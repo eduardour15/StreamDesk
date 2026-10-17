@@ -47,10 +47,7 @@ public sealed partial class MainViewModel
 
     private async Task LoadProfileCacheAsync(Profile? profile)
     {
-        var version = ++_sessionVersion;
-        _session.Cancel(); _session.Dispose(); _session = new();
-        _operation?.Cancel();
-        _filter?.Cancel();
+        var version = BeginCatalogSession();
         _client?.Dispose(); _client = null; _account = null; _connectedProfileId = null;
         StopPlayback(); ClearCatalog(); ConnectionSummary = null;
         BaseUrl = profile?.BaseUrl ?? string.Empty; Username = string.Empty;
@@ -82,6 +79,7 @@ public sealed partial class MainViewModel
     public async Task ConnectAsync(string baseUrl, string username, string password)
     {
         if (!CanConnect || _disposed) return;
+        BeginCatalogSession();
         ClearCatalog();
         CatalogSummary = "Sesión temporal: guarda un perfil en Configuración para conservar su catálogo.";
         await RunConnectionAsync(baseUrl, new(username, password), null);
@@ -112,6 +110,8 @@ public sealed partial class MainViewModel
 
     private async Task AuthenticateCoreAsync(string url, StoredCredentials credentials, string? profileId, int version, CancellationToken token)
     {
+        token.ThrowIfCancellationRequested();
+        if (version != _sessionVersion || _disposed) return;
         StopPlayback(); _client?.Dispose(); _client = null; _account = null; _connectedProfileId = null;
         AvailableFormats.Clear(); SelectedFormat = null; ConnectionSummary = null;
         IIptvProvider? provider = _providerFactory(url, credentials.Username, credentials.Password);
@@ -170,6 +170,7 @@ public sealed partial class MainViewModel
     private async Task ApplySnapshotAsync(CatalogSnapshot snapshot, int version, CancellationToken token)
     {
         var index = await Task.Run(() => new CatalogSearch(snapshot.Channels), token);
+        token.ThrowIfCancellationRequested();
         if (version != _sessionVersion || _disposed) return;
         _snapshot = snapshot; _search = index;
         Categories = new[] { new XtreamCategory("", "Todas las categorías") }.Concat(snapshot.Categories).ToArray();
@@ -216,6 +217,13 @@ public sealed partial class MainViewModel
     }
 
     public void CancelCatalog() => _operation?.Cancel();
+    private int BeginCatalogSession()
+    {
+        var version = ++_sessionVersion;
+        _session.Cancel(); _session.Dispose(); _session = new();
+        _operation?.Cancel(); _filter?.Cancel();
+        return version;
+    }
     private void DisposeCatalog()
     {
         _session.Cancel(); _operation?.Cancel(); _filter?.Cancel(); _session.Dispose();

@@ -115,17 +115,14 @@ public sealed class XtreamApiClient : IIptvProvider
         }
 
         var baseUri = _baseUri!;
-        var escapedUser = Uri.EscapeDataString(_username!);
-        var escapedPassword = Uri.EscapeDataString(_password!);
+        var escapedUser = EscapePathSegment(_username!);
+        var escapedPassword = EscapePathSegment(_password!);
         var escapedStreamId = Uri.EscapeDataString(channel.Id);
-        var builder = new UriBuilder(baseUri)
-        {
-            Path = AppendPath(baseUri.AbsolutePath, $"live/{escapedUser}/{escapedPassword}/{escapedStreamId}.{normalizedFormat}"),
-            Query = string.Empty,
-            Fragment = string.Empty
-        };
-
-        return builder.Uri;
+        var path = AppendPath(baseUri.AbsolutePath, $"live/{escapedUser}/{escapedPassword}/{escapedStreamId}.{normalizedFormat}");
+        // All variable segments are escaped above and the base endpoint is validated.
+        // Preserve encoded dot-only credentials instead of Uri collapsing their path.
+        return new Uri(baseUri.GetLeftPart(UriPartial.Authority) + path,
+            new UriCreationOptions { DangerousDisablePathAndQueryCanonicalization = true });
     }
 
     public void Dispose()
@@ -183,7 +180,7 @@ public sealed class XtreamApiClient : IIptvProvider
                 .ConfigureAwait(false);
             return document.RootElement.Clone();
         }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested || _disposed)
         {
             throw;
         }
@@ -460,6 +457,9 @@ public sealed class XtreamApiClient : IIptvProvider
         $"{existingPath.TrimEnd('/')}/{suffix.TrimStart('/')}";
 
     private static string NormalizeFormat(string value) => value.Trim().TrimStart('.').ToLowerInvariant();
+
+    private static string EscapePathSegment(string value) => value is "." or ".."
+        ? value.Replace(".", "%2E", StringComparison.Ordinal) : Uri.EscapeDataString(value);
 
     private void EnsureAuthenticated()
     {

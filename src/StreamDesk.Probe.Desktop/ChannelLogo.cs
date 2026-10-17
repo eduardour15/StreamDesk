@@ -27,6 +27,7 @@ public sealed class ChannelLogo : Image
             if (ReferenceEquals(_load, load) && IsLoaded) Source = image;
         }
         catch (OperationCanceledException) { }
+        catch (ObjectDisposedException) { } // The shared loader may close while a row is unloading.
         finally { if (ReferenceEquals(_load, load)) _load = null; }
     }
 }

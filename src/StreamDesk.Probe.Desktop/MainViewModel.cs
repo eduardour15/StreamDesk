@@ -30,6 +30,7 @@ public sealed partial class MainViewModel : INotifyPropertyChanged, IDisposable
     private string? _selectedFormat;
     private int _currentTabIndex;
     private bool _isBusy;
+    private bool _isProfileBusy;
     private bool _isPlaybackReady;
     private bool _disposed;
 
@@ -88,7 +89,7 @@ public sealed partial class MainViewModel : INotifyPropertyChanged, IDisposable
     public bool HasHttpWarning => !string.IsNullOrWhiteSpace(HttpWarning);
     public string? ConnectionSummary { get => _connectionSummary; private set { if (SetProperty(ref _connectionSummary, value)) OnPropertyChanged(nameof(HasConnectionSummary)); } }
     public bool HasConnectionSummary => !string.IsNullOrWhiteSpace(ConnectionSummary);
-    public bool IsBusy { get => _isBusy; private set { if (SetProperty(ref _isBusy, value)) { OnPropertyChanged(nameof(CanConnect)); OnPropertyChanged(nameof(IsWorking)); NotifyCommands(); } } }
+    public bool IsBusy { get => _isBusy || _isProfileBusy; private set { if (_isBusy != value) { _isBusy = value; NotifyBusyChanged(); } } }
     public bool CanConnect => !IsBusy && !IsCatalogLoading;
     public bool IsPlaybackReady { get => _isPlaybackReady; private set => SetProperty(ref _isPlaybackReady, value); }
     public object? PlayerHandle => _playbackService.PlayerHandle;
@@ -97,7 +98,7 @@ public sealed partial class MainViewModel : INotifyPropertyChanged, IDisposable
     public async Task LoadProfilesAsync()
     {
         if (_disposed || IsBusy) return;
-        IsBusy = true;
+        SetProfileBusy(true);
         try
         {
             await ReloadProfilesCoreAsync(_shutdown.Token);
@@ -108,13 +109,13 @@ public sealed partial class MainViewModel : INotifyPropertyChanged, IDisposable
             _logger.LogError("profile_load", exception);
             ProfileStatus = "No se pudieron cargar los perfiles locales.";
         }
-        finally { IsBusy = false; }
+        finally { SetProfileBusy(false); }
     }
 
     public async Task CreateProfileAsync(string password)
     {
         if (_disposed || IsBusy) return;
-        IsBusy = true;
+        SetProfileBusy(true);
         try
         {
             await _profilesService.CreateAsync(ProfileName, ProfileBaseUrl, ProfileUsername, password, _shutdown.Token);
@@ -130,13 +131,13 @@ public sealed partial class MainViewModel : INotifyPropertyChanged, IDisposable
             _logger.LogError("profile_create", exception);
             ProfileStatus = "No se pudo guardar el perfil. Revisa la ruta de datos y vuelve a intentarlo.";
         }
-        finally { IsBusy = false; }
+        finally { SetProfileBusy(false); }
     }
 
     private async Task DeleteSelectedProfileAsync()
     {
         if (SelectedProfile is null || IsBusy || _disposed) return;
-        IsBusy = true;
+        SetProfileBusy(true);
         try
         {
             await _profilesService.DeleteAsync(SelectedProfile.Id, _shutdown.Token);
@@ -149,7 +150,7 @@ public sealed partial class MainViewModel : INotifyPropertyChanged, IDisposable
             _logger.LogError("profile_delete", exception);
             ProfileStatus = "No se pudo eliminar el perfil y sus credenciales.";
         }
-        finally { IsBusy = false; }
+        finally { SetProfileBusy(false); }
     }
 
     public void PlaySelected()
@@ -231,6 +232,14 @@ public sealed partial class MainViewModel : INotifyPropertyChanged, IDisposable
         ((AsyncRelayCommand)ReloadProfilesCommand).NotifyCanExecuteChanged();
         ((AsyncRelayCommand)DeleteProfileCommand).NotifyCanExecuteChanged();
         ((AsyncRelayCommand)ConnectProfileCommand).NotifyCanExecuteChanged();
+    }
+
+    private void SetProfileBusy(bool value) { _isProfileBusy = value; NotifyBusyChanged(); }
+
+    private void NotifyBusyChanged()
+    {
+        OnPropertyChanged(nameof(IsBusy)); OnPropertyChanged(nameof(CanConnect)); OnPropertyChanged(nameof(IsWorking));
+        NotifyCommands();
     }
 
     private bool SetProperty<T>(ref T field, T value, [CallerMemberName] string? propertyName = null)

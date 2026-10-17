@@ -11,6 +11,7 @@ public sealed class DpapiCredentialStore(string directory) : ICredentialStore
 
     public async Task SaveAsync(string key, StoredCredentials credentials, CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         var file = GetPath(key);
         Directory.CreateDirectory(_directory);
         var plain = JsonSerializer.SerializeToUtf8Bytes(credentials);
@@ -21,6 +22,7 @@ public sealed class DpapiCredentialStore(string directory) : ICredentialStore
         {
             protectedBytes = ProtectedData.Protect(plain, entropy, DataProtectionScope.CurrentUser);
             await File.WriteAllBytesAsync(temp, protectedBytes, cancellationToken);
+            cancellationToken.ThrowIfCancellationRequested();
             File.Move(temp, file, overwrite: true);
         }
         finally

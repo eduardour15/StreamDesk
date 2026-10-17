@@ -29,10 +29,15 @@ public sealed class LibVlcPlaybackService : IPlaybackService
             throw new InvalidOperationException("No se encontró el runtime nativo de LibVLC junto al ejecutable.");
         }
         LibVLCSharp.Shared.Core.Initialize(runtimeDirectory);
-        _libVlc = new LibVLC();
-        _mediaPlayer = new MediaPlayer(_libVlc);
-        _mediaPlayer.Playing += (_, _) => PlaybackStarted?.Invoke(this, EventArgs.Empty);
-        _mediaPlayer.EncounteredError += (_, _) => PlaybackFailed?.Invoke(this, EventArgs.Empty);
+        var libVlc = new LibVLC("--quiet", "--no-video-title-show");
+        try
+        {
+            var player = new MediaPlayer(libVlc);
+            player.Playing += (_, _) => PlaybackStarted?.Invoke(this, EventArgs.Empty);
+            player.EncounteredError += (_, _) => PlaybackFailed?.Invoke(this, EventArgs.Empty);
+            _libVlc = libVlc; _mediaPlayer = player;
+        }
+        catch { libVlc.Dispose(); throw; }
     }
 
     public void Play(Uri streamUri)
@@ -41,30 +46,30 @@ public sealed class LibVlcPlaybackService : IPlaybackService
         if (_libVlc is null || _mediaPlayer is null) throw new InvalidOperationException("El motor de video no está disponible.");
         Stop();
         var media = new Media(_libVlc, streamUri);
-        if (!_mediaPlayer.Play(media))
+        try
         {
-            media.Dispose();
-            throw new InvalidOperationException("LibVLC rechazó el medio solicitado.");
+            if (!_mediaPlayer.Play(media)) throw new InvalidOperationException("LibVLC rechazó el medio solicitado.");
+            _currentMedia = media;
         }
-        _currentMedia = media;
+        catch { media.Dispose(); throw; }
     }
 
     public void Stop()
     {
-        if (_mediaPlayer is not null && _currentMedia is not null) _mediaPlayer.Stop();
-        _currentMedia?.Dispose();
-        _currentMedia = null;
+        try { if (_mediaPlayer is not null && _currentMedia is not null) _mediaPlayer.Stop(); }
+        finally { _currentMedia?.Dispose(); _currentMedia = null; }
     }
 
     public void Dispose()
     {
         if (_disposed) return;
         _disposed = true;
-        Stop();
-        _mediaPlayer?.Dispose();
-        _mediaPlayer = null;
-        _libVlc?.Dispose();
-        _libVlc = null;
+        try { Stop(); }
+        finally
+        {
+            try { _mediaPlayer?.Dispose(); }
+            finally { _mediaPlayer = null; _libVlc?.Dispose(); _libVlc = null; }
+        }
     }
 
     private static string GetRuntimeArchitectureDirectory() =>

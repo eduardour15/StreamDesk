@@ -83,15 +83,19 @@ public sealed class ProfileService(ISettingsService settings, ICredentialStore c
         if (profile is null)
             return;
 
-        await settings.DeleteProfileAsync(id, cancellationToken);
+        // Keep the database (including cascaded catalog/favorites/history) intact
+        // until the credential store has accepted deletion. Retain a memory-only
+        // backup so a database failure can restore the protected credential.
+        var backup = await credentials.GetAsync(profile.CredentialKey, cancellationToken);
+        await credentials.DeleteAsync(profile.CredentialKey, cancellationToken);
         try
         {
-            await credentials.DeleteAsync(profile.CredentialKey, cancellationToken);
+            await settings.DeleteProfileAsync(id, cancellationToken);
         }
         catch
         {
-            // Restore metadata so a transient credential-store error remains visible and retryable.
-            await settings.AddProfileAsync(profile, CancellationToken.None);
+            if (backup is not null)
+                await credentials.SaveAsync(profile.CredentialKey, backup, CancellationToken.None);
             throw;
         }
     }

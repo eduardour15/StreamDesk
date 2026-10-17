@@ -19,7 +19,15 @@ public sealed class PlaybackRuntimeTests
     {
         using var playback = new LibVlcPlaybackService();
         playback.Initialize();
+        var handle = playback.PlayerHandle;
+        playback.Initialize();
+        Assert.Same(handle, playback.PlayerHandle);
         Assert.True(playback.IsReady);
+        Assert.False(playback.HasActiveMedia);
+        playback.Stop(); playback.Dispose(); playback.Dispose();
+        Assert.Null(playback.PlayerHandle);
+        Assert.False(playback.IsReady);
+        Assert.Throws<ObjectDisposedException>(() => playback.Initialize());
     }
 
     private static string RuntimeDirectory() =>

@@ -119,6 +119,8 @@ public sealed class CatalogUiTests
                 ProfileSwitchPreservedIsolation = true, Source = "Automated WPF test with invented provider data"
             }, new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
             await VerifyLogosAsync();
+            await VerifyStaleCredentialReadDoesNotClearNewProfileAsync();
+            await VerifyProfileChangeDoesNotUnlockProfileSaveAsync();
         }
         finally { window.Close(); }
     }
@@ -178,5 +180,67 @@ public sealed class CatalogUiTests
             if (watch.Elapsed > TimeSpan.FromSeconds(15)) throw new TimeoutException("WPF catalogue state did not settle.");
             await Task.Delay(10);
         }
+    }
+
+    private static async Task VerifyStaleCredentialReadDoesNotClearNewProfileAsync()
+    {
+        using var db = new TestDatabase(); await db.AddProfileAsync("first"); await db.AddProfileAsync("second");
+        await db.Store.ReplaceAsync("first", CatalogFixtures.Create(10));
+        await db.Store.ReplaceAsync("second", CatalogFixtures.Create(20));
+        var first = (await db.Settings.GetProfilesAsync()).Single(profile => profile.Id == "first");
+        var credentials = new DeferredCredentials(first.CredentialKey);
+        var providerCalls = 0;
+        using var vm = new MainViewModel((_, _, _) => { providerCalls++; return new FixtureProvider(CatalogFixtures.Create()); }, new FixturePlayback(),
+            new ProfileService(db.Settings, credentials), new FixtureLogger(), new CatalogService(db.Store), credentials);
+        await vm.LoadProfilesAsync();
+        await WaitAsync(() => !vm.IsWorking && vm.Channels.Count == 10);
+        var pending = vm.ConnectProfileAsync();
+        await credentials.Entered.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        vm.ActiveProfile = vm.Profiles.Single(profile => profile.Id == "second");
+        await WaitAsync(() => !vm.IsWorking && vm.Channels.Count == 20);
+        await vm.ConnectProfileAsync();
+        var summary = vm.ConnectionSummary; Assert.NotNull(summary);
+        credentials.Release.SetResult();
+        await pending;
+        Assert.Equal(summary, vm.ConnectionSummary);
+        Assert.Equal("ts", vm.SelectedFormat);
+        Assert.Equal(1, providerCalls);
+        Assert.Equal(20, vm.Channels.Count);
+    }
+
+    private static async Task VerifyProfileChangeDoesNotUnlockProfileSaveAsync()
+    {
+        using var db = new TestDatabase(); await db.AddProfileAsync("first"); await db.AddProfileAsync("second");
+        var credentials = new DeferredCredentials(null);
+        using var vm = new MainViewModel((_, _, _) => new FixtureProvider(CatalogFixtures.Create()), new FixturePlayback(),
+            new ProfileService(db.Settings, credentials), new FixtureLogger(), new CatalogService(db.Store), credentials);
+        await vm.LoadProfilesAsync(); await WaitAsync(() => !vm.IsWorking);
+        vm.ProfileName = "New fixture"; vm.ProfileBaseUrl = "https://provider.invalid"; vm.ProfileUsername = "fixture-user";
+        var pending = vm.CreateProfileAsync("fixture-password");
+        await credentials.Entered.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        try
+        {
+            vm.ActiveProfile = vm.Profiles.Single(profile => profile.Id == "second");
+            await WaitAsync(() => !vm.IsCatalogLoading);
+            Assert.True(vm.IsBusy);
+            await vm.CreateProfileAsync("fixture-password");
+            Assert.Equal(1, credentials.Saves);
+        }
+        finally { credentials.Release.SetResult(); await pending; }
+    }
+
+    private sealed class DeferredCredentials(string? delayedKey) : ICredentialStore
+    {
+        public TaskCompletionSource Entered { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public TaskCompletionSource Release { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        public int Saves { get; private set; }
+        public async Task<StreamDesk.Probe.Core.StoredCredentials?> GetAsync(string key, CancellationToken cancellationToken = default)
+        {
+            if (key == delayedKey) { Entered.TrySetResult(); await Release.Task; } // Simulate an OS store finishing after cancellation.
+            return new("fixture-user", "fixture-password");
+        }
+        public async Task SaveAsync(string key, StreamDesk.Probe.Core.StoredCredentials value, CancellationToken cancellationToken = default)
+        { Saves++; Entered.TrySetResult(); await Release.Task; }
+        public Task DeleteAsync(string key, CancellationToken cancellationToken = default) => Task.CompletedTask;
     }
 }

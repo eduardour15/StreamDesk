@@ -18,21 +18,21 @@ public partial class App : System.Windows.Application
     {
         base.OnStartup(e);
         var directory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "StreamDesk");
-        _services = new AppServices(directory);
         DispatcherUnhandledException += (_, eventArgs) =>
         {
-            _services.Logger.LogError("ui_unhandled", eventArgs.Exception);
+            _services?.Logger.LogError("ui_unhandled", eventArgs.Exception);
             eventArgs.Handled = true;
             MessageBox.Show("Ocurrió un error recuperable. Se registró un código técnico sin datos de la cuenta.", "StreamDesk", MessageBoxButton.OK, MessageBoxImage.Warning);
         };
         TaskScheduler.UnobservedTaskException += (_, eventArgs) =>
         {
-            _services.Logger.LogError("task_unobserved", eventArgs.Exception);
+            _services?.Logger.LogError("task_unobserved", eventArgs.Exception);
             eventArgs.SetObserved();
         };
 
         try
         {
+            _services = new AppServices(directory);
             await _services.Settings.InitializeAsync();
             var window = new MainWindow(_services);
             MainWindow = window;
@@ -40,7 +40,7 @@ public partial class App : System.Windows.Application
         }
         catch (Exception exception)
         {
-            _services.Logger.LogError("startup_failed", exception);
+            _services?.Logger.LogError("startup_failed", exception);
             MessageBox.Show("StreamDesk no pudo preparar sus datos locales. Revisa los permisos de tu carpeta de usuario.", "StreamDesk", MessageBoxButton.OK, MessageBoxImage.Error);
             Shutdown(-1);
         }

@@ -11,14 +11,18 @@ public sealed class ChannelLogoLoader(HttpClient client) : IDisposable
     private readonly object _sync = new();
     private readonly Dictionary<string, (BitmapSource? Image, LinkedListNode<string> Node)> _cache = new(StringComparer.Ordinal);
     private readonly LinkedList<string> _lru = new();
+    private bool _disposed;
     public int CachedCount { get { lock (_sync) return _cache.Count; } }
 
     public async Task<BitmapSource?> GetAsync(string? url, CancellationToken cancellationToken)
     {
+        CancellationToken shutdown;
+        lock (_sync) { ObjectDisposedException.ThrowIf(_disposed, this); shutdown = _shutdown.Token; }
+        cancellationToken.ThrowIfCancellationRequested();
         if (!Uri.TryCreate(url, UriKind.Absolute, out var uri) || uri.Scheme is not ("https" or "http") ||
             uri.Query.Length != 0 || uri.UserInfo.Length != 0 || uri.Fragment.Length != 0) return null;
         if (TryGet(url!, out var cached)) return cached;
-        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _shutdown.Token);
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, shutdown);
         timeout.CancelAfter(TimeSpan.FromSeconds(10));
         var entered = false;
         BitmapSource? image = null;
@@ -89,11 +93,20 @@ public sealed class ChannelLogoLoader(HttpClient client) : IDisposable
     {
         lock (_sync)
         {
+            if (_disposed) return null;
             if (_cache.TryGetValue(key, out var existing)) _lru.Remove(existing.Node);
             var node = _lru.AddFirst(key); _cache[key] = (image, node);
             while (_cache.Count > 128) { var last = _lru.Last!; _cache.Remove(last.Value); _lru.RemoveLast(); }
         }
         return image;
     }
-    public void Dispose() { _shutdown.Cancel(); client.Dispose(); lock (_sync) { _cache.Clear(); _lru.Clear(); } }
+    public void Dispose()
+    {
+        lock (_sync)
+        {
+            if (_disposed) return;
+            _disposed = true; _cache.Clear(); _lru.Clear();
+        }
+        _shutdown.Cancel(); client.Dispose();
+    }
 }
