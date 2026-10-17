@@ -110,7 +110,7 @@ La separación puede simplificarse si el MVP se vuelve innecesariamente complejo
 **Meta:** convertir el catálogo en una experiencia usable y resistente a fallos.  
 **Entregable:** autenticación y catálogo de televisión completo con búsqueda y caché.
 
-- [ ] **F2-T01** Implementar adaptador Xtream aislado de las vistas.
+- [x] **F2-T01** Implementar adaptador Xtream aislado de las vistas.
 - [ ] **F2-T02** Interpretar respuesta de autenticación, cuenta expirada, credenciales inválidas y máximo de conexiones.
 - [ ] **F2-T03** Descargar/normalizar categorías y canales; preservar identificadores del proveedor.
 - [ ] **F2-T04** Añadir `HttpClientFactory`, timeouts, cancelación y reintentos limitados solo para operaciones idempotentes.

@@ -1,11 +1,12 @@
 using System.Globalization;
 using System.Net;
 using System.Text.Json;
+using StreamDesk.Application;
 using StreamDesk.Probe.Core;
 
 namespace StreamDesk.Probe.Infrastructure;
 
-public sealed class XtreamApiClient : IDisposable
+public sealed class XtreamApiClient : IIptvProvider
 {
     private static readonly HashSet<string> SupportedFormats = new(StringComparer.OrdinalIgnoreCase)
     {

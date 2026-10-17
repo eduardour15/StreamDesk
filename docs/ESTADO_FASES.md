@@ -6,7 +6,7 @@ Este archivo registra trabajo y evidencias reales. La confirmación del usuario 
 |---|---|---:|---|---|
 | F0 | APROBADA | 8/11 | 2026-10-17 | Métricas de hardware/códec, verificación de condiciones del proveedor y revisión completa de licencias siguen pendientes; no bloquean el gate funcional reportado. |
 | F1 | APROBADA | 10/10 | 2026-10-17 | Validación funcional confirmada por el usuario; sin desglose manual por paso. |
-| F2 | NO_INICIADA | 0/10 | — | Requiere F1 aprobada |
+| F2 | EN_PROGRESO | 1/10 | 2026-10-17 | F2-T01 completada; F2-T02 a F2-T10 pendientes. |
 | F3 | NO_INICIADA | 0/11 | — | Requiere F2 aprobada |
 | F4 | NO_INICIADA | 0/11 | — | Requiere F3 aprobada |
 | F5 | NO_INICIADA | 0/9 | — | Requiere F4 aprobada; EPG/VOD condicional |
@@ -62,3 +62,27 @@ Este archivo registra trabajo y evidencias reales. La confirmación del usuario 
 
 - **Evidencia reportada por el usuario:** confirmó «Si funciona» después de recibir el cierre de F1 y solicitó proceder con la siguiente tarea. Se registra como validación funcional aportada por el usuario, sin atribuirle mediciones, datos del proveedor o un desglose de pruebas que no facilitó.
 - **Gate:** `APROBADA`. La confirmación del usuario complementa la compilación y las 19 pruebas automáticas ya ejecutadas. La siguiente tarea autorizada es `F2-T01`; no se aprueba F2 por anticipado.
+
+### 2026-10-17 (America/Managua) — F2-T01: adaptador Xtream
+
+- **Alcance:** exclusivamente la siguiente tarea, `F2-T01`. Se revalidó la base F1 con build sin errores/advertencias y 19 tests pasados antes de modificar el adaptador. La base F1 aprobada quedó en el commit local `8f058c3`.
+- **Implementación:** `XtreamApiClient` implementa directamente `IIptvProvider`. Se eliminó `XtreamProvider.cs`, que solo delegaba llamadas. `AppServices` construye el adaptador; `MainViewModel` depende de `IIptvProvider` y las vistas no acceden al cliente HTTP. Se conserva el flujo de red y reproducción existente, sin dependencias nuevas.
+- **Archivos:** `src/StreamDesk.Probe.Infrastructure/XtreamApiClient.cs`, `src/StreamDesk.Probe.Desktop/AppServices.cs`, `tests/StreamDesk.Probe.Tests/XtreamApiClientTests.cs`, `docs/ROADMAP.md` y este registro. Eliminado: `src/StreamDesk.Probe.Infrastructure/XtreamProvider.cs`.
+- **Comandos reales:** `dotnet build StreamDesk.sln --no-restore --verbosity minimal --maxcpucount:1 -p:UseSharedCompilation=false` (correcto, 0 errores y 0 advertencias); `dotnet test StreamDesk.sln --no-build --no-restore --verbosity minimal --maxcpucount:1` (25 pasadas, 0 fallidas).
+- **Pruebas:** los helpers del proveedor ahora devuelven `IIptvProvider`; se prueba el flujo autenticación/categorías/canales/URI a través de ese contrato. Casos añadidos: aviso HTTP/HTTPS antes de conectar, bloqueo de catálogo/stream sin autenticar, cancelación de catálogo, error tipado sin credenciales/URI, disposición del transporte e imposibilidad de reutilizarlo después de Dispose.
+- **Comprobación manual nueva:** no ejecutada. Los tests usan un transporte HTTP ficticio y no acreditan una nueva sesión de proveedor real. Para comprobarlo en Windows: ejecutar la app desde la raíz, introducir localmente una cuenta autorizada en TV en vivo, conectar, cargar categorías/canales, reproducir un canal y detener/cerrar. Registrar solo resultado, sin datos de cuenta. Esta regresión real queda `PENDIENTE_DE_VALIDACION`; no hubo cambios visuales en esta tarea.
+- **Aceptación de F2-T01:** contrato independiente de WPF `PASA`; flujo mediante interfaz y casos de error/cancelación/disposición `PASA`; ejecución con proveedor real después del cambio `NO VERIFICADO`.
+- **Gate F2:** `EN_PROGRESO`, 1/10 tareas completadas. No se aprueba el catálogo completo, la caché ni la navegación con miles de canales; corresponden a tareas pendientes. Siguiente tarea recomendada: `F2-T02`.
+
+| ID | Estado | Evidencia o pendiente |
+|---|---|---|
+| F2-T01 | COMPLETADA | Adaptador directo de IIptvProvider, sin wrapper duplicado; contrato y ciclo de vida cubiertos por tests; build correcto. |
+| F2-T02 | PENDIENTE | Revalidar y completar autenticación, vencimiento, credenciales y máximo de conexiones. |
+| F2-T03 | PENDIENTE | Normalizar categorías/canales y preservar IDs remotos. |
+| F2-T04 | PENDIENTE | HttpClientFactory, reintentos transitorios limitados y Retry-After. |
+| F2-T05 | PENDIENTE | Caché local con sincronización atómica y fecha. |
+| F2-T06 | PENDIENTE | Búsqueda local sin distinguir acentos/mayúsculas. |
+| F2-T07 | PENDIENTE | Virtualización y carga diferida/cache limitada de logos. |
+| F2-T08 | PENDIENTE | Filtro por categoría y estados de resultados/vacíos/errores. |
+| F2-T09 | PENDIENTE | Decisión de perfiles/servidores basada en evidencia del proveedor; sin alternancia automática. |
+| F2-T10 | PENDIENTE | Catálogos ficticios de al menos 5.000 canales, duplicados y respuestas parciales. |

@@ -14,7 +14,7 @@ public sealed class AppServices
         Settings = new SqliteSettingsService(Path.Combine(localDataDirectory, "streamdesk.db"));
         Credentials = new DpapiCredentialStore(Path.Combine(localDataDirectory, "secrets"));
         Profiles = new ProfileService(Settings, Credentials);
-        ProviderFactory = (url, username, password) => new XtreamProvider(url, username, password);
+        ProviderFactory = (url, username, password) => new XtreamApiClient(url, username, password);
         Playback = new LibVlcPlaybackService();
     }
 

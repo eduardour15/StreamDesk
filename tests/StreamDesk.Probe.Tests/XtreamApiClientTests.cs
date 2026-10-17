@@ -1,5 +1,6 @@
 using System.Net;
 using System.Text;
+using StreamDesk.Application;
 using StreamDesk.Probe.Core;
 using StreamDesk.Probe.Infrastructure;
 
@@ -83,6 +84,10 @@ public sealed class XtreamApiClientTests
             Assert.Equal("7", channel.CategoryId);
             Assert.Equal("live", channel.StreamType);
         });
+
+        var streamUri = client.CreateLiveStreamUri(Assert.Single(channels), "ts");
+        Assert.Equal("provider.invalid", streamUri.Host);
+        Assert.Equal("/base/live/demo-user/fake-password/42.ts", streamUri.AbsolutePath);
     }
 
     [Fact]
@@ -173,12 +178,103 @@ public sealed class XtreamApiClientTests
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() => client.AuthenticateAsync(cancellation.Token));
     }
 
-    private static XtreamApiClient CreateClient(Func<HttpRequestMessage, HttpResponseMessage> responseFactory) =>
+    [Theory]
+    [InlineData("http://provider.invalid", true)]
+    [InlineData("https://provider.invalid", false)]
+    public void ProviderContractReportsUnencryptedTransportBeforeAuthentication(string endpoint, bool expected)
+    {
+        using IIptvProvider provider = new XtreamApiClient(endpoint, "demo-user", "fake-password");
+
+        Assert.Equal(expected, provider.UsesUnencryptedTransport);
+    }
+
+    [Fact]
+    public async Task ProviderContractRequiresAuthenticationBeforeCatalogOrPlayback()
+    {
+        var requests = 0;
+        using var provider = CreateClient(_ =>
+        {
+            requests++;
+            return JsonResponse("{}");
+        });
+
+        var categoriesError = await Assert.ThrowsAsync<XtreamApiException>(() => provider.GetLiveCategoriesAsync());
+        var channelsError = await Assert.ThrowsAsync<XtreamApiException>(() => provider.GetLiveChannelsAsync());
+        var playbackError = Assert.Throws<XtreamApiException>(() =>
+            provider.CreateLiveStreamUri(new XtreamChannel("42", "Canal", null, "live", null), "ts"));
+
+        Assert.Equal(XtreamFailureKind.InvalidState, categoriesError.Kind);
+        Assert.Equal(XtreamFailureKind.InvalidState, channelsError.Kind);
+        Assert.Equal(XtreamFailureKind.InvalidState, playbackError.Kind);
+        Assert.Equal(0, requests);
+    }
+
+    [Fact]
+    public async Task ProviderContractCancelsCatalogRequestWithoutMappingItToNetworkFailure()
+    {
+        var requestStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var provider = CreateClient(async (request, cancellationToken) =>
+        {
+            if (request.RequestUri!.Query.Contains("action=get_live_streams", StringComparison.Ordinal))
+            {
+                requestStarted.SetResult();
+                await Task.Delay(Timeout.Infinite, cancellationToken);
+            }
+
+            return JsonResponse("""{"user_info":{"auth":1,"status":"Active","allowed_output_formats":["ts"]}}""");
+        });
+        await provider.AuthenticateAsync();
+        using var cancellation = new CancellationTokenSource();
+
+        var requestTask = provider.GetLiveChannelsAsync(cancellation.Token);
+        await requestStarted.Task.WaitAsync(TimeSpan.FromSeconds(5));
+        cancellation.Cancel();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => requestTask);
+    }
+
+    [Fact]
+    public async Task ProviderContractReturnsTypedCatalogErrorWithoutLeakingRequestData()
+    {
+        using var provider = CreateClient(request =>
+            request.RequestUri!.Query.Contains("action=", StringComparison.Ordinal)
+                ? new HttpResponseMessage(HttpStatusCode.Forbidden)
+                : JsonResponse("""{"user_info":{"auth":1,"status":"Active","allowed_output_formats":["ts"]}}"""));
+        await provider.AuthenticateAsync();
+
+        var error = await Assert.ThrowsAsync<XtreamApiException>(() => provider.GetLiveCategoriesAsync());
+
+        Assert.Equal(XtreamFailureKind.AccessDenied, error.Kind);
+        Assert.DoesNotContain("provider.invalid", error.ToString(), StringComparison.Ordinal);
+        Assert.DoesNotContain("demo-user", error.ToString(), StringComparison.Ordinal);
+        Assert.DoesNotContain("fake-password", error.ToString(), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task DisposingProviderContractReleasesTransportAndRejectsFurtherOperations()
+    {
+        var handler = new StubHandler((_, _) => Task.FromResult(JsonResponse(
+            """{"user_info":{"auth":1,"status":"Active","allowed_output_formats":["ts"]}}""")));
+        using IIptvProvider provider = new XtreamApiClient("https://provider.invalid", "demo-user", "fake-password", handler: handler);
+        await provider.AuthenticateAsync();
+
+        provider.Dispose();
+        provider.Dispose();
+
+        Assert.True(handler.IsDisposed);
+        await Assert.ThrowsAsync<ObjectDisposedException>(() => provider.AuthenticateAsync());
+        await Assert.ThrowsAsync<ObjectDisposedException>(() => provider.GetLiveCategoriesAsync());
+        await Assert.ThrowsAsync<ObjectDisposedException>(() => provider.GetLiveChannelsAsync());
+        Assert.Throws<ObjectDisposedException>(() =>
+            provider.CreateLiveStreamUri(new XtreamChannel("42", "Canal", null, "live", null), "ts"));
+    }
+
+    private static IIptvProvider CreateClient(Func<HttpRequestMessage, HttpResponseMessage> responseFactory) =>
         CreateClient((request, _) => Task.FromResult(responseFactory(request)));
 
-    private static XtreamApiClient CreateClient(
+    private static IIptvProvider CreateClient(
         Func<HttpRequestMessage, CancellationToken, Task<HttpResponseMessage>> responseFactory) =>
-        new(
+        new XtreamApiClient(
             "https://provider.invalid/base",
             "demo-user",
             "fake-password",
@@ -193,8 +289,16 @@ public sealed class XtreamApiClientTests
     private sealed class StubHandler(
         Func<HttpRequestMessage, CancellationToken, Task<HttpResponseMessage>> responseFactory) : HttpMessageHandler
     {
+        public bool IsDisposed { get; private set; }
+
         protected override Task<HttpResponseMessage> SendAsync(
             HttpRequestMessage request,
             CancellationToken cancellationToken) => responseFactory(request, cancellationToken);
+
+        protected override void Dispose(bool disposing)
+        {
+            IsDisposed = true;
+            base.Dispose(disposing);
+        }
     }
 }
