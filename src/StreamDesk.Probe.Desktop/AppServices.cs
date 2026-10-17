@@ -1,12 +1,15 @@
 using System.IO;
+using System.Net.Http;
+using Microsoft.Extensions.DependencyInjection;
 using StreamDesk.Application;
 using StreamDesk.Probe.Infrastructure;
 using StreamDesk.Probe.Playback;
 
 namespace StreamDesk.Probe.Desktop;
 
-public sealed class AppServices
+public sealed class AppServices : IDisposable
 {
+    private readonly ServiceProvider _httpServices;
     public AppServices(string localDataDirectory)
     {
         Directory.CreateDirectory(localDataDirectory);
@@ -14,7 +17,11 @@ public sealed class AppServices
         Settings = new SqliteSettingsService(Path.Combine(localDataDirectory, "streamdesk.db"));
         Credentials = new DpapiCredentialStore(Path.Combine(localDataDirectory, "secrets"));
         Profiles = new ProfileService(Settings, Credentials);
-        ProviderFactory = (url, username, password) => new XtreamApiClient(url, username, password);
+        Catalogs = new CatalogService(new SqliteCatalogStore(Path.Combine(localDataDirectory, "streamdesk.db")));
+        _httpServices = ProviderHttpClients.CreateServices();
+        var factory = _httpServices.GetRequiredService<IHttpClientFactory>();
+        ProviderFactory = (url, username, password) => new XtreamApiClient(url, username, password, httpClient: factory.CreateClient("Xtream"));
+        Logos = new ChannelLogoLoader(factory.CreateClient("Logos"));
         Playback = new LibVlcPlaybackService();
     }
 
@@ -22,6 +29,9 @@ public sealed class AppServices
     public ISettingsService Settings { get; }
     public ICredentialStore Credentials { get; }
     public ProfileService Profiles { get; }
+    public CatalogService Catalogs { get; }
+    public ChannelLogoLoader Logos { get; }
     public Func<string, string, string, IIptvProvider> ProviderFactory { get; }
     public IPlaybackService Playback { get; }
+    public void Dispose() { Logos.Dispose(); Playback.Dispose(); _httpServices.Dispose(); }
 }

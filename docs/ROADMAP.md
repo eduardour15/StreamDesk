@@ -111,15 +111,15 @@ La separación puede simplificarse si el MVP se vuelve innecesariamente complejo
 **Entregable:** autenticación y catálogo de televisión completo con búsqueda y caché.
 
 - [x] **F2-T01** Implementar adaptador Xtream aislado de las vistas.
-- [ ] **F2-T02** Interpretar respuesta de autenticación, cuenta expirada, credenciales inválidas y máximo de conexiones.
-- [ ] **F2-T03** Descargar/normalizar categorías y canales; preservar identificadores del proveedor.
-- [ ] **F2-T04** Añadir `HttpClientFactory`, timeouts, cancelación y reintentos limitados solo para operaciones idempotentes.
-- [ ] **F2-T05** Implementar caché local con fecha de sincronización y refresco manual.
-- [ ] **F2-T06** Crear búsqueda por nombre con normalización de mayúsculas/acentos.
-- [ ] **F2-T07** Usar listas virtualizadas y carga progresiva de logos; impedir que miles de registros congelen UI.
-- [ ] **F2-T08** Añadir filtro por categoría y estado de vacíos/errores.
-- [ ] **F2-T09** Decidir si ambos servidores ofrecidos por el proveedor representan perfiles separados o alternativas válidas; nunca intercambiarlos automáticamente sin validación.
-- [ ] **F2-T10** Probar con catálogos simulados grandes, duplicados y respuestas parciales.
+- [x] **F2-T02** Interpretar respuesta de autenticación, cuenta expirada, credenciales inválidas y máximo de conexiones.
+- [x] **F2-T03** Descargar/normalizar categorías y canales; preservar identificadores del proveedor.
+- [x] **F2-T04** Añadir `HttpClientFactory`, timeouts, cancelación y reintentos limitados solo para operaciones idempotentes.
+- [x] **F2-T05** Implementar caché local con fecha de sincronización y refresco manual.
+- [x] **F2-T06** Crear búsqueda por nombre con normalización de mayúsculas/acentos.
+- [x] **F2-T07** Usar listas virtualizadas y carga progresiva de logos; impedir que miles de registros congelen UI.
+- [x] **F2-T08** Añadir filtro por categoría y estado de vacíos/errores.
+- [x] **F2-T09** Decidir si ambos servidores ofrecidos por el proveedor representan perfiles separados o alternativas válidas; nunca intercambiarlos automáticamente sin validación.
+- [x] **F2-T10** Probar con catálogos simulados grandes, duplicados y respuestas parciales.
 
 **Aceptación:** autenticación, categorías y miles de canales navegables; la búsqueda responde fluidamente, un fallo de Internet conserva el catálogo conocido y ofrece reintentar.
 

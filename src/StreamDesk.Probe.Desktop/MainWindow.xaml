@@ -3,6 +3,7 @@
                  xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
                  xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
                  xmlns:lvs="clr-namespace:LibVLCSharp.WPF;assembly=LibVLCSharp.WPF"
+                 xmlns:local="clr-namespace:StreamDesk.Probe.Desktop"
                  Title="StreamDesk"
                  Height="850" Width="1360" MinHeight="680" MinWidth="1000"
                  WindowStartupLocation="CenterScreen"
@@ -24,9 +25,23 @@
         <Style TargetType="TabItem">
             <Setter Property="Padding" Value="18,10" />
             <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Foreground" Value="{StaticResource TextMutedBrush}" />
+            <Setter Property="Background" Value="{StaticResource SurfaceBrush}" />
+            <Setter Property="Template">
+                <Setter.Value><ControlTemplate TargetType="TabItem">
+                    <Border x:Name="TabBorder" Background="{TemplateBinding Background}" BorderBrush="Transparent" BorderThickness="0,0,0,2" Padding="{TemplateBinding Padding}" Margin="0,0,4,0">
+                        <ContentPresenter ContentSource="Header" RecognizesAccessKey="True" />
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsSelected" Value="True"><Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" /><Setter TargetName="TabBorder" Property="BorderBrush" Value="{StaticResource AccentBrush}" /><Setter TargetName="TabBorder" Property="Background" Value="{StaticResource SurfaceRaisedBrush}" /></Trigger>
+                        <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="TabBorder" Property="Background" Value="{StaticResource SurfaceRaisedBrush}" /></Trigger>
+                        <Trigger Property="IsKeyboardFocused" Value="True"><Setter TargetName="TabBorder" Property="BorderBrush" Value="{StaticResource AccentBrush}" /></Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate></Setter.Value>
+            </Setter>
         </Style>
     </ui:FluentWindow.Resources>
-    <Grid Margin="{StaticResource SpaceLarge}">
+    <Grid Margin="{StaticResource SpaceLarge}" Background="{StaticResource CanvasBrush}">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
@@ -39,11 +54,11 @@
                 <TextBlock Text="Televisión, organizada a tu manera" FontSize="21" FontWeight="SemiBold" />
             </StackPanel>
             <ProgressBar DockPanel.Dock="Right" Width="110" Height="5" IsIndeterminate="True"
-                         Visibility="{Binding IsBusy, Converter={StaticResource BooleanToVisibilityConverter}}"
+                         Visibility="{Binding IsWorking, Converter={StaticResource BooleanToVisibilityConverter}}"
                          VerticalAlignment="Center" Foreground="{StaticResource AccentBrush}" />
         </DockPanel>
 
-        <TabControl Grid.Row="1" SelectedIndex="{Binding CurrentTabIndex, Mode=TwoWay}">
+        <TabControl x:Name="NavigationTabs" Grid.Row="1" SelectedIndex="{Binding CurrentTabIndex, Mode=TwoWay}" Background="{StaticResource CanvasBrush}" BorderThickness="0">
             <TabItem Header="Inicio">
                 <Grid Margin="24">
                     <Grid.RowDefinitions>
@@ -68,16 +83,24 @@
                     <Border Grid.Row="0" Padding="16" CornerRadius="10" Background="{StaticResource SurfaceBrush}" Margin="0,0,0,14">
                         <Grid>
                             <Grid.ColumnDefinitions><ColumnDefinition Width="2*" /><ColumnDefinition Width="1.2*" /><ColumnDefinition Width="Auto" /></Grid.ColumnDefinitions>
-                            <StackPanel Grid.Column="0" Margin="0,0,12,0">
-                                <TextBlock Text="Servidor base" Margin="0,0,0,5" />
+                            <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /></Grid.RowDefinitions>
+                            <WrapPanel Grid.Row="0" Grid.ColumnSpan="3" Margin="0,0,0,12">
+                                <TextBlock Text="Perfil" VerticalAlignment="Center" Margin="0,0,8,0" />
+                                <ComboBox Width="200" ItemsSource="{Binding Profiles}" DisplayMemberPath="Name" SelectedItem="{Binding ActiveProfile, Mode=TwoWay}" Margin="0,0,8,0" />
+                                <ui:Button Content="Conectar perfil" Command="{Binding ConnectProfileCommand}" Margin="0,0,8,0" />
+                                <ui:Button Content="Actualizar catálogo" Command="{Binding LoadCatalogCommand}" Margin="0,0,8,0" />
+                                <ui:Button Content="Cancelar consulta" Click="CancelCatalog_Click" />
+                            </WrapPanel>
+                            <StackPanel Grid.Row="1" Grid.Column="0" Margin="0,0,12,0">
+                                <TextBlock Text="Conexión temporal · servidor base" Margin="0,0,0,5" />
                                 <TextBox x:Name="BaseUrlBox" Text="{Binding BaseUrl, UpdateSourceTrigger=PropertyChanged}"
                                          ToolTip="URL http:// o https://, sin credenciales ni parámetros" />
                             </StackPanel>
-                            <StackPanel Grid.Column="1" Margin="0,0,12,0">
+                            <StackPanel Grid.Row="1" Grid.Column="1" Margin="0,0,12,0">
                                 <TextBlock Text="Usuario" Margin="0,0,0,5" />
                                 <TextBox x:Name="UsernameBox" Text="{Binding Username, UpdateSourceTrigger=PropertyChanged}" />
                             </StackPanel>
-                            <StackPanel Grid.Column="2" MinWidth="210">
+                            <StackPanel Grid.Row="1" Grid.Column="2" MinWidth="210">
                                 <TextBlock Text="Contraseña (se usa en memoria)" Margin="0,0,0,5" />
                                 <DockPanel LastChildFill="False">
                                     <PasswordBox x:Name="PasswordBox" Width="128" Margin="0,0,8,0" />
@@ -91,17 +114,33 @@
                         <Grid.ColumnDefinitions><ColumnDefinition Width="340" /><ColumnDefinition Width="16" /><ColumnDefinition Width="*" /></Grid.ColumnDefinitions>
                         <Border Grid.Column="0" Padding="16" CornerRadius="10" Background="{StaticResource SurfaceBrush}">
                             <Grid>
-                                <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="100" /><RowDefinition Height="Auto" /><RowDefinition Height="*" /></Grid.RowDefinitions>
+                                <Grid.RowDefinitions><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="Auto" /><RowDefinition Height="*" /></Grid.RowDefinitions>
                                 <TextBlock Text="Cuenta y catálogo" FontSize="18" FontWeight="SemiBold" Margin="0,0,0,10" />
-                                <TextBlock Grid.Row="1" Text="{Binding ConnectionSummary}" TextWrapping="Wrap" Foreground="{StaticResource TextMutedBrush}" Margin="0,0,0,10" />
-                                <DockPanel Grid.Row="2" Margin="0,0,0,8">
-                                    <TextBlock Text="Canales en vivo" FontWeight="SemiBold" VerticalAlignment="Center" />
-                                    <ui:Button Content="Cargar catálogo" Command="{Binding LoadCatalogCommand}" DockPanel.Dock="Right" />
-                                </DockPanel>
-                                <TextBlock Grid.Row="3" Text="Categorías consultadas" FontWeight="SemiBold" Margin="0,0,0,5" />
-                                <ListBox Grid.Row="4" ItemsSource="{Binding Categories}" DisplayMemberPath="Name" BorderThickness="0" Background="#FF111318" Margin="0,0,0,10" />
-                                <TextBlock Grid.Row="5" Text="Canales en vivo" FontWeight="SemiBold" Margin="0,0,0,5" />
-                                <ListBox Grid.Row="6" ItemsSource="{Binding Channels}" SelectedItem="{Binding SelectedChannel, Mode=TwoWay}" DisplayMemberPath="Name" BorderThickness="0" Background="#FF111318" />
+                                <TextBlock Grid.Row="1" Text="{Binding ConnectionSummary}" TextWrapping="Wrap" Foreground="{StaticResource TextMutedBrush}" Margin="0,0,0,10" Visibility="{Binding HasConnectionSummary, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                                <StackPanel Grid.Row="2" Margin="0,0,0,8">
+                                    <TextBlock Text="Buscar canal" Margin="0,0,0,5" />
+                                    <TextBox x:Name="SearchBox" Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}" AutomationProperties.Name="Buscar canal" ToolTip="Sin distinguir acentos ni mayúsculas" />
+                                </StackPanel>
+                                <ComboBox x:Name="CategoryFilter" Grid.Row="3" ItemsSource="{Binding Categories}" DisplayMemberPath="Name" SelectedItem="{Binding SelectedCategory, Mode=TwoWay}" Margin="0,0,0,8" VirtualizingPanel.IsVirtualizing="True" VirtualizingPanel.VirtualizationMode="Recycling" />
+                                <CheckBox Grid.Row="4" Content="Solo favoritos guardados" IsChecked="{Binding FavoritesOnly}" Margin="0,0,0,8" />
+                                <TextBlock Grid.Row="5" Text="{Binding CatalogSummary}" TextWrapping="Wrap" Foreground="{StaticResource TextMutedBrush}" Margin="0,0,0,8" FontSize="12" />
+                                <Grid Grid.Row="6">
+                                    <ListBox x:Name="ChannelsList" ItemsSource="{Binding Channels}" SelectedItem="{Binding SelectedChannel, Mode=TwoWay}" BorderThickness="0" Background="#FF111318"
+                                             ScrollViewer.CanContentScroll="True" VirtualizingPanel.IsVirtualizing="True" VirtualizingPanel.VirtualizationMode="Recycling">
+                                        <ListBox.ItemContainerStyle><Style TargetType="ListBoxItem" BasedOn="{StaticResource {x:Type ListBoxItem}}">
+                                            <Setter Property="Padding" Value="0" /><Setter Property="Margin" Value="0" /><Setter Property="Height" Value="52" /><Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                                        </Style></ListBox.ItemContainerStyle>
+                                        <ListBox.ItemTemplate><DataTemplate>
+                                            <DockPanel Margin="4" Height="42">
+                                                <Border Width="40" Height="36" Background="{StaticResource SurfaceRaisedBrush}" Margin="0,0,8,0">
+                                                    <local:ChannelLogo Url="{Binding LogoUrl}" Loader="{Binding LogoLoader, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Stretch="Uniform" />
+                                                </Border>
+                                                <TextBlock Text="{Binding Name}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                                            </DockPanel>
+                                        </DataTemplate></ListBox.ItemTemplate>
+                                    </ListBox>
+                                    <TextBlock Text="Sin canales. Actualiza el catálogo o cambia los filtros." TextWrapping="Wrap" TextAlignment="Center" VerticalAlignment="Center" Margin="18" IsHitTestVisible="False" Foreground="{StaticResource TextMutedBrush}" Visibility="{Binding HasNoChannels, Converter={StaticResource BooleanToVisibilityConverter}}" />
+                                </Grid>
                             </Grid>
                         </Border>
 
@@ -156,6 +195,7 @@
                         <TextBlock Text="Perfiles" Style="{StaticResource TypographyPageTitle}" />
                         <TextBlock Text="Se guarda la dirección base y se cifran usuario y contraseña con DPAPI CurrentUser. No se almacenan credenciales en la base de datos."
                                    Foreground="{StaticResource TextMutedBrush}" TextWrapping="Wrap" Margin="0,8,0,20" />
+                        <TextBlock Text="Crea un perfil independiente por servidor. La aplicación no intercambia servidores automáticamente." TextWrapping="Wrap" Foreground="{StaticResource TextMutedBrush}" Margin="0,0,0,12" />
                         <TextBlock Text="Nombre del perfil" Margin="0,0,0,5" /><TextBox Text="{Binding ProfileName, UpdateSourceTrigger=PropertyChanged}" />
                         <TextBlock Text="Servidor base" Margin="0,14,0,5" /><TextBox Text="{Binding ProfileBaseUrl, UpdateSourceTrigger=PropertyChanged}" />
                         <TextBlock Text="Usuario" Margin="0,14,0,5" /><TextBox Text="{Binding ProfileUsername, UpdateSourceTrigger=PropertyChanged}" />

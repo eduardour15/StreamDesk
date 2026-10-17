@@ -12,11 +12,17 @@ public partial class MainWindow : FluentWindow
     private WindowStyle _previousWindowStyle;
     private ResizeMode _previousResizeMode;
     private WindowState _previousWindowState;
+    public ChannelLogoLoader LogoLoader { get; }
 
-    public MainWindow(AppServices services)
+    public MainWindow(AppServices services) : this(
+        new MainViewModel(services.ProviderFactory, services.Playback, services.Profiles, services.Logger, services.Catalogs, services.Credentials), services.Logos)
+    { }
+
+    public MainWindow(MainViewModel viewModel, ChannelLogoLoader logoLoader)
     {
+        _viewModel = viewModel;
+        LogoLoader = logoLoader;
         InitializeComponent();
-        _viewModel = new MainViewModel(services.ProviderFactory, services.Playback, services.Profiles, services.Logger);
         DataContext = _viewModel;
         Loaded += async (_, _) => await _viewModel.LoadProfilesAsync();
     }
@@ -37,6 +43,7 @@ public partial class MainWindow : FluentWindow
 
     private void PlaySelected_Click(object sender, RoutedEventArgs e) => _viewModel.PlaySelected();
     private void Stop_Click(object sender, RoutedEventArgs e) => _viewModel.StopPlayback();
+    private void CancelCatalog_Click(object sender, RoutedEventArgs e) => _viewModel.CancelCatalog();
 
     private void VideoView_Loaded(object sender, RoutedEventArgs e)
     {
@@ -64,6 +71,7 @@ public partial class MainWindow : FluentWindow
 
     protected override void OnClosed(EventArgs e)
     {
+        VideoView.MediaPlayer = null;
         _viewModel.Dispose();
         VideoView.Dispose();
         base.OnClosed(e);

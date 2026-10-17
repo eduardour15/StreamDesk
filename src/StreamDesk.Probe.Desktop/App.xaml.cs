@@ -8,6 +8,12 @@ public partial class App : System.Windows.Application
 {
     private AppServices? _services;
 
+    protected override void OnExit(ExitEventArgs e)
+    {
+        _services?.Dispose();
+        base.OnExit(e);
+    }
+
     protected override async void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);

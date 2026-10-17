@@ -5,6 +5,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <IsPackable>false</IsPackable>
+    <UseWPF>true</UseWPF>
   </PropertyGroup>
 
   <ItemGroup>
@@ -16,12 +17,15 @@
 
   <ItemGroup>
     <Using Include="Xunit" />
+    <Using Include="System.IO" />
+    <Using Include="System.Net.Http" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\StreamDesk.Probe.Core\StreamDesk.Probe.Core.csproj" />
     <ProjectReference Include="..\..\src\StreamDesk.Application\StreamDesk.Application.csproj" />
     <ProjectReference Include="..\..\src\StreamDesk.Probe.Infrastructure\StreamDesk.Probe.Infrastructure.csproj" />
+    <ProjectReference Include="..\..\src\StreamDesk.Probe.Desktop\StreamDesk.Probe.Desktop.csproj" />
   </ItemGroup>
 
 </Project>
