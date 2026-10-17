@@ -8,6 +8,7 @@
     <ProjectReference Include="..\StreamDesk.Probe.Core\StreamDesk.Probe.Core.csproj" />
     <ProjectReference Include="..\StreamDesk.Application\StreamDesk.Application.csproj" />
     <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.13" />
+    <PackageReference Include="Microsoft.Extensions.Http" Version="10.0.13" />
     <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="10.0.13" />
   </ItemGroup>
 </Project>

@@ -16,6 +16,9 @@ public sealed class XtreamApiClient : IIptvProvider
 
     private readonly HttpClient _httpClient;
     private readonly TimeSpan _requestTimeout;
+    private readonly int _maxRetries;
+    private readonly SemaphoreSlim _requests = new(1, 1);
+    private readonly CancellationTokenSource _lifetime = new();
     private Uri? _baseUri;
     private string? _username;
     private string? _password;
@@ -27,9 +30,11 @@ public sealed class XtreamApiClient : IIptvProvider
         string username,
         string password,
         TimeSpan? requestTimeout = null,
-        HttpMessageHandler? handler = null)
+        HttpMessageHandler? handler = null,
+        HttpClient? httpClient = null,
+        int maxRetries = 2)
     {
-        if (!TryParseBaseUrl(baseUrl, out var baseUri))
+        if (!ProviderEndpoint.TryParse(baseUrl, out var baseUri))
         {
             throw new XtreamApiException(XtreamFailureKind.InvalidEndpoint);
         }
@@ -49,10 +54,15 @@ public sealed class XtreamApiClient : IIptvProvider
             throw new ArgumentOutOfRangeException(nameof(requestTimeout));
         }
 
-        _httpClient = new HttpClient(handler ?? new SocketsHttpHandler(), disposeHandler: true)
+        if (maxRetries is < 0 or > 2) throw new ArgumentOutOfRangeException(nameof(maxRetries));
+        _maxRetries = maxRetries;
+        _httpClient = httpClient ?? new HttpClient(handler ?? new SocketsHttpHandler
         {
-            Timeout = Timeout.InfiniteTimeSpan
-        };
+            AllowAutoRedirect = false,
+            UseCookies = false,
+            MaxConnectionsPerServer = 2
+        }, disposeHandler: true);
+        _httpClient.Timeout = Timeout.InfiniteTimeSpan;
     }
 
     public bool UsesUnencryptedTransport =>
@@ -61,6 +71,7 @@ public sealed class XtreamApiClient : IIptvProvider
     public async Task<XtreamAccount> AuthenticateAsync(CancellationToken cancellationToken = default)
     {
         ThrowIfDisposed();
+        _account = null;
         var root = await GetJsonAsync(BuildApiUri(action: null), isAuthentication: true, cancellationToken)
             .ConfigureAwait(false);
 
@@ -74,7 +85,7 @@ public sealed class XtreamApiClient : IIptvProvider
         EnsureAuthenticated();
         var root = await GetJsonAsync(BuildApiUri("get_live_categories"), isAuthentication: false, cancellationToken)
             .ConfigureAwait(false);
-        return ParseArray(root, ParseCategory);
+        return ParseArray(root, ParseCategory, item => item.Id);
     }
 
     public async Task<IReadOnlyList<XtreamChannel>> GetLiveChannelsAsync(
@@ -83,7 +94,7 @@ public sealed class XtreamApiClient : IIptvProvider
         EnsureAuthenticated();
         var root = await GetJsonAsync(BuildApiUri("get_live_streams"), isAuthentication: false, cancellationToken)
             .ConfigureAwait(false);
-        return ParseArray(root, ParseChannel);
+        return ParseArray(root, ParseChannel, item => item.Id);
     }
 
     public Uri CreateLiveStreamUri(XtreamChannel channel, string format)
@@ -125,11 +136,13 @@ public sealed class XtreamApiClient : IIptvProvider
         }
 
         _disposed = true;
+        _lifetime.Cancel();
         _password = null;
         _username = null;
         _account = null;
         _baseUri = null;
         _httpClient.Dispose();
+        _lifetime.Dispose();
     }
 
     private async Task<JsonElement> GetJsonAsync(
@@ -137,17 +150,14 @@ public sealed class XtreamApiClient : IIptvProvider
         bool isAuthentication,
         CancellationToken cancellationToken)
     {
-        using var timeoutSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        using var timeoutSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _lifetime.Token);
         timeoutSource.CancelAfter(_requestTimeout);
-
+        var entered = false;
         try
         {
-            using var request = new HttpRequestMessage(HttpMethod.Get, requestUri);
-            using var response = await _httpClient.SendAsync(
-                    request,
-                    HttpCompletionOption.ResponseHeadersRead,
-                    timeoutSource.Token)
-                .ConfigureAwait(false);
+            await _requests.WaitAsync(timeoutSource.Token).ConfigureAwait(false);
+            entered = true;
+            using var response = await SendWithRetriesAsync(requestUri, timeoutSource.Token).ConfigureAwait(false);
 
             if (!response.IsSuccessStatusCode)
             {
@@ -156,11 +166,15 @@ public sealed class XtreamApiClient : IIptvProvider
                     HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden when isAuthentication =>
                         XtreamFailureKind.InvalidCredentials,
                     HttpStatusCode.Unauthorized or HttpStatusCode.Forbidden => XtreamFailureKind.AccessDenied,
+                    HttpStatusCode.TooManyRequests => XtreamFailureKind.RateLimited,
                     _ => XtreamFailureKind.ProviderUnavailable
                 };
                 throw new XtreamApiException(kind);
             }
 
+            if (response.Content.Headers.ContentLength > 32 * 1024 * 1024)
+                throw new XtreamApiException(XtreamFailureKind.UnsupportedResponse);
+            await response.Content.LoadIntoBufferAsync(32 * 1024 * 1024, timeoutSource.Token).ConfigureAwait(false);
             await using var responseStream = await response.Content.ReadAsStreamAsync(timeoutSource.Token)
                 .ConfigureAwait(false);
             using var document = await JsonDocument.ParseAsync(
@@ -184,6 +198,39 @@ public sealed class XtreamApiClient : IIptvProvider
         catch (JsonException)
         {
             throw new XtreamApiException(XtreamFailureKind.UnsupportedResponse);
+        }
+        finally
+        {
+            if (entered) _requests.Release();
+        }
+    }
+
+    private async Task<HttpResponseMessage> SendWithRetriesAsync(Uri uri, CancellationToken cancellationToken)
+    {
+        for (var attempt = 0; ; attempt++)
+        {
+            HttpResponseMessage response;
+            try
+            {
+                using var request = new HttpRequestMessage(HttpMethod.Get, uri);
+                response = await _httpClient.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken).ConfigureAwait(false);
+            }
+            catch (HttpRequestException) when (attempt < _maxRetries)
+            {
+                await Task.Delay(TimeSpan.FromMilliseconds(250 * (1 << attempt)), cancellationToken).ConfigureAwait(false);
+                continue;
+            }
+
+            var transient = response.StatusCode is HttpStatusCode.RequestTimeout or HttpStatusCode.TooManyRequests
+                or HttpStatusCode.InternalServerError or HttpStatusCode.BadGateway or HttpStatusCode.ServiceUnavailable or HttpStatusCode.GatewayTimeout;
+            if (!transient || attempt >= _maxRetries) return response;
+            var retryAfter = response.Headers.RetryAfter;
+            var delay = retryAfter?.Delta ?? (retryAfter?.Date - DateTimeOffset.UtcNow)
+                ?? TimeSpan.FromMilliseconds(250 * (1 << attempt));
+            // A long Retry-After is surfaced to the user; never retry earlier than requested.
+            if (delay > TimeSpan.FromSeconds(5)) return response;
+            response.Dispose();
+            await Task.Delay(delay < TimeSpan.Zero ? TimeSpan.Zero : delay, cancellationToken).ConfigureAwait(false);
         }
     }
 
@@ -211,7 +258,7 @@ public sealed class XtreamApiClient : IIptvProvider
             !root.TryGetProperty("user_info", out var userInfo) ||
             userInfo.ValueKind != JsonValueKind.Object)
         {
-            throw new XtreamApiException(XtreamFailureKind.InvalidCredentials);
+            throw new XtreamApiException(XtreamFailureKind.UnsupportedResponse);
         }
 
         var status = ReadString(userInfo, "status") ?? string.Empty;
@@ -229,6 +276,9 @@ public sealed class XtreamApiClient : IIptvProvider
             throw new XtreamApiException(XtreamFailureKind.InvalidCredentials);
         }
 
+        if (!string.IsNullOrEmpty(status) && !status.Equals("active", StringComparison.OrdinalIgnoreCase))
+            throw new XtreamApiException(XtreamFailureKind.AccessDenied);
+
         if (auth is null && !status.Equals("active", StringComparison.OrdinalIgnoreCase))
         {
             throw new XtreamApiException(XtreamFailureKind.UnsupportedResponse);
@@ -236,6 +286,8 @@ public sealed class XtreamApiClient : IIptvProvider
 
         var activeConnections = ReadInt(userInfo, "active_cons");
         var maxConnections = ReadInt(userInfo, "max_connections");
+        if (activeConnections < 0) activeConnections = null;
+        if (maxConnections < 0) maxConnections = null;
         var isTrial = ReadBoolean(userInfo, "is_trial");
         var formats = ReadStringArray(userInfo, "allowed_output_formats")
             .Select(NormalizeFormat)
@@ -252,7 +304,7 @@ public sealed class XtreamApiClient : IIptvProvider
             formats);
     }
 
-    private static IReadOnlyList<T> ParseArray<T>(JsonElement root, Func<JsonElement, T> parseItem)
+    private static IReadOnlyList<T> ParseArray<T>(JsonElement root, Func<JsonElement, T> parseItem, Func<T, string> key)
     {
         if (root.ValueKind != JsonValueKind.Array)
         {
@@ -260,9 +312,11 @@ public sealed class XtreamApiClient : IIptvProvider
         }
 
         var results = new List<T>();
+        var seen = new HashSet<string>(StringComparer.Ordinal);
         foreach (var item in root.EnumerateArray())
         {
-            results.Add(parseItem(item));
+            var parsed = parseItem(item);
+            if (seen.Add(key(parsed))) results.Add(parsed);
         }
 
         return results;
@@ -282,10 +336,10 @@ public sealed class XtreamApiClient : IIptvProvider
             throw new XtreamApiException(XtreamFailureKind.UnsupportedResponse);
         }
 
-        return new XtreamCategory(id, name);
+        return new XtreamCategory(id.Trim(), name.Trim());
     }
 
-    private static XtreamChannel ParseChannel(JsonElement item)
+    private XtreamChannel ParseChannel(JsonElement item)
     {
         if (item.ValueKind != JsonValueKind.Object)
         {
@@ -300,11 +354,24 @@ public sealed class XtreamApiClient : IIptvProvider
         }
 
         return new XtreamChannel(
-            id,
-            name,
-            ReadString(item, "category_id"),
-            ReadString(item, "stream_type"),
-            ReadString(item, "container_extension"));
+            id.Trim(),
+            name.Trim(),
+            ReadString(item, "category_id")?.Trim(),
+            ReadString(item, "stream_type")?.Trim(),
+            ReadString(item, "container_extension")?.Trim(),
+            SafeLogoUrl(ReadString(item, "stream_icon")),
+            ReadString(item, "epg_channel_id"));
+    }
+
+    private string? SafeLogoUrl(string? value)
+    {
+        if (!Uri.TryCreate(value, UriKind.Absolute, out var uri) ||
+            uri.Scheme is not ("https" or "http") || uri.UserInfo.Length != 0 || uri.Query.Length != 0 || uri.Fragment.Length != 0)
+            return null;
+        var decoded = Uri.UnescapeDataString(uri.AbsoluteUri);
+        if (decoded.Contains(_username!, StringComparison.OrdinalIgnoreCase) || decoded.Contains(_password!, StringComparison.OrdinalIgnoreCase))
+            return null;
+        return uri.AbsoluteUri;
     }
 
     private static string? ReadString(JsonElement parent, string propertyName)
@@ -387,23 +454,6 @@ public sealed class XtreamApiClient : IIptvProvider
             .Where(item => !string.IsNullOrWhiteSpace(item))
             .Select(item => item!)
             .ToArray();
-    }
-
-    private static bool TryParseBaseUrl(string value, out Uri? baseUri)
-    {
-        baseUri = null;
-        if (!Uri.TryCreate(value?.Trim(), UriKind.Absolute, out var parsed) ||
-            (parsed.Scheme != Uri.UriSchemeHttp && parsed.Scheme != Uri.UriSchemeHttps) ||
-            string.IsNullOrWhiteSpace(parsed.Host) ||
-            !string.IsNullOrEmpty(parsed.UserInfo) ||
-            !string.IsNullOrEmpty(parsed.Query) ||
-            !string.IsNullOrEmpty(parsed.Fragment))
-        {
-            return false;
-        }
-
-        baseUri = parsed;
-        return true;
     }
 
     private static string AppendPath(string existingPath, string suffix) =>

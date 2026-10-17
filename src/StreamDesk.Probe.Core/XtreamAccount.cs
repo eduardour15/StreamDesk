@@ -6,4 +6,8 @@ public sealed record XtreamAccount(
     int? MaxConnections,
     bool? IsTrial,
     DateTimeOffset? ExpiresAt,
-    IReadOnlyList<string> AllowedOutputFormats);
+    IReadOnlyList<string> AllowedOutputFormats)
+{
+    public bool HasReachedConnectionLimit =>
+        MaxConnections is > 0 && ActiveConnections >= MaxConnections;
+}

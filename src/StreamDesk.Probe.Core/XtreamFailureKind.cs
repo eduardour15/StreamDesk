@@ -10,5 +10,6 @@ public enum XtreamFailureKind
     AccessDenied,
     UnsupportedResponse,
     FormatNotSupported,
-    InvalidState
+    InvalidState,
+    RateLimited
 }

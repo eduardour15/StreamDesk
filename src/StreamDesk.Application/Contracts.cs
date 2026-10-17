@@ -60,14 +60,11 @@ public sealed class ProfileService(ISettingsService settings, ICredentialStore c
             throw new ArgumentException("El nombre debe tener entre 1 y 80 caracteres.", nameof(name));
         if (string.IsNullOrWhiteSpace(username) || username.Length > 256 || string.IsNullOrEmpty(password) || password.Length > 1024)
             throw new ArgumentException("Revisa el usuario y la contraseña.", nameof(username));
-        if (!Uri.TryCreate(baseUrl.Trim(), UriKind.Absolute, out var uri) ||
-            (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps) ||
-            string.IsNullOrWhiteSpace(uri.Host) || !string.IsNullOrEmpty(uri.UserInfo) ||
-            !string.IsNullOrEmpty(uri.Query) || !string.IsNullOrEmpty(uri.Fragment))
+        if (!ProviderEndpoint.TryParse(baseUrl, out var uri))
             throw new ArgumentException("Usa una URL base HTTP o HTTPS sin credenciales ni parámetros.", nameof(baseUrl));
 
         var id = Guid.NewGuid().ToString("N");
-        var profile = new Profile(id, normalizedName, uri.ToString().TrimEnd('/'), id, DateTimeOffset.UtcNow);
+        var profile = new Profile(id, normalizedName, uri!.ToString().TrimEnd('/'), id, DateTimeOffset.UtcNow);
         await credentials.SaveAsync(id, new StoredCredentials(username.Trim(), password), cancellationToken);
         try
         {

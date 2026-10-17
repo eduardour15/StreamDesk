@@ -5,4 +5,6 @@ public sealed record XtreamChannel(
     string Name,
     string? CategoryId,
     string? StreamType,
-    string? ContainerExtension);
+    string? ContainerExtension,
+    string? LogoUrl = null,
+    string? EpgChannelId = null);
