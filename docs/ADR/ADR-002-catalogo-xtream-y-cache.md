@@ -13,6 +13,7 @@
 - SQLite pasa a esquema v2 con claves `(ProfileId, ContentType, ProviderId)` e índices de categoría/nombre normalizado. La migración conserva perfiles, canales, favoritos e historial. La API devuelve listas completas: se elige reemplazo atómico con upsert, eliminación de IDs obsoletos y fecha UTC al confirmar. Los favoritos de IDs que permanecen se conservan.
 - La E/S de SQLite se ejecuta en tareas de fondo: [sus métodos ADO.NET async son síncronos internamente](https://learn.microsoft.com/en-us/dotnet/standard/data/sqlite/async). No se carga masivamente la colección de canales mediante notificaciones por fila.
 - Búsqueda local con índice de nombres sin distinguir acentos/mayúsculas, cancelación y debounce de 180 ms. Listas WPF con [virtualización y reciclaje](https://learn.microsoft.com/en-us/dotnet/desktop/wpf/advanced/optimizing-performance-controls). Logos solo para filas materializadas, con cancelación al salir de pantalla, 4 descargas simultáneas, 512 KiB por imagen, decodificación a 64×64 y LRU de 128 resultados en memoria.
+- El cargador de logos filtra las firmas raster que soportan los codecs WIC integrados de WPF antes de decodificar. SVG, WebP, AVIF y respuestas HTML se tratan como metadatos opcionales ausentes y no interrumpen la navegación ni provocan excepciones de primera oportunidad por cada fila.
 
 ## Validación y límites
 

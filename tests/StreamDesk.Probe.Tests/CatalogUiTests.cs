@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Net;
 using System.Net.Http;
+using System.Text;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
@@ -141,6 +142,27 @@ public sealed class CatalogUiTests
         var previous = requests;
         Assert.Null(await loader.GetAsync("https://logos.invalid/a.png?token=fixture", CancellationToken.None));
         Assert.Equal(previous, requests);
+        using var unsupported = new ChannelLogoLoader(new HttpClient(new XtreamPhase2Tests.Handler((request, _) =>
+        {
+            if (request.RequestUri!.AbsolutePath.EndsWith(".webp", StringComparison.Ordinal))
+            {
+                // RIFF/WebP is intentionally unsupported by WPF's built-in WIC codecs.
+                return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new ByteArrayContent(new byte[] { (byte)'R', (byte)'I', (byte)'F', (byte)'F', 0, 0, 0, 0, (byte)'W', (byte)'E', (byte)'B', (byte)'P' })
+                });
+            }
+            var body = request.RequestUri.AbsolutePath.EndsWith(".svg", StringComparison.Ordinal)
+                ? "<svg xmlns=\"http://www.w3.org/2000/svg\"></svg>"
+                : "<html>provider error</html>";
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(body, Encoding.UTF8, request.RequestUri.AbsolutePath.EndsWith(".svg", StringComparison.Ordinal) ? "image/svg+xml" : "text/html")
+            });
+        })));
+        Assert.Null(await unsupported.GetAsync("https://logos.invalid/logo.svg", CancellationToken.None));
+        Assert.Null(await unsupported.GetAsync("https://logos.invalid/logo.webp", CancellationToken.None));
+        Assert.Null(await unsupported.GetAsync("https://logos.invalid/logo.png", CancellationToken.None));
         using var oversized = new ChannelLogoLoader(new HttpClient(new XtreamPhase2Tests.Handler((_, _) =>
             Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = new ByteArrayContent(new byte[512 * 1024 + 1]) }))));
         Assert.Null(await oversized.GetAsync("https://logos.invalid/large.png", CancellationToken.None));

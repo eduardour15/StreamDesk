@@ -39,6 +39,11 @@ public sealed class ChannelLogoLoader(HttpClient client) : IDisposable
             }
             buffer.Position = 0;
             var encoded = buffer.ToArray();
+            // WPF's built-in WIC codecs do not handle SVG, WebP, AVIF or HTML
+            // error pages.  Check the payload before invoking BitmapImage so a
+            // provider's unsupported logo does not produce a first-chance WIC
+            // exception for every realized row.
+            if (!LooksLikeWpfRasterImage(encoded)) return Remember(url!, null);
             image = await Task.Run(() =>
             {
                 using var stream = new MemoryStream(encoded);
@@ -53,6 +58,23 @@ public sealed class ChannelLogoLoader(HttpClient client) : IDisposable
         catch { /* An unavailable or invalid logo must not interrupt catalogue navigation. */ }
         finally { if (entered) _slots.Release(); }
         return Remember(url!, image);
+    }
+
+    private static bool LooksLikeWpfRasterImage(ReadOnlySpan<byte> data)
+    {
+        // PNG
+        if (data.Length >= 8 && data[..8].SequenceEqual(new byte[] { 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A })) return true;
+        // JPEG
+        if (data.Length >= 3 && data[0] == 0xFF && data[1] == 0xD8 && data[2] == 0xFF) return true;
+        // GIF
+        if (data.Length >= 6 && (data[..6].SequenceEqual("GIF87a"u8) || data[..6].SequenceEqual("GIF89a"u8))) return true;
+        // BMP
+        if (data.Length >= 2 && data[0] == (byte)'B' && data[1] == (byte)'M') return true;
+        // TIFF (little- and big-endian)
+        if (data.Length >= 4 && ((data[0] == (byte)'I' && data[1] == (byte)'I' && data[2] == 0x2A && data[3] == 0x00) ||
+                                 (data[0] == (byte)'M' && data[1] == (byte)'M' && data[2] == 0x00 && data[3] == 0x2A))) return true;
+        // ICO/CUR
+        return data.Length >= 4 && data[0] == 0x00 && data[1] == 0x00 && (data[2] == 0x01 || data[2] == 0x02) && data[3] == 0x00;
     }
 
     private bool TryGet(string key, out BitmapSource? image)
