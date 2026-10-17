@@ -6,17 +6,29 @@ namespace StreamDesk.Probe.Infrastructure;
 
 public sealed class SqliteSettingsService : ISettingsService
 {
-    private const int CurrentSchemaVersion = 1;
+    private const int CurrentSchemaVersion = 2;
     private readonly string _connectionString;
 
     public SqliteSettingsService(string databasePath, bool pooling = true)
     {
         var fullPath = Path.GetFullPath(databasePath);
         Directory.CreateDirectory(Path.GetDirectoryName(fullPath)!);
-        _connectionString = new SqliteConnectionStringBuilder { DataSource = fullPath, ForeignKeys = true, Pooling = pooling }.ToString();
+        _connectionString = new SqliteConnectionStringBuilder { DataSource = fullPath, ForeignKeys = true, Pooling = pooling, DefaultTimeout = 5 }.ToString();
     }
 
-    public async Task InitializeAsync(CancellationToken cancellationToken = default)
+    public Task InitializeAsync(CancellationToken cancellationToken = default) =>
+        Task.Run(() => InitializeCoreAsync(cancellationToken), cancellationToken);
+
+    public Task<IReadOnlyList<Profile>> GetProfilesAsync(CancellationToken cancellationToken = default) =>
+        Task.Run(() => GetProfilesCoreAsync(cancellationToken), cancellationToken);
+
+    public Task AddProfileAsync(Profile profile, CancellationToken cancellationToken = default) =>
+        Task.Run(() => AddProfileCoreAsync(profile, cancellationToken), cancellationToken);
+
+    public Task DeleteProfileAsync(string profileId, CancellationToken cancellationToken = default) =>
+        Task.Run(() => DeleteProfileCoreAsync(profileId, cancellationToken), cancellationToken);
+
+    private async Task InitializeCoreAsync(CancellationToken cancellationToken)
     {
         await using var connection = new SqliteConnection(_connectionString);
         await connection.OpenAsync(cancellationToken);
@@ -75,11 +87,17 @@ public sealed class SqliteSettingsService : ISettingsService
                 UPDATE SchemaVersion SET Version = 1;
                 """;
             await command.ExecuteNonQueryAsync(cancellationToken);
+            version = 1;
+        }
+        if (version == 1)
+        {
+            command.CommandText = CatalogMigration.Sql;
+            await command.ExecuteNonQueryAsync(cancellationToken);
         }
         await transaction.CommitAsync(cancellationToken);
     }
 
-    public async Task<IReadOnlyList<Profile>> GetProfilesAsync(CancellationToken cancellationToken = default)
+    private async Task<IReadOnlyList<Profile>> GetProfilesCoreAsync(CancellationToken cancellationToken)
     {
         await using var connection = new SqliteConnection(_connectionString);
         await connection.OpenAsync(cancellationToken);
@@ -92,7 +110,7 @@ public sealed class SqliteSettingsService : ISettingsService
         return profiles;
     }
 
-    public async Task AddProfileAsync(Profile profile, CancellationToken cancellationToken = default)
+    private async Task AddProfileCoreAsync(Profile profile, CancellationToken cancellationToken)
     {
         await using var connection = new SqliteConnection(_connectionString);
         await connection.OpenAsync(cancellationToken);
@@ -106,7 +124,7 @@ public sealed class SqliteSettingsService : ISettingsService
         await command.ExecuteNonQueryAsync(cancellationToken);
     }
 
-    public async Task DeleteProfileAsync(string profileId, CancellationToken cancellationToken = default)
+    private async Task DeleteProfileCoreAsync(string profileId, CancellationToken cancellationToken)
     {
         await using var connection = new SqliteConnection(_connectionString);
         await connection.OpenAsync(cancellationToken);
