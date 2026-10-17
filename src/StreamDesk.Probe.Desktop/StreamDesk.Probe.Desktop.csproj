@@ -10,6 +10,8 @@
   <ItemGroup>
     <PackageReference Include="WPF-UI" Version="4.3.0" />
     <PackageReference Include="LibVLCSharp.WPF" Version="3.10.2" />
+    <!-- The executable owns the native VLC payload; transitive package assets from Playback are not copied here. -->
+    <PackageReference Include="VideoLAN.LibVLC.Windows" Version="3.0.24" />
   </ItemGroup>
 
   <PropertyGroup>

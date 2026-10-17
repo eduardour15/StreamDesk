@@ -1,3 +1,5 @@
+using System.IO;
+using System.Runtime.InteropServices;
 using LibVLCSharp.Shared;
 using StreamDesk.Application;
 
@@ -20,7 +22,13 @@ public sealed class LibVlcPlaybackService : IPlaybackService
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
         if (_mediaPlayer is not null) return;
-        LibVLCSharp.Shared.Core.Initialize();
+        var runtimeDirectory = Path.Combine(AppContext.BaseDirectory, "libvlc", GetRuntimeArchitectureDirectory());
+        if (!File.Exists(Path.Combine(runtimeDirectory, "libvlc.dll")) ||
+            !File.Exists(Path.Combine(runtimeDirectory, "libvlccore.dll")))
+        {
+            throw new InvalidOperationException("No se encontró el runtime nativo de LibVLC junto al ejecutable.");
+        }
+        LibVLCSharp.Shared.Core.Initialize(runtimeDirectory);
         _libVlc = new LibVLC();
         _mediaPlayer = new MediaPlayer(_libVlc);
         _mediaPlayer.Playing += (_, _) => PlaybackStarted?.Invoke(this, EventArgs.Empty);
@@ -58,4 +66,13 @@ public sealed class LibVlcPlaybackService : IPlaybackService
         _libVlc?.Dispose();
         _libVlc = null;
     }
+
+    private static string GetRuntimeArchitectureDirectory() =>
+        RuntimeInformation.ProcessArchitecture switch
+        {
+            Architecture.X64 => "win-x64",
+            Architecture.X86 => "win-x86",
+            Architecture.Arm64 => "win-arm64",
+            var architecture => throw new PlatformNotSupportedException($"Arquitectura no soportada: {architecture}.")
+        };
 }

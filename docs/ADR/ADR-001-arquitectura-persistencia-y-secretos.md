@@ -13,6 +13,7 @@ El prototipo F0 necesita crecer a una aplicación WPF que arranque sin conexión
 - Usar `Microsoft.Data.Sqlite` 10.0.13 con `SchemaVersion` y migración explícita. SQLite contiene datos del perfil y catálogo, nunca usuario, contraseña o URL autenticada.
 - Proteger usuario/contraseña como archivo DPAPI `CurrentUser` bajo `%LocalAppData%\StreamDesk\secrets`, usando una clave aleatoria de perfil como entropía. Al eliminar un perfil se elimina su fila y archivo asociado.
 - Mantener un solo servicio LibVLC y un `MediaPlayer`; el cambio de canal detiene y sustituye el medio actual.
+- El ejecutable WPF es dueño del paquete nativo `VideoLAN.LibVLC.Windows`; el servicio de Playback mantiene la integración administrada y recibe el runtime desde `libvlc\win-{arch}` junto al ejecutable. La inicialización comprueba `libvlc.dll` y `libvlccore.dll` antes de crear `LibVLC`.
 - Los logs contienen solo identificador técnico y tipo de excepción, sin mensaje ni stack trace.
 
 ## Consecuencias
