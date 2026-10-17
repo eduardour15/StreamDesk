@@ -79,9 +79,9 @@ La separación puede simplificarse si el MVP se vuelve innecesariamente complejo
 - [x] **F0-T02** Crear pantalla de configuración temporal que solicite URL, usuario y contraseña sin valores incrustados en el código.
 - [x] **F0-T03** Probar el contrato Xtream `player_api.php`: autenticación, estado de cuenta, conexiones admitidas y formatos disponibles, sin registrar secretos.
 - [x] **F0-T04** Implementar consulta real de categorías y canales con timeout, cancelación y tratamiento de errores. Usar respuestas mock para tests.
-- [x] **F0-T05** Reproducir al menos una transmisión autorizada; evaluar `.ts` y `.m3u8` cuando el servicio los admita.
-- [x] **F0-T06** Demostrar detener, liberar, reproducir otro canal y cerrar la app sin conservar el stream.
-- [x] **F0-T07** Probar controls encima del video, maximizar, pantalla completa, DPI y cambio de monitor (riesgo airspace).
+- [ ] **F0-T05** Reproducir al menos una transmisión autorizada; evaluar `.ts` y `.m3u8` cuando el servicio los admita. Auditoría: PARCIAL, revalidar tras corrección de runtime.
+- [ ] **F0-T06** Demostrar detener, liberar, reproducir otro canal y cerrar la app sin conservar el stream. Auditoría: PARCIAL, falta revalidación multimedia actual.
+- [ ] **F0-T07** Probar controls encima del video, maximizar, pantalla completa, DPI y cambio de monitor (riesgo airspace). Auditoría: PARCIAL, sin evidencia detallada de DPI/monitores.
 - [ ] **F0-T08** Medir arranque, RAM, CPU, GPU, latencia de canal y estabilidad en una sesión real; anotar modelo de hardware y códec.
 - [ ] **F0-T09** Verificar modalidad de acceso segura (preferir HTTPS), límites de conexión y condiciones de uso. Mostrar aviso si únicamente admite HTTP.
 - [ ] **F0-T10** Revisar versiones y licencias de WPF UI, LibVLCSharp y bibliotecas nativas antes de distribuir.

@@ -15,6 +15,7 @@ El prototipo F0 necesita crecer a una aplicación WPF que arranque sin conexión
 - Mantener un solo servicio LibVLC y un `MediaPlayer`; el cambio de canal detiene y sustituye el medio actual.
 - El ejecutable WPF es dueño del paquete nativo `VideoLAN.LibVLC.Windows`; el servicio de Playback mantiene la integración administrada y recibe el runtime desde `libvlc\win-{arch}` junto al ejecutable. La inicialización comprueba `libvlc.dll` y `libvlccore.dll` antes de crear `LibVLC`.
 - Los logs contienen solo identificador técnico y tipo de excepción, sin mensaje ni stack trace.
+- Auditoría F0–F2: al eliminar un perfil se conserva una copia de las credenciales únicamente en memoria, se elimina el secreto y luego la fila SQLite. Si SQLite falla se restaura el secreto mediante el almacén protegido; si el borrado del secreto falla, la base y todas sus filas dependientes permanecen intactas. No se promete una transacción distribuida frente a pérdida de energía o a un fallo adicional durante la compensación.
 
 ## Consecuencias
 

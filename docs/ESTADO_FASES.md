@@ -4,16 +4,27 @@ Este archivo registra trabajo y evidencias reales. La confirmación del usuario 
 
 | Fase | Gate | Tareas completas | Última revisión | Bloqueos o dependencias |
 |---|---|---:|---|---|
-| F0 | APROBADA | 8/11 | 2026-10-17 | Métricas de hardware/códec, verificación de condiciones del proveedor y revisión completa de licencias siguen pendientes; no bloquean el gate funcional reportado. |
-| F1 | APROBADA | 10/10 | 2026-10-17 | Validación funcional confirmada por el usuario; sin desglose manual por paso. |
-| F2 | APROBADA | 10/10 | 2026-10-17 | Build y 58 tests correctos, incluida WPF con 5.000 canales ficticios. Prueba opcional con proveedor real pendiente. |
-| F3 | NO_INICIADA | 0/11 | — | Sin iniciar; F2 ya aprobada |
+| F0 | PENDIENTE_DE_VALIDACION | 5/11 | 2026-10-17 | Auditoría: revalidar video/cambio/detención/controles tras fallo real de LibVLC reportado; F0-T05/T06/T07 PARCIAL. Métricas, condiciones del proveedor y avisos nativos pendientes. |
+| F1 | PENDIENTE_DE_VALIDACION | 10/10 | 2026-10-17 | Código y regresiones corregidos; falta confirmar preservación del playback real actual. |
+| F2 | PENDIENTE_DE_VALIDACION | 10/10 | 2026-10-17 | 67 tests en salida Release aislada, incluida WPF con 5.000 canales. Verificación técnica PASA; cierre condicionado a revalidación previa F0/F1. |
+| F3 | NO_INICIADA | 0/11 | — | Requiere cerrar la revalidación de F0/F1/F2 |
 | F4 | NO_INICIADA | 0/11 | — | Requiere F3 aprobada |
 | F5 | NO_INICIADA | 0/9 | — | Requiere F4 aprobada; EPG/VOD condicional |
 | F6 | NO_INICIADA | 0/12 | — | Requiere MVP estable |
 | F7 | NO_INICIADA | 0/6 | — | Opcional después de 1.0 |
 
 ## Bitácora de evidencias
+
+### 2026-10-17 (America/Managua) — Auditoría y corrección de F0–F2 (estado vigente)
+
+- **Solicitud:** auditar las fases trabajadas y resolver los problemas encontrados. Se revisaron F0, F1, F2, código actual, tests y ADRs; F3–F7 no se ejecutaron. El detalle por los 31 IDs y la matriz de incidencias están en [AUDITORIA_F0_F2.md](AUDITORIA_F0_F2.md). Las aprobaciones históricas de abajo se conservan y quedan sustituidas por este estado vigente.
+- **Defectos reproducidos y resueltos:** pérdida de catálogo/favoritos/historial ante fallo de borrado de credenciales; una lectura tardía de credenciales borraba la sesión nueva; cambio de perfil permitía desbloquear un guardado pendiente; rutas de stream con credenciales de solo puntos se comprimían; Dispose de proveedor se informaba como timeout. También se corrigieron cancelación temprana DPAPI, reutilización/caché tras Dispose de logos, inicialización parcial/limpieza nativa y errores de construcción de servicios fuera del try de arranque. LibVLC usa quiet y oculta el título del medio para reducir exposición accidental de URLs.
+- **Evidencia antes/después:** base de 60 tests correcta; cinco casos de regresión nuevos fallaron antes del arreglo y los siete casos nuevos pasan después. La prueba WPF reprodujo la sesión nueva borrada por una lectura antigua y luego pasó, junto con guardado protegido frente a doble ejecución.
+- **Comandos finales:** restore de solución con `--artifacts-path artifacts/audit-verification`; build Release con `--no-restore --artifacts-path artifacts/audit-verification --verbosity minimal --maxcpucount:1 -p:UseSharedCompilation=false` (0 errores/advertencias); test Release con `--no-build --no-restore --artifacts-path artifacts/audit-verification --verbosity minimal --maxcpucount:1` (67 correctos, 0 fallidos/omitidos). Salida aislada sin binarios previos: DLL/plugins nativos presentes e inicialización/disposición real del motor comprobada, sin canal IPTV.
+- **WPF:** 5.000 canales ficticios, 5 filas iniciales y 4 al desplazar; búsqueda con acentos de 393 ms en esta ejecución (incluye debounce, no es benchmark general), fallo de refresco conserva 5.000, cambio de perfil mantiene aislamiento. Captura `artifacts/f2-catalog.png` inspeccionada; no acredita video nativo. Todos los datos del test están en directorios temporales.
+- **Dependencias/privacidad:** `dotnet list StreamDesk.sln package --vulnerable --include-transitive --no-restore --format json` consultó NuGet y no reportó avisos conocidos. No equivale a una auditoría de cada plugin nativo. Se revisaron licencias declaradas de los 24 paquetes de Desktop: MIT, Apache-2.0 y LGPL-2.1-or-later; inventario/avisos completos de plugins siguen pendientes antes de distribuir. No hay archivos `.db`, `.dpapi`, `.env` ni `secrets/` rastreados. No se consultaron datos reales del usuario.
+- **Gate de auditoría:** F0 y F1 `PENDIENTE_DE_VALIDACION`: el último reporte de playback real fue un fallo y la corrección del runtime solo fue probada mediante inicialización nativa. F2 tiene sus 10 tareas implementadas y aceptación automatizada PASA, pero su gate queda `PENDIENTE_DE_VALIDACION` por dependencia de F1. F0-T05/T06/T07 pasan a `PARCIAL`; no se inventan confirmaciones de formatos/monitores que el usuario no aportó.
+- **Siguiente paso:** protocolo de revalidación del informe: imagen/audio, dos canales, detener/cerrar, controles/fullscreen/DPI. Métricas, HTTPS/condiciones y licencias nativas permanecen en sus IDs. F3 continúa sin iniciar. El archivo aportado `Error/error.txt` se conserva fuera de Git.
 
 ### 2026-10-17 (America/Managua) — Cierre de Fase 0
 

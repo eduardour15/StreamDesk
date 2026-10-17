@@ -42,3 +42,5 @@ Si el proveedor usa HTTP, usuario y contraseña pueden viajar sin cifrar. Pregun
 Para repetir la prueba WPF: `dotnet test StreamDesk.sln --filter FullyQualifiedName~CatalogUiTests`. Genera una captura y mediciones en `artifacts/`, usando exclusivamente datos inventados. Los logos visibles se descargan bajo demanda y su caché se limita a 128 entradas en memoria.
 
 Los tests simulados validan contratos y persistencia, no una conexión IPTV real ni la reproducción de video.
+
+La auditoría de F0–F2 y los pasos para revalidar el video tras la corrección del runtime están en [docs/AUDITORIA_F0_F2.md](docs/AUDITORIA_F0_F2.md). LibVLC se incluye junto al ejecutable; conserva la carpeta `libvlc` al ejecutar o copiar una salida de compilación. Las pruebas inicializan el motor nativo y verifican su cierre sin abrir canales del proveedor.
