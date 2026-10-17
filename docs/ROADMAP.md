@@ -76,16 +76,16 @@ La separación puede simplificarse si el MVP se vuelve innecesariamente complejo
 **Entregable:** un ejecutable experimental que conecta con un servidor configurado por el usuario, lista unos canales y reproduce video con controles básicos.
 
 - [x] **F0-T01** Crear repositorio, solución .NET y proyecto WPF mínimo compilable.
-- [ ] **F0-T02** Crear pantalla de configuración temporal que solicite URL, usuario y contraseña sin valores incrustados en el código.
-- [ ] **F0-T03** Probar el contrato Xtream `player_api.php`: autenticación, estado de cuenta, conexiones admitidas y formatos disponibles, sin registrar secretos.
-- [ ] **F0-T04** Implementar consulta real de categorías y canales con timeout, cancelación y tratamiento de errores. Usar respuestas mock para tests.
-- [ ] **F0-T05** Reproducir al menos una transmisión autorizada; evaluar `.ts` y `.m3u8` cuando el servicio los admita.
-- [ ] **F0-T06** Demostrar detener, liberar, reproducir otro canal y cerrar la app sin conservar el stream.
-- [ ] **F0-T07** Probar controls encima del video, maximizar, pantalla completa, DPI y cambio de monitor (riesgo airspace).
+- [x] **F0-T02** Crear pantalla de configuración temporal que solicite URL, usuario y contraseña sin valores incrustados en el código.
+- [x] **F0-T03** Probar el contrato Xtream `player_api.php`: autenticación, estado de cuenta, conexiones admitidas y formatos disponibles, sin registrar secretos.
+- [x] **F0-T04** Implementar consulta real de categorías y canales con timeout, cancelación y tratamiento de errores. Usar respuestas mock para tests.
+- [x] **F0-T05** Reproducir al menos una transmisión autorizada; evaluar `.ts` y `.m3u8` cuando el servicio los admita.
+- [x] **F0-T06** Demostrar detener, liberar, reproducir otro canal y cerrar la app sin conservar el stream.
+- [x] **F0-T07** Probar controls encima del video, maximizar, pantalla completa, DPI y cambio de monitor (riesgo airspace).
 - [ ] **F0-T08** Medir arranque, RAM, CPU, GPU, latencia de canal y estabilidad en una sesión real; anotar modelo de hardware y códec.
 - [ ] **F0-T09** Verificar modalidad de acceso segura (preferir HTTPS), límites de conexión y condiciones de uso. Mostrar aviso si únicamente admite HTTP.
 - [ ] **F0-T10** Revisar versiones y licencias de WPF UI, LibVLCSharp y bibliotecas nativas antes de distribuir.
-- [ ] **F0-T11** Registrar decisiones técnicas en máximo una página y adjuntar evidencia de ejecución.
+- [x] **F0-T11** Registrar decisiones técnicas en máximo una página y adjuntar evidencia de ejecución.
 
 **Aceptación:** la aplicación experimental se abre, carga un catálogo, inicia un canal válido, cambia a otro, termina la reproducción sin procesos colgados; queda resuelto si WPF/LibVLC soportará el diseño de controles elegido. Si se bloquea alguna condición, no avanzar ciegamente.
 
@@ -93,16 +93,16 @@ La separación puede simplificarse si el MVP se vuelve innecesariamente complejo
 **Meta:** convertir el prototipo en una base mantenible.  
 **Entregable:** aplicación WPF navegable, compilable, con persistencia y estructura de pruebas.
 
-- [ ] **F1-T01** Separar solución en proyectos/capas; definir `IIptvProvider`, `IPlaybackService`, `ISettingsService`, `ICredentialStore`.
-- [ ] **F1-T02** Configurar MVVM, DI, comandos async, `CancellationToken` y gestión del ciclo de vida.
-- [ ] **F1-T03** Aplicar WPF UI con tokens visuales: colores, tipografía, espaciado, estados y modo oscuro.
-- [ ] **F1-T04** Implementar navegación: Inicio, TV en vivo, Favoritos, Recientes y Configuración.
-- [ ] **F1-T05** Crear SQLite versionado y tablas iniciales para perfiles, canales, categorías, favoritos e historial.
-- [ ] **F1-T06** Implementar almacén de secretos DPAPI/Windows, separado de SQLite; permitir borrar cuenta y credenciales.
-- [ ] **F1-T07** Centralizar errores, notificaciones UI, logging redactado y manejo global de fallos recuperables.
-- [ ] **F1-T08** Aplicar validaciones a formularios, prevención de doble clic y estados loading/vacío/error.
-- [ ] **F1-T09** Configurar test unitarios e integración con fixtures falsos; ejecutar `dotnet build` y `dotnet test`.
-- [ ] **F1-T10** Crear guía mínima de ejecución y reglas del agente en `AGENTS.md`.
+- [x] **F1-T01** Separar solución en proyectos/capas; definir `IIptvProvider`, `IPlaybackService`, `ISettingsService`, `ICredentialStore`.
+- [x] **F1-T02** Configurar MVVM, DI, comandos async, `CancellationToken` y gestión del ciclo de vida.
+- [x] **F1-T03** Aplicar WPF UI con tokens visuales: colores, tipografía, espaciado, estados y modo oscuro.
+- [x] **F1-T04** Implementar navegación: Inicio, TV en vivo, Favoritos, Recientes y Configuración.
+- [x] **F1-T05** Crear SQLite versionado y tablas iniciales para perfiles, canales, categorías, favoritos e historial.
+- [x] **F1-T06** Implementar almacén de secretos DPAPI/Windows, separado de SQLite; permitir borrar cuenta y credenciales.
+- [x] **F1-T07** Centralizar errores, notificaciones UI, logging redactado y manejo global de fallos recuperables.
+- [x] **F1-T08** Aplicar validaciones a formularios, prevención de doble clic y estados loading/vacío/error.
+- [x] **F1-T09** Configurar test unitarios e integración con fixtures falsos; ejecutar `dotnet build` y `dotnet test`.
+- [x] **F1-T10** Crear guía mínima de ejecución y reglas del agente en `AGENTS.md`.
 
 **Aceptación:** la aplicación inicia sin Internet, navega sin bloquear, permite guardar y eliminar un perfil de prueba, ningún secreto aparece en código/log/base de datos, y la suite de tests se ejecuta.
 

@@ -1,8 +1,9 @@
 using System.Globalization;
 using System.Net;
 using System.Text.Json;
+using StreamDesk.Probe.Core;
 
-namespace StreamDesk.Probe.Core;
+namespace StreamDesk.Probe.Infrastructure;
 
 public sealed class XtreamApiClient : IDisposable
 {

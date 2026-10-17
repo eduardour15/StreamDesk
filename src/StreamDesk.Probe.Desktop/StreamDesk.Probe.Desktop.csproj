@@ -2,12 +2,14 @@
 
   <ItemGroup>
     <ProjectReference Include="..\StreamDesk.Probe.Core\StreamDesk.Probe.Core.csproj" />
+    <ProjectReference Include="..\StreamDesk.Application\StreamDesk.Application.csproj" />
+    <ProjectReference Include="..\StreamDesk.Probe.Infrastructure\StreamDesk.Probe.Infrastructure.csproj" />
+    <ProjectReference Include="..\StreamDesk.Probe.Playback\StreamDesk.Probe.Playback.csproj" />
   </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="WPF-UI" Version="4.3.0" />
     <PackageReference Include="LibVLCSharp.WPF" Version="3.10.2" />
-    <PackageReference Include="VideoLAN.LibVLC.Windows" Version="3.0.24" />
   </ItemGroup>
 
   <PropertyGroup>

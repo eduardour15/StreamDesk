@@ -1,7 +1,7 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>net10.0</TargetFramework>
+    <TargetFramework>net10.0-windows</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <IsPackable>false</IsPackable>
@@ -20,6 +20,8 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\StreamDesk.Probe.Core\StreamDesk.Probe.Core.csproj" />
+    <ProjectReference Include="..\..\src\StreamDesk.Application\StreamDesk.Application.csproj" />
+    <ProjectReference Include="..\..\src\StreamDesk.Probe.Infrastructure\StreamDesk.Probe.Infrastructure.csproj" />
   </ItemGroup>
 
 </Project>

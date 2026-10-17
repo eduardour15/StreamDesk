@@ -1,10 +1,13 @@
-# StreamDesk — prototipo técnico
+# StreamDesk
 
-StreamDesk es un prototipo experimental para validar una aplicación IPTV de escritorio en Windows con .NET 10, WPF, WPF UI y LibVLCSharp. El gate de Fase 0 sigue pendiente hasta probar un servicio autorizado y la interfaz de video en un equipo real.
+Reproductor IPTV de escritorio para Windows, creado con .NET 10, WPF, WPF UI y LibVLCSharp. F1 agrega navegación, perfiles locales, SQLite versionado y protección DPAPI CurrentUser. La compatibilidad con un proveedor depende de la validación manual con una cuenta autorizada.
+
+## Requisitos
+
+- Windows x64 con .NET 10 SDK y Windows Desktop Runtime.
+- Acceso de red solo para autenticar y consultar el servicio elegido. La app inicia sin Internet.
 
 ## Ejecutar
-
-Requisitos: Windows x64 y .NET 10 SDK/Desktop Runtime.
 
 ```powershell
 dotnet restore StreamDesk.sln
@@ -13,18 +16,25 @@ dotnet test StreamDesk.sln
 dotnet run --project src/StreamDesk.Probe.Desktop/StreamDesk.Probe.Desktop.csproj
 ```
 
-La ventana permite introducir una URL base, usuario y contraseña, consultar el estado de cuenta, cargar categorías y canales y solicitar reproducción. La contraseña no se guarda; permanece en memoria solo mientras la sesión está activa. La reproducción inicia únicamente cuando se elige un canal y se pulsa el botón.
+TV en vivo conserva el flujo de prueba: introduce la URL base, usuario y contraseña, carga el catálogo y solicita reproducción tras elegir canal. La contraseña se borra del control al conectar y no se guarda en esa sesión. Configuración permite crear y borrar perfiles locales; sus credenciales se protegen con DPAPI para el usuario actual de Windows.
 
-Usa solo una cuenta y contenido cuya reproducción tengas autorizada. Si el servidor usa HTTP, la app advierte que las credenciales y datos pueden viajar sin cifrar; consulta al proveedor si ofrece HTTPS. El prototipo no cambia el endpoint ni intenta saltarse los límites de conexiones.
+## Datos locales
 
-## Estructura
+- `%LocalAppData%\StreamDesk\streamdesk.db`: perfiles y tablas iniciales de catálogo, favoritos e historial. No contiene contraseñas.
+- `%LocalAppData%\StreamDesk\secrets\`: credenciales cifradas mediante DPAPI CurrentUser.
+- `%LocalAppData%\StreamDesk\logs\streamdesk.log`: tipo de excepción e identificador técnico, sin mensajes, rutas solicitadas ni datos de cuenta.
 
-- `src/StreamDesk.Probe.Core`: cliente Xtream inicial, modelos y errores seguros.
-- `src/StreamDesk.Probe.Desktop`: pantalla WPF, integración WPF UI y ciclo de vida de LibVLC.
-- `tests/StreamDesk.Probe.Tests`: pruebas del cliente con respuestas ficticias.
-- `docs/ROADMAP.md`: plan fuente.
-- `docs/ESTADO_FASES.md`: evidencias, tareas y gate.
-- `docs/PRUEBA_MANUAL_F0.md`: protocolo de validación con el servicio autorizado.
-- `docs/DECISION_TECNICA_F0.md`: decisiones provisionales y licencias revisadas.
+Si el proveedor usa HTTP, usuario y contraseña pueden viajar sin cifrar. Pregunta si ofrece HTTPS; StreamDesk no cambia servidores ni elude límites de conexiones. Usa solo cuentas y contenido autorizados.
 
-Las pruebas simuladas no verifican autenticación real, compatibilidad del proveedor, reproducción, overlay, rendimiento ni liberación de conexiones nativas. No compartas credenciales en el chat, repositorio, capturas o logs.
+## Capas
+
+- `StreamDesk.Probe.Core`: modelos de dominio.
+- `StreamDesk.Application`: contratos y coordinación de perfiles.
+- `StreamDesk.Probe.Infrastructure`: adaptador Xtream, SQLite, DPAPI y logging redactado.
+- `StreamDesk.Probe.Playback`: servicio LibVLC único.
+- `StreamDesk.Probe.Desktop`: arranque, composición de dependencias, MVVM y UI.
+- `tests/StreamDesk.Probe.Tests`: tests unitarios del proveedor y tests de integración de almacenamiento con datos ficticios.
+- `docs/ROADMAP.md` y `docs/ESTADO_FASES.md`: plan y evidencia de fases.
+- `docs/PRUEBA_MANUAL_F1.md`: verificación Windows pendiente de navegación, perfiles y regresión de playback.
+
+Los tests simulados validan contratos y persistencia, no una conexión IPTV real ni la reproducción de video.

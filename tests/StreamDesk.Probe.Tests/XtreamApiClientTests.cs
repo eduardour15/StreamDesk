@@ -1,6 +1,7 @@
 using System.Net;
 using System.Text;
 using StreamDesk.Probe.Core;
+using StreamDesk.Probe.Infrastructure;
 
 namespace StreamDesk.Probe.Tests;
 

@@ -46,3 +46,10 @@ Cuando el usuario indique una fase, tarea o auditoria de forma corta (aunque sol
 - Estados validos de gate: `NO_INICIADA`, `EN_PROGRESO`, `PENDIENTE_DE_VALIDACION`, `BLOQUEADA`, `APROBADA`.
 - No marques una fase `APROBADA` cuando un criterio obligatorio no se verifico; no marques tests exitosos si no los ejecutaste.
 - El cierre incluye: tareas completadas vs parciales, archivos, comandos y resultados, pruebas manuales, riesgos, gate y proxima fase recomendada **sin iniciarla**.
+
+## Convenciones de arquitectura (F1)
+
+- `StreamDesk.Probe.Core` contiene modelos de dominio; `StreamDesk.Application` contiene contratos y coordinación; `StreamDesk.Probe.Infrastructure` implementa Xtream, SQLite, DPAPI y logging; `StreamDesk.Probe.Playback` encapsula LibVLC; `StreamDesk.Probe.Desktop` compone dependencias y presenta WPF/MVVM.
+- La base local y secretos viven en `%LocalAppData%\StreamDesk`. SQLite nunca guarda usuario/contraseña ni URLs autenticadas. Las credenciales se protegen con DPAPI CurrentUser y se borran al eliminar el perfil.
+- Los logs registran solo identificadores técnicos y tipo de excepción; nunca guardar mensaje, stack trace, URL de solicitud ni datos de cuenta.
+- Pruebas de persistencia deben usar directorios temporales y fixtures ficticios. Ejecutar `dotnet build StreamDesk.sln` y `dotnet test StreamDesk.sln` desde la raíz.
