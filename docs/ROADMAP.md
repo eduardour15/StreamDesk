@@ -180,18 +180,18 @@ La separación puede simplificarse si el MVP se vuelve innecesariamente complejo
 **Meta:** distribuir una aplicación lista para utilizar en ambas computadoras.  
 **Entregable:** instalador y versión **1.0** probados.
 
-- [ ] **F6-T01** Analizar resultados de CPU/RAM/GPU y corregir ralentizaciones, bloqueos, escapes de memoria.
-- [ ] **F6-T02** Probar arranque, cierre, reconexión, suspensión/reanudación, Wi-Fi inestable y desconexión de proveedor.
-- [ ] **F6-T03** Ejecutar suite unitaria e integración; probar flujos UI críticos y documentar evidencia.
-- [ ] **F6-T04** Ejecutar pruebas de seguridad: secretos en disco, redirecciones, logs, errores y URL de transmisión.
-- [ ] **F6-T05** Comprobar versiones/licencias de dependencias nativas y obligaciones de redistribución.
-- [ ] **F6-T06** Publicar `win-x64`; revisar inclusión de DLL/plugins/codec de LibVLC. No asumir que `single-file` empaqueta correctamente bibliotecas nativas.
-- [ ] **F6-T07** Crear instalador preferiblemente per-user, con instalación, actualización y desinstalación limpia.
-- [ ] **F6-T08** Probar en PC de trabajo y casa (con autorización de TI para equipo corporativo).
-- [ ] **F6-T09** Verificar que no se requieren SDKs/herramientas de desarrollo en PCs destino.
-- [ ] **F6-T10** Definir estrategia para actualización de app, copias de configuración, reporte de errores y rollback.
-- [ ] **F6-T11** Entregar manual de instalación/uso breve y registro de problemas conocidos.
-- [ ] **F6-T12** Marcar 1.0 únicamente al cumplir checklist de release.
+- [ ] **F6-T01** Analizar resultados de CPU/RAM/GPU y corregir ralentizaciones, bloqueos, escapes de memoria. PARCIAL: medición local BMP y límites corregidos; métricas IPTV comparables pendientes.
+- [ ] **F6-T02** Probar arranque, cierre, reconexión, suspensión/reanudación, Wi-Fi inestable y desconexión de proveedor. PARCIAL: regresiones automáticas pasan; eventos físicos/red real pendientes.
+- [x] **F6-T03** Ejecutar suite unitaria e integración; probar flujos UI críticos y documentar evidencia.
+- [x] **F6-T04** Ejecutar pruebas de seguridad: secretos en disco, redirecciones, logs, errores y URL de transmisión.
+- [ ] **F6-T05** Comprobar versiones/licencias de dependencias nativas y obligaciones de redistribución. PARCIAL: inventario/avisos/textos y NuGet revisados; mapeo completo por plugin pendiente.
+- [x] **F6-T06** Publicar `win-x64`; revisar inclusión de DLL/plugins/codec de LibVLC. No asumir que `single-file` empaqueta correctamente bibliotecas nativas.
+- [x] **F6-T07** Crear instalador preferiblemente per-user, con instalación, actualización y desinstalación limpia.
+- [ ] **F6-T08** Probar en PC de trabajo y casa (con autorización de TI para equipo corporativo). PENDIENTE: protocolo entregado, sin acceso físico.
+- [ ] **F6-T09** Verificar que no se requieren SDKs/herramientas de desarrollo en PCs destino. PARCIAL: paquete autocontenido probado sin SDK en PATH; equipo limpio pendiente.
+- [x] **F6-T10** Definir estrategia para actualización de app, copias de configuración, reporte de errores y rollback.
+- [x] **F6-T11** Entregar manual de instalación/uso breve y registro de problemas conocidos.
+- [ ] **F6-T12** Marcar 1.0 únicamente al cumplir checklist de release. BLOQUEADA por pruebas físicas y revisión nativa incompletas; solo candidato 0.5.0-rc.1 local.
 
 **Aceptación:** el instalador funciona en ambas PCs limpias o equivalentes, reproduce contenido permitido, persiste ajustes, no expone secretos en disco o logs y se desinstala sin romper el sistema.
 

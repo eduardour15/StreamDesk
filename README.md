@@ -1,11 +1,11 @@
 # StreamDesk
 
-Reproductor IPTV de escritorio para Windows, creado con .NET 10, WPF, WPF UI y LibVLCSharp. Incluye catálogo persistente, favoritos, recientes, teclado y un reproductor con cancelación y recuperación limitada. F3 está cerrada por instrucción del usuario; F4 entrega un candidato MVP 0.1 con pruebas físicas/humanas pendientes. La compatibilidad con un proveedor depende de validación con una cuenta autorizada.
+Reproductor IPTV para Windows con .NET 10, WPF/WPF UI y LibVLCSharp. Incluye TV, favoritos, recientes y, cuando la cuenta ofrece datos, EPG/películas/series con progreso y pistas. F5/F6 entregan un candidato **0.5.0-rc.1 autocontenido win-x64**; 1.0 sigue pendiente de pruebas reales y revisión completa de licencias nativas.
 
 ## Requisitos
 
-- Windows x64 con .NET 10 SDK y Windows Desktop Runtime.
-- Acceso de red solo para autenticar y consultar el servicio elegido. La app inicia sin Internet.
+- Para desarrollar: Windows x64 con .NET 10 SDK. El candidato autocontenido no necesita SDK ni runtime externo.
+- Acceso de red para autenticar, consultar y reproducir el servicio elegido. La app inicia sin Internet.
 
 ## Ejecutar
 
@@ -22,7 +22,7 @@ El formulario de conexión temporal está en Configuración, sin persistir crede
 
 ## Datos locales
 
-- `%LocalAppData%\StreamDesk\streamdesk.db`: esquema v3 con perfiles, catálogo, favoritos, hasta 50 recientes por perfil/tipo y preferencias sin secretos. No contiene usuario/contraseña ni URLs autenticadas.
+- `%LocalAppData%\StreamDesk\streamdesk.db`: esquema v4 con perfiles, TV/VOD/EPG, favoritos, recientes y progreso por perfil/tipo. Sin usuario/contraseña ni URLs autenticadas.
 - `%LocalAppData%\StreamDesk\secrets\`: credenciales cifradas mediante DPAPI CurrentUser.
 - `%LocalAppData%\StreamDesk\logs\streamdesk.log`: tipo de excepción e identificador técnico, sin mensajes, rutas solicitadas ni datos de cuenta.
 
@@ -49,6 +49,8 @@ Las reconexiones automáticas se limitan a dos intentos para fallos reconocidos 
 
 Los controles están junto al video y se ocultan a los 3 segundos de reproducción sin interacción; movimiento/teclado los recupera. Espacio reproduce/detiene, ←/→ cambia canal, ↑/↓ ajusta volumen fuera de listas/inputs, F pantalla completa, M mute y Esc restaura ventana. Se respetan los campos de edición y controles con función propia.
 
-Para generar el candidato local: `powershell -NoProfile -ExecutionPolicy Bypass -File scripts/Build-Mvp.ps1`. El script imprime la carpeta de `artifacts/mvp`; su `Install-Mvp.ps1` copia a una carpeta nueva del usuario. El destino necesita **.NET 10 Windows Desktop Runtime x64**; no requiere SDK. Sin publicación ni release. [Cierre F4](docs/CIERRE_F4.md), [prueba humana](docs/PRUEBA_MANUAL_F4.md) y [defectos](docs/DEFECTOS_F4.md) distinguen comprobaciones automatizadas de las pendientes.
+Para generar el candidato: `powershell -NoProfile -ExecutionPolicy Bypass -File scripts/Build-Candidate.ps1`. Imprime una carpeta de `artifacts/candidates`. Ejecutar su `Manage-StreamDesk.ps1 -Action Install`; admite Install/Rollback/Uninstall y conserva los datos personales. Incluye .NET Desktop y VLC, sin SDK requerido. Para reproducir el test aislado: `scripts/Test-Candidate.ps1 -Candidate <carpeta>`; usa carpetas del proyecto y omite registro/acceso directo.
+
+En TV, «Consultar películas y series» verifica catálogos de la cuenta. Guía permite actualización/importación XMLTV; VOD ofrece ficha, temporadas/episodios, reanudación y pistas declaradas por el medio. Configuración incorpora copia protegida y diagnóstico sin datos de cuenta. El mismo motor mantiene un stream activo. [Manual](docs/MANUAL_USO.md), [cierre F5](docs/CIERRE_F5.md), [cierre F6](docs/CIERRE_F6.md), [privacidad](docs/PRIVACIDAD_F6.md) y protocolos manuales distinguen fixtures de pruebas reales. No se publica ni etiqueta una release 1.0.
 
 La auditoría de F0–F2 y los pasos para revalidar el video tras la corrección del runtime están en [docs/AUDITORIA_F0_F2.md](docs/AUDITORIA_F0_F2.md). LibVLC se incluye junto al ejecutable; conserva la carpeta `libvlc` al ejecutar o copiar una salida de compilación. Las pruebas inicializan el motor nativo y verifican su cierre sin abrir canales del proveedor.

@@ -10,10 +10,20 @@ Este archivo registra trabajo y evidencias reales. La confirmación del usuario 
 | F3 | APROBADA | 7/11 verificadas; cierre solicitado | 2026-10-18 | COMPLETADA por decisión expresa del usuario. Se conservan las verificaciones físicas/IPTV/mediciones pendientes de T04/T05/T10/T11; esta decisión no constituye evidencia de esas pruebas. |
 | F4 | PENDIENTE_DE_VALIDACION | 9/11 | 2026-10-18 | MVP implementado, 113 tests y candidato win-x64 local. T09/T10 PARCIAL: DPI físicos/dos monitores y evaluación humana/IPTV pendientes. |
 | F5 | PENDIENTE_DE_VALIDACION | 8/9 | 2026-10-18 | Código/fixtures y UI implementados; capacidades y calidad EPG/VOD reales pendientes. Avance conjunto F5/F6 solicitado; F4 no se aprueba por anticipado. |
-| F6 | EN_PROGRESO | 0/12 | 2026-10-18 | Estabilización/privacidad/empaquetado autorizados; 1.0 condicionada a pruebas reales y licencias. |
+| F6 | PENDIENTE_DE_VALIDACION | 6/12 | 2026-10-18 | Candidato autocontenido e instalación verificados localmente; 4 parciales, T08 pendiente y T12 bloqueada hasta pruebas físicas/licencias. Sin release 1.0. |
 | F7 | NO_INICIADA | 0/6 | — | Opcional después de 1.0 |
 
 ## Bitácora de evidencias
+
+### 2026-10-18 — F6: estabilización e instalación autocontenida
+
+- Se trabajó después de F5 por solicitud expresa. Logging asíncrono acotado/rotativo, snapshot SQLite con secretos DPAPI referenciados, diagnóstico filtrado y correcciones de contenido/ciclo de vida. Contratos/código y decisiones en ADR-006; revisión de privacidad enfocada en `PRIVACIDAD_F6.md`, sin declarar auditoría exhaustiva.
+- Build/test Release: 0 errores/advertencias y 128 correctos, 0 fallidos/omitidos. Regresión WPF TV/VOD/EPG, persistencia, recuperación y motor nativo. NuGet consultado sin avisos conocidos reportados; 323 DLL nativas inventariadas y textos/avisos preservados. Mapeo completo de licencias/fuentes de plugins pendiente.
+- Candidato `artifacts/candidates/StreamDesk-0.5.0-rc.1-20261018-171817`, win-x64 autocontenido, 903 archivos inventariados, 0 archivos locales sensibles. Verify-runtime decodifica BMP y comprueba píxeles sin servicios de datos ni red. Gestor por usuario con hashes, versiones, rollback y desinstalación que conserva datos. Scripts antiguos quedan como entradas de compatibilidad.
+- Prueba de instalación en `artifacts/i-3b750b31`: instalación real, update/rollback/uninstall con archivos ficticios y traversal rechazado; datos separados conservados. Ejecutable instalado decodifica con DOTNET_ROOT inexistente y SDK fuera de PATH. Registro/acceso directo se omiten; equipo limpio y PC casa/trabajo no se verificaron.
+- Se corrigieron lectura de JSON y reemplazo de marcador bajo Windows PowerShell 5. La API File.Replace requiere permisos no permitidos en el sandbox de esta sesión; pruebas autorizadas fuera de ese límite pasaron sin tocar registro/datos reales. Rutas largas heredadas se documentan y la prueba usa carpeta corta.
+- Medición local única de arranque/BMP/cierre: 2.650 ms, pico RAM muestreado 94,63 MiB, CPU muestreada 656,25 ms/77 muestras. GPU NO MEDIDA; no es latencia IPTV ni baseline comparable con F0/F3.
+- F6 `PENDIENTE_DE_VALIDACION`: 6 COMPLETADA, 4 PARCIAL, T08 PENDIENTE y T12 BLOQUEADA. `CIERRE_F6.md` contiene todos los IDs/aceptación; `MANUAL_USO.md` y `PRUEBA_MANUAL_F6.md` preparan pruebas físicas/recuperación. No se publica/etiqueta 1.0 ni se inicia F7.
 
 ### 2026-10-18 — F5 y avance solicitado a F6
 
