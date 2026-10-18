@@ -17,6 +17,19 @@ public partial class App : System.Windows.Application
     protected override async void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
+        if (e.Args is ["--verify-runtime"])
+        {
+            // Packaging smoke check: no window, network, profiles or user data.
+            var exitCode = 0;
+            try
+            {
+                await using var playback = new StreamDesk.Application.PlaybackService(new StreamDesk.Probe.Playback.LibVlcBackend());
+                await playback.InitializeAsync();
+            }
+            catch { exitCode = 2; }
+            Shutdown(exitCode);
+            return;
+        }
         var directory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "StreamDesk");
         DispatcherUnhandledException += (_, eventArgs) =>
         {

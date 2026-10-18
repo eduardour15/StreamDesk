@@ -2,6 +2,8 @@
 
 Fecha: 2026-10-18 (America/Managua). Solicitud: «culmina la fase 3». Se implementó el alcance de código F3, sin iniciar F4. El gate es `PENDIENTE_DE_VALIDACION` y no se declara una sesión IPTV real que no se ejecutó.
 
+**Actualización posterior del mismo día:** el usuario pidió «marca la fase 3 completada y continua con la siguiente fase». F3 se marca COMPLETADA por esa decisión, con gate APROBADA por instrucción expresa, y se inicia F4. La matriz técnica de este informe se conserva: las mediciones y pruebas físicas sin evidencia permanecen pendientes. La decisión de cierre no implica que se hayan ejecutado.
+
 ## Dependencias y decisión
 
 La instrucción explícita de avanzar llegó después de comunicar que F0/F1/F2 requieren revalidar el video real tras el fallo de LibVLC. Se desarrolló F3 bajo esa instrucción y con el riesgo advertido; no se aprobaron retroactivamente esos gates. Se conservan el catálogo, SQLite, DPAPI y los datos del usuario. `Error/error.txt` permanece fuera de Git.

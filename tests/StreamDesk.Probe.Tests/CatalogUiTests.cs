@@ -8,6 +8,11 @@ using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
+using System.Windows.Input;
+using System.Windows.Controls.Primitives;
+using StreamDesk.Probe.Infrastructure;
+using StreamDesk.Probe.Core;
+using StreamDesk.Probe.Playback;
 using StreamDesk.Application;
 using StreamDesk.Probe.Desktop;
 
@@ -49,7 +54,7 @@ public sealed class CatalogUiTests
             Volatile.Write(ref stage, "thread finished");
         }) { IsBackground = true, Name = "StreamDesk F2 WPF verification" };
         thread.SetApartmentState(ApartmentState.STA); thread.Start();
-        await completion.Task.WaitAsync(TimeSpan.FromSeconds(60));
+        await completion.Task.WaitAsync(TimeSpan.FromSeconds(90));
         Assert.True(thread.Join(TimeSpan.FromSeconds(5)), "WPF thread remained at: " + Volatile.Read(ref stage));
     }
 
@@ -121,8 +126,162 @@ public sealed class CatalogUiTests
             await VerifyLogosAsync();
             await VerifyStaleCredentialReadDoesNotClearNewProfileAsync();
             await VerifyProfileChangeDoesNotUnlockProfileSaveAsync();
+            await VerifyMvpUxAsync(directory, logos);
+            await VerifyNativeControlPlacementAsync(logos);
         }
         finally { window.Close(); await WaitAsync(() => !window.IsVisible); }
+    }
+
+    private static async Task VerifyNativeControlPlacementAsync(ChannelLogoLoader logos)
+    {
+        using var db = new TestDatabase(); await db.Settings.InitializeAsync();
+        var imagePath = Path.Combine(db.Root, "local-fixture.bmp");
+        var encoder = new BmpBitmapEncoder();
+        encoder.Frames.Add(BitmapFrame.Create(BitmapSource.Create(16, 16, 96, 96, PixelFormats.Bgr24, null, Enumerable.Repeat((byte)180, 16 * 16 * 3).ToArray(), 16 * 3)));
+        using (var file = File.Create(imagePath)) encoder.Save(file);
+        var credentials = new FixtureCredentials(); var playback = new PlaybackService(new LibVlcBackend());
+        var vm = new MainViewModel((_, _, _) => new LocalFixtureProvider(new Uri(imagePath)), playback,
+            new ProfileService(db.Settings, credentials), new FixtureLogger(), new CatalogService(db.Store), credentials);
+        var window = new MainWindow(vm, logos) { Left = -20000, Top = -20000, ShowActivated = false, ShowInTaskbar = false, WindowStartupLocation = WindowStartupLocation.Manual };
+        try
+        {
+            window.Show(); await WaitAsync(() => vm.IsPlaybackReady && !vm.IsWorking);
+            vm.CurrentTabIndex = 1; await vm.ConnectAsync("https://provider.invalid", "fixture-user", "fixture-password");
+            await vm.LoadCatalogAsync(); vm.SelectedChannel = vm.Channels[0]; await vm.PlaySelectedAsync();
+            await WaitAsync(() => vm.IsPlaying);
+            await Dispatcher.Yield(DispatcherPriority.ApplicationIdle); window.UpdateLayout();
+            var video = (LibVLCSharp.WPF.VideoView)window.FindName("VideoView");
+            var player = Assert.IsType<LibVLCSharp.Shared.MediaPlayer>(vm.PlayerHandle);
+            Assert.NotEqual(nint.Zero, player.Hwnd);
+            var controls = (FrameworkElement)window.FindName("PlayerControls");
+            var videoBounds = video.TransformToAncestor(window).TransformBounds(new Rect(video.RenderSize));
+            var controlsBounds = controls.TransformToAncestor(window).TransformBounds(new Rect(controls.RenderSize));
+            Assert.False(videoBounds.IntersectsWith(controlsBounds));
+            Assert.NotNull(window.InputHitTest(controlsBounds.TopLeft + new Vector(12, 12)));
+            var stop = Descendants<ButtonBase>(controls).Single(button => button.Content as string == "Detener");
+            stop.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
+            await WaitAsync(() => !playback.HasActiveMedia);
+        }
+        finally { window.Close(); await WaitAsync(() => !window.IsVisible); }
+    }
+
+    private sealed class LocalFixtureProvider(Uri source) : IIptvProvider
+    {
+        public bool UsesUnencryptedTransport => false;
+        public Task<XtreamAccount> AuthenticateAsync(CancellationToken cancellationToken = default) => Task.FromResult(new XtreamAccount("Active", 0, 1, false, null, ["ts"]));
+        public Task<IReadOnlyList<XtreamCategory>> GetLiveCategoriesAsync(CancellationToken cancellationToken = default) => Task.FromResult<IReadOnlyList<XtreamCategory>>([]);
+        public Task<IReadOnlyList<XtreamChannel>> GetLiveChannelsAsync(CancellationToken cancellationToken = default) => Task.FromResult<IReadOnlyList<XtreamChannel>>([new("fixture", "Imagen local de prueba", null, "live", "ts")]);
+        public Uri CreateLiveStreamUri(XtreamChannel channel, string format) => source;
+        public void Dispose() { }
+    }
+
+    private static async Task VerifyMvpUxAsync(string artifacts, ChannelLogoLoader logos)
+    {
+        using var db = new TestDatabase(); await db.Settings.InitializeAsync();
+        var credentials = new FixtureCredentials(); var store = new SqliteViewerStore(db.PathName, false);
+        var calls = 0; var backend = new ControlledBackend(); var playback = new PlaybackService(backend);
+        MainViewModel Create(PlaybackService service) => new((_, _, _) => { calls++; return new FixtureProvider(CatalogFixtures.Create(50)); }, service,
+            new ProfileService(db.Settings, credentials), new FixtureLogger(), new CatalogService(db.Store), credentials, store);
+        var vm = Create(playback);
+        var window = new MainWindow(vm, logos) { Left = -20000, Top = -20000, ShowActivated = false, ShowInTaskbar = false, WindowStartupLocation = WindowStartupLocation.Manual };
+        try
+        {
+            window.Show(); await WaitAsync(() => !vm.IsWorking);
+            Assert.False(vm.AutoPlayLast); Assert.Equal(0, calls);
+            vm.ProfileName = "Cuenta de prueba"; vm.ProfileBaseUrl = "https://provider.invalid"; vm.ProfileUsername = "fixture-user";
+            await vm.CreateProfileAsync("fixture-password"); await WaitAsync(() => !vm.IsWorking && vm.ActiveProfile is not null);
+            vm.CurrentTabIndex = 1; await vm.LoadCatalogAsync(); Assert.Equal(50, vm.Channels.Count);
+            await Dispatcher.Yield(DispatcherPriority.ApplicationIdle); window.UpdateLayout();
+            var category = (ComboBox)window.FindName("CategoryFilter");
+            Assert.Contains(Descendants<TextBlock>(category), text => text.Text == "Todas las categorías");
+            Assert.DoesNotContain(Descendants<TextBlock>(category), text => text.Text.Contains("XtreamCategory", StringComparison.Ordinal));
+            foreach (var background in new[] { "CanvasBrush", "SurfaceBrush", "SurfaceRaisedBrush" })
+                foreach (var foreground in new[] { "TextPrimaryBrush", "TextMutedBrush", "AccentBrush" })
+                    Assert.True(Contrast(((SolidColorBrush)window.FindResource(foreground)).Color, ((SolidColorBrush)window.FindResource(background)).Color) >= 4.5);
+            var video = window.FindName("VideoView");
+            vm.SearchText = "repetido"; await WaitAsync(() => vm.Channels.Count == 2);
+            vm.SelectedChannel = vm.Channels[0];
+            await vm.ToggleFavoriteAsync(); Assert.True(vm.SelectedIsFavorite);
+            vm.CurrentTabIndex = 2; await WaitAsync(() => vm.Channels.Count == 1);
+            Assert.Same(video, window.FindName("VideoView"));
+            vm.SelectedChannel = vm.Channels[0]; await vm.PlaySelectedAsync();
+            Assert.Empty((await store.LoadAsync(vm.ActiveProfile!.Id)).Recents);
+            backend.Emit(new(backend.Opens.Last().Id, PlaybackSignalKind.Playing));
+            await WaitAsync(() => vm.HasLastChannel);
+            Assert.Equal(vm.SelectedChannel!.Id, vm.LastChannel!.Id);
+            vm.CurrentTabIndex = 3; await WaitAsync(() => vm.Channels.Count == 1);
+            Assert.Same(video, window.FindName("VideoView"));
+            var search = (TextBox)window.FindName("SearchBox"); var muted = vm.IsMuted;
+            search.RaiseEvent(new KeyEventArgs(Keyboard.PrimaryDevice, PresentationSource.FromVisual(window), 0, Key.M) { RoutedEvent = Keyboard.PreviewKeyDownEvent });
+            Assert.Equal(muted, vm.IsMuted);
+            var controls = (FrameworkElement)window.FindName("PlayerControls");
+            await WaitAsync(() => controls.Visibility == Visibility.Collapsed);
+            ((UIElement)window.FindName("PlayerPane")).RaiseEvent(new MouseEventArgs(Mouse.PrimaryDevice, 0) { RoutedEvent = Mouse.MouseMoveEvent });
+            Assert.Equal(Visibility.Visible, controls.Visibility);
+            backend.Emit(new(backend.Opens.Last().Id, PlaybackSignalKind.Failed, PlaybackFailure.Forbidden));
+            await WaitAsync(() => vm.CanRetryPlayback && controls.Visibility == Visibility.Visible);
+            Assert.Single((await store.LoadAsync(vm.ActiveProfile.Id)).Recents);
+            vm.SearchText = "sin coincidencias"; await WaitAsync(() => vm.Channels.Count == 0);
+            Assert.Null(vm.SelectedChannel);
+            var opens = backend.Opens.Count;
+            await vm.RetryPlaybackAsync(); Assert.Equal(opens + 1, backend.Opens.Count);
+            await vm.StopPlaybackAsync();
+
+            vm.CurrentTabIndex = 1; await WaitAsync(() => vm.Channels.Count == 50);
+            var shell = (FrameworkElement)window.FindName("Shell");
+            var scales = new[] { 1d, 1.25, 1.5, 2d };
+            foreach (var scale in scales)
+            {
+                window.Width = 760 * scale; window.Height = 600 * scale; shell.LayoutTransform = new ScaleTransform(scale, scale);
+                await Dispatcher.Yield(DispatcherPriority.ApplicationIdle); window.UpdateLayout();
+                var player = (FrameworkElement)window.FindName("PlayerPane");
+                Assert.True(player.ActualWidth > 180); Assert.True(player.ActualHeight > 100);
+                var bounds = controls.TransformToAncestor(shell).TransformBounds(new Rect(controls.RenderSize));
+                Assert.True(bounds.Right <= shell.ActualWidth + 2 && bounds.Bottom <= shell.ActualHeight + 2, "Controls exceed available layout space.");
+            }
+            shell.LayoutTransform = Transform.Identity; window.Width = 1360; window.Height = 850;
+            await Dispatcher.Yield(DispatcherPriority.ApplicationIdle); window.UpdateLayout();
+            var bitmap = new RenderTargetBitmap(1360, 850, 96, 96, PixelFormats.Pbgra32); bitmap.Render((Visual)window.Content);
+            var encoder = new PngBitmapEncoder(); encoder.Frames.Add(BitmapFrame.Create(bitmap));
+            using (var file = File.Create(Path.Combine(artifacts, "f4-mvp.png"))) encoder.Save(file);
+            await File.WriteAllTextAsync(Path.Combine(artifacts, "f4-ui-evidence.json"), System.Text.Json.JsonSerializer.Serialize(new
+            {
+                Source = "WPF real con datos y backend ficticios", Flow = "Crear perfil, buscar, reproducir, favorito, reciente, reiniciar",
+                LayoutScales = scales, PhysicalDpiVerified = false, Autohide = true, EditingShortcutIgnored = true, SharedVideoView = true
+            }));
+        }
+        finally { window.Close(); await WaitAsync(() => !window.IsVisible); }
+
+        var restartedBackend = new ControlledBackend(); var restarted = Create(new PlaybackService(restartedBackend));
+        await restarted.LoadProfilesAsync();
+        Assert.True(restarted.HasLastChannel); Assert.Single(restarted.FavoriteChannelIds);
+        Assert.False(restarted.AutoPlayLast); Assert.Empty(restartedBackend.Opens);
+        await restarted.SetAutoPlayAsync(true); await restarted.DisposeAsync();
+        var autoBackend = new ControlledBackend(); await using var auto = Create(new PlaybackService(autoBackend));
+        await auto.LoadProfilesAsync(); Assert.Single(autoBackend.Opens);
+        await auto.LoadProfilesAsync(); Assert.Single(autoBackend.Opens);
+        await auto.SuspendPlaybackAsync(); Assert.Equal(0, autoBackend.Active);
+        await db.AddProfileAsync("second"); await auto.LoadProfilesAsync();
+        auto.ActiveProfile = auto.Profiles.Single(profile => profile.Id == "second");
+        await WaitAsync(() => !auto.IsWorking); Assert.Single(autoBackend.Opens);
+        Assert.Empty(auto.FavoriteChannelIds); Assert.False(auto.HasLastChannel);
+    }
+
+    private static IEnumerable<T> Descendants<T>(DependencyObject root) where T : DependencyObject
+    {
+        for (var i = 0; i < VisualTreeHelper.GetChildrenCount(root); i++)
+        {
+            var child = VisualTreeHelper.GetChild(root, i);
+            if (child is T match) yield return match;
+            foreach (var descendant in Descendants<T>(child)) yield return descendant;
+        }
+    }
+    private static double Contrast(Color foreground, Color background)
+    {
+        static double Channel(byte value) { var c = value / 255d; return c <= 0.04045 ? c / 12.92 : Math.Pow((c + 0.055) / 1.055, 2.4); }
+        static double Luminance(Color c) => 0.2126 * Channel(c.R) + 0.7152 * Channel(c.G) + 0.0722 * Channel(c.B);
+        var a = Luminance(foreground); var b = Luminance(background);
+        return (Math.Max(a, b) + 0.05) / (Math.Min(a, b) + 0.05);
     }
 
     private static async Task VerifyLogosAsync()

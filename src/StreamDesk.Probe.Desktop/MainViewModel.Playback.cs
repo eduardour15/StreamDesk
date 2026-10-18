@@ -12,6 +12,11 @@ public sealed partial class MainViewModel
             ? $" Intento de recuperación {_playback.RetryCount}/2." : "");
     public bool ShowPlaybackPlaceholder => !_playback.IsActive;
     public bool CanRetryPlayback => _playback.State == PlaybackState.Failed && !_playback.WillRetry;
+    public bool IsPlaying => _playback.State == PlaybackState.Playing;
+    public bool CanHideControls => IsPlaying && !IsWorking;
+    public string NowPlaying => _watch?.Channel.Name ?? "Elige un canal";
+    public string PlayAction => _playback.IsActive ? "Detener" : "Reproducir";
+    public async Task TogglePlaybackAsync() { if (_playback.IsActive) await StopPlaybackAsync(); else await PlaySelectedAsync(); }
     public int Volume { get => _playbackService.Volume; set { _playbackService.Volume = value; OnPropertyChanged(); } }
     public bool IsMuted { get => _playbackService.IsMuted; set { _playbackService.IsMuted = value; OnPropertyChanged(); } }
     public int BufferMilliseconds
@@ -45,6 +50,8 @@ public sealed partial class MainViewModel
     public async Task StopPlaybackAsync()
     {
         _playingChannelId = null;
+        _watch = null;
+        OnPropertyChanged(nameof(NowPlaying));
         try { await _playbackService.StopAsync(); }
         catch (Exception exception) { _logger.LogError("playback_stop", exception); }
     }
@@ -72,12 +79,20 @@ public sealed partial class MainViewModel
 
     private void PlaybackStateChanged(object? sender, PlaybackSnapshot snapshot)
     {
+        var watch = _watch;
         void Apply()
         {
             if (_disposed || snapshot.Sequence <= _playback.Sequence) return;
             _playback = snapshot;
             StatusMessage = PlaybackStatus;
             OnPropertyChanged(nameof(PlaybackStatus)); OnPropertyChanged(nameof(ShowPlaybackPlaceholder)); OnPropertyChanged(nameof(CanRetryPlayback));
+            OnPropertyChanged(nameof(IsPlaying)); OnPropertyChanged(nameof(CanHideControls)); OnPropertyChanged(nameof(PlayAction));
+            if (snapshot.State == PlaybackState.Playing && watch is not null && ReferenceEquals(watch, _watch) && snapshot.Sequence > watch.AfterSequence && !watch.Recorded)
+            {
+                watch.Recorded = true;
+                watch.PlayedAt = DateTimeOffset.UtcNow;
+                _historyWrites = RecordWatchAsync(_historyWrites, watch);
+            }
         }
         if (_ui is not null && SynchronizationContext.Current != _ui) _ui.Post(_ => Apply(), null); else Apply();
     }

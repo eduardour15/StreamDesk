@@ -7,13 +7,29 @@ Este archivo registra trabajo y evidencias reales. La confirmación del usuario 
 | F0 | PENDIENTE_DE_VALIDACION | 5/11 | 2026-10-18 | Reanudada F0-T05: build y 67 tests correctos; sigue pendiente confirmar video real después de corregir LibVLC. F0-T05/T06/T07 PARCIAL. Métricas, condiciones del proveedor y avisos nativos pendientes. |
 | F1 | PENDIENTE_DE_VALIDACION | 10/10 | 2026-10-17 | Código y regresiones corregidos; falta confirmar preservación del playback real actual. |
 | F2 | PENDIENTE_DE_VALIDACION | 10/10 | 2026-10-17 | 67 tests en salida Release aislada, incluida WPF con 5.000 canales. Verificación técnica PASA; cierre condicionado a revalidación previa F0/F1. |
-| F3 | PENDIENTE_DE_VALIDACION | 7/11 | 2026-10-18 | Implementación completa por instrucción expresa de avanzar; T04/T05/T10/T11 PARCIAL por validación física/IPTV/mediciones pendiente. Gates F0/F1/F2 no se aprueban por anticipado. |
-| F4 | NO_INICIADA | 0/11 | — | Requiere F3 aprobada |
+| F3 | APROBADA | 7/11 verificadas; cierre solicitado | 2026-10-18 | COMPLETADA por decisión expresa del usuario. Se conservan las verificaciones físicas/IPTV/mediciones pendientes de T04/T05/T10/T11; esta decisión no constituye evidencia de esas pruebas. |
+| F4 | PENDIENTE_DE_VALIDACION | 9/11 | 2026-10-18 | MVP implementado, 113 tests y candidato win-x64 local. T09/T10 PARCIAL: DPI físicos/dos monitores y evaluación humana/IPTV pendientes. |
 | F5 | NO_INICIADA | 0/9 | — | Requiere F4 aprobada; EPG/VOD condicional |
 | F6 | NO_INICIADA | 0/12 | — | Requiere MVP estable |
 | F7 | NO_INICIADA | 0/6 | — | Opcional después de 1.0 |
 
 ## Bitácora de evidencias
+
+### 2026-10-18 (America/Managua) — F4: UX y candidato MVP 0.1
+
+- **Alcance:** exclusivamente F4-T01 a F4-T11 por avance expresamente solicitado. Dependencias y decisiones en ADR-004; no se inicia F5 ni se publica/etiqueta una release.
+- **Código:** sidebar y TV protagonista con un solo VideoView; favoritos, hasta 50 recientes distintos y preferencias por perfil/tipo en SQLite v3; historial solo tras Playing, autoplay de fábrica apagado y evaluado una vez al arrancar. Reinicio rehidrata biblioteca y último perfil. Sesión temporal no escribe en la cuenta guardada. Teclado respeta inputs y ↑/↓ en listas; controles WPF adyacentes al HWND con autohide, cursor/foco y recuperación. Reintentar conserva el canal fallido aunque la búsqueda haya eliminado la selección.
+- **Verificación:** build sin errores/advertencias y 113 tests correctos, 0 fallidos/omitidos. Se conserva toda la regresión F3, incluido motor nativo y HTTP 401/403/404. SQLite usa directorios temporales. WPF verifica recorrido de cuenta/búsqueda/favorito/reciente/reinicio/opt-in, autohide y tecla de edición sin efecto de playback; 5.000 canales siguen virtualizados. Escala de layout 1/1,25/1,5/2 y contraste de tokens ≥4,5:1, sin afirmar DPI físico. Captura ficticia `artifacts/f4-mvp.png` inspeccionada.
+- **Airspace:** se reprodujo un BMP local con LibVLC en VideoView WPF real, HWND asignado, regiones video/controles sin intersección y botón WPF que detiene el motor. No es una sesión IPTV ni certificación de mouse/teclado físico en monitores. Se mantienen las pruebas físicas como pendientes explícitos.
+- **Candidato:** `scripts/Build-Mvp.ps1` genera Release win-x64 con DLL/plugins x64 e inventario/avisos de paquetes. `--verify-runtime` inicializa/libera motor sin perfiles/red y devuelve 0. Copia de instalación probada en carpeta de `artifacts` con `-SkipShortcut`, sin tocar datos reales. Requiere .NET 10 Windows Desktop Runtime x64; no es self-contained. La restauración restringida falló al consultar NuGet (NU1900); con acceso autorizado se completó. Avisos/fuentes de plugins completos pendientes antes de redistribuir externamente.
+- **Defectos:** corregidos colores de controles, presentación de ToString en ComboBox, reintento dependiente de selección filtrada y una carrera de autoplay al cambiar perfil durante arranque. Esta última se reprodujo con test fallido antes del arreglo. Registro en `DEFECTOS_F4.md`.
+- **Gate:** `PENDIENTE_DE_VALIDACION`, 9 COMPLETADA / 2 PARCIAL (T09/T10). `CIERRE_F4.md` detalla todos los IDs y criterios; `PRUEBA_MANUAL_F4.md` prepara instalación/recorrido humano, DPI reales y dos monitores. Siguiente paso: completar ese protocolo; F5 solo se recomienda después del gate, sin iniciarla.
+
+### 2026-10-18 (America/Managua) — Cierre de F3 solicitado y avance a F4
+
+- El usuario instruyó «marca la fase 3 completada y continua con la siguiente fase». F3 queda **COMPLETADA por decisión del usuario**, con gate `APROBADA` por esa instrucción expresa; se inicia exclusivamente F4. Esta decisión sustituye el bloqueo administrativo anterior para avanzar.
+- La evidencia técnica de F3 permanece en `CIERRE_F3.md`: build correcto y 100 tests. T04/T05/T10/T11 conservan su clasificación `PARCIAL` de verificación. No se recibieron nuevas mediciones, formatos, resultados de monitores ni una sesión IPTV desglosada; no se inventan esos resultados ni se aprueban retrospectivamente los gates F0/F1/F2.
+- Riesgo comunicado antes de avanzar: una regresión multimedia real todavía no observada podría afectar la aceptación del MVP. Se mantiene el protocolo `PRUEBA_MANUAL_F3.md` para verificarla.
 
 ### 2026-10-18 (America/Managua) — Implementación F3 por solicitud expresa
 

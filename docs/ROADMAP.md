@@ -124,6 +124,7 @@ La separación puede simplificarse si el MVP se vuelve innecesariamente complejo
 **Aceptación:** autenticación, categorías y miles de canales navegables; la búsqueda responde fluidamente, un fallo de Internet conserva el catálogo conocido y ofrece reintentar.
 
 ### Fase 3 — Reproductor de TV en vivo (núcleo del MVP)
+**Cierre 2026-10-18:** COMPLETADA por instrucción expresa del usuario y avance autorizado a F4. La clasificación de evidencia de las cuatro verificaciones parciales de abajo se conserva; no implica pruebas físicas ni métricas no aportadas.
 **Meta:** lograr reproducción robusta en uso diario.  
 **Entregable:** visor funcional con controles y recuperación ante desconexiones.
 
@@ -145,17 +146,17 @@ La separación puede simplificarse si el MVP se vuelve innecesariamente complejo
 **Meta:** que sea agradable y rápido de usar, no solo técnicamente correcto.  
 **Entregable:** versión **0.1 MVP** instalable para pruebas diarias.
 
-- [ ] **F4-T01** Completar diseño visual: navegación lateral, jerarquía, modo oscuro y estados de botones.
-- [ ] **F4-T02** Diseñar vista TV en vivo con lista de canales y área protagonista de reproducción.
-- [ ] **F4-T03** Implementar favoritos con persistencia por perfil y acceso directo.
-- [ ] **F4-T04** Implementar recientes, último canal visto y opción de reproducirlo al iniciar (apagada por defecto).
-- [ ] **F4-T05** Implementar búsqueda instantánea y accesos a categorías frecuentes.
-- [ ] **F4-T06** Añadir atajos de teclado: espacio, Esc, flechas, F, M; evitar conflictos en campos de texto.
-- [ ] **F4-T07** Diseñar controles de reproducción con autocultamiento, verificando la solución elegida para airspace.
-- [ ] **F4-T08** Implementar estados de skeleton/placeholder, red lenta, sin resultados, timeout, expiración y sin conexión.
-- [ ] **F4-T09** Validar escalado 100–200 %, resoluciones y ventanas pequeñas; navegación por teclado y contraste.
-- [ ] **F4-T10** Realizar evaluación UX: alta de cuenta, localizar canal, reproducir, añadir favorito y volver al último canal.
-- [ ] **F4-T11** Generar build de prueba y recopilar defectos antes de avanzar.
+- [x] **F4-T01** Completar diseño visual: navegación lateral, jerarquía, modo oscuro y estados de botones.
+- [x] **F4-T02** Diseñar vista TV en vivo con lista de canales y área protagonista de reproducción.
+- [x] **F4-T03** Implementar favoritos con persistencia por perfil y acceso directo.
+- [x] **F4-T04** Implementar recientes, último canal visto y opción de reproducirlo al iniciar (apagada por defecto).
+- [x] **F4-T05** Implementar búsqueda instantánea y accesos a categorías frecuentes.
+- [x] **F4-T06** Añadir atajos de teclado: espacio, Esc, flechas, F, M; evitar conflictos en campos de texto.
+- [x] **F4-T07** Diseñar controles de reproducción con autocultamiento, verificando la solución elegida para airspace.
+- [x] **F4-T08** Implementar estados de skeleton/placeholder, red lenta, sin resultados, timeout, expiración y sin conexión.
+- [ ] **F4-T09** Validar escalado 100–200 %, resoluciones y ventanas pequeñas; navegación por teclado y contraste. PARCIAL: escala simulada/layout/contraste probados; faltan DPI físicos y dos monitores.
+- [ ] **F4-T10** Realizar evaluación UX: alta de cuenta, localizar canal, reproducir, añadir favorito y volver al último canal. PARCIAL: recorrido WPF automatizado pasa; evaluación humana/IPTV pendiente.
+- [x] **F4-T11** Generar build de prueba y recopilar defectos antes de avanzar.
 
 **Aceptación:** desde una instalación limpia, el usuario configura su cuenta una sola vez, entra a TV en vivo, encuentra un canal, lo reproduce, lo guarda en favoritos, cambia a otro y recupera sus preferencias al reiniciar.
 

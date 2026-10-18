@@ -33,7 +33,7 @@ public sealed class LibVlcBackend : IPlaybackBackend
             // Subscribing replaces VLC's default logger. Raw messages are classified
             // only in memory and must never reach the application logger or UI.
             lib.Log += NativeLog;
-            var player = new MediaPlayer(lib) { Scale = 0 };
+            var player = new MediaPlayer(lib) { Scale = 0, EnableKeyInput = false, EnableMouseInput = false };
             player.Playing += Playing; player.Buffering += Buffering;
             player.EncounteredError += Failed; player.EndReached += Ended;
             _libVlc = lib; _player = player;

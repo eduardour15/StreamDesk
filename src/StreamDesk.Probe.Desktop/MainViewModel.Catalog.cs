@@ -26,7 +26,7 @@ public sealed partial class MainViewModel
     public Profile? ActiveProfile
     {
         get => _activeProfile;
-        set { if (SetProperty(ref _activeProfile, value)) _ = LoadProfileCacheAsync(value); }
+        set { if (SetProperty(ref _activeProfile, value)) _profileLoad = LoadProfileCacheAsync(value); }
     }
     public string SearchText { get => _searchText; set { if (SetProperty(ref _searchText, value)) _ = ApplyFilterAsync(true); } }
     public XtreamCategory? SelectedCategory { get => _selectedCategory; set { if (SetProperty(ref _selectedCategory, value)) _ = ApplyFilterAsync(false); } }
@@ -50,6 +50,7 @@ public sealed partial class MainViewModel
         var version = BeginCatalogSession();
         _client?.Dispose(); _client = null; _account = null; _connectedProfileId = null;
         ClearCatalog(); ConnectionSummary = null;
+        _catalogOwnerId = profile?.Id;
         BaseUrl = profile?.BaseUrl ?? string.Empty; Username = string.Empty;
         HttpWarning = profile?.BaseUrl.StartsWith("http://", StringComparison.OrdinalIgnoreCase) == true
             ? "Este servidor usa HTTP. Usuario y contraseña pueden viajar sin cifrar. Consulta si el proveedor ofrece HTTPS." : null;
@@ -68,6 +69,9 @@ public sealed partial class MainViewModel
                 StatusMessage = "Metadatos disponibles sin conexión. Conecta o actualiza para reproducir.";
             }
             else CatalogSummary = "No hay catálogo guardado. Conecta y pulsa Actualizar catálogo.";
+            await LoadLibraryAsync(profile?.Id, version, token);
+            if (profile is not null && _viewer is not null && version == _sessionVersion)
+                await _viewer.SetLastProfileAsync(profile.Id, token);
         }
         catch (OperationCanceledException) { }
         catch (Exception exception)
@@ -163,7 +167,11 @@ public sealed partial class MainViewModel
             var snapshot = _connectedProfileId is string profileId
                 ? await _catalogService.RefreshAsync(profileId, provider, token)
                 : new CatalogSnapshot(await provider.GetLiveCategoriesAsync(token), await provider.GetLiveChannelsAsync(token), DateTimeOffset.UtcNow);
+            if (version != _sessionVersion || _disposed) return;
+            _catalogOwnerId = _connectedProfileId;
             await ApplySnapshotAsync(snapshot, version, token);
+            if (version != _sessionVersion || _disposed) return;
+            await LoadLibraryAsync(_connectedProfileId, version, token);
             if (version != _sessionVersion || _disposed) return;
             CatalogSummary = $"{(_connectedProfileId is null ? "Sesión temporal" : "Actualizado")} · {snapshot.Channels.Count} canales · {snapshot.SyncedAt.LocalDateTime:g}";
             StatusMessage = snapshot.Channels.Count == 0 ? "El proveedor devolvió un catálogo vacío." : "Catálogo actualizado. La búsqueda y los filtros funcionan sin conexión.";
@@ -183,6 +191,7 @@ public sealed partial class MainViewModel
         _selectedCategory = Categories.FirstOrDefault(item => item.Id == _selectedCategory?.Id) ?? Categories[0];
         OnPropertyChanged(nameof(SelectedCategory));
         await ApplyFilterAsync(false);
+        RefreshFrequentCategories();
     }
 
     private async Task ApplyFilterAsync(bool debounce)
@@ -192,15 +201,20 @@ public sealed partial class MainViewModel
         using var filter = CancellationTokenSource.CreateLinkedTokenSource(_shutdown.Token, _session.Token);
         _filter = filter;
         var index = _search; var snapshot = _snapshot; var version = _sessionVersion;
-        var query = SearchText; var category = SelectedCategory?.Id; var favoritesOnly = FavoritesOnly;
+        var query = SearchText; var category = SelectedCategory?.Id; var favoritesOnly = FavoritesOnly; var recentsOnly = _recentsOnly;
+        var recentOrder = _library.Recents.Select((item, order) => (item.ChannelId, order)).ToDictionary(item => item.ChannelId, item => item.order);
         try
         {
             if (debounce) await Task.Delay(180, filter.Token);
-            var result = await Task.Run(() => index.Filter(query, category, favoritesOnly, snapshot?.FavoriteChannelIds, filter.Token), filter.Token);
+            var result = await Task.Run(() =>
+            {
+                var matches = index.Filter(query, category, favoritesOnly, snapshot?.FavoriteChannelIds, filter.Token);
+                return recentsOnly ? matches.Where(item => recentOrder.ContainsKey(item.Id)).OrderBy(item => recentOrder[item.Id]).ToArray() : matches;
+            }, filter.Token);
             if (version != _sessionVersion || _disposed || !ReferenceEquals(_filter, filter)) return;
             var selectedId = SelectedChannel?.Id;
             Channels = result;
-            OnPropertyChanged(nameof(Channels)); OnPropertyChanged(nameof(HasNoChannels));
+            OnPropertyChanged(nameof(Channels)); OnPropertyChanged(nameof(HasNoChannels)); OnPropertyChanged(nameof(ResultSummary)); OnPropertyChanged(nameof(EmptyMessage));
             SelectedChannel = result.FirstOrDefault(item => item.Id == selectedId);
         }
         catch (OperationCanceledException) { }

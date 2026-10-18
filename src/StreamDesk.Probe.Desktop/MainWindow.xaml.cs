@@ -1,8 +1,13 @@
 using System.Windows;
 using System.ComponentModel;
 using System.Windows.Input;
+using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
+using System.Windows.Media;
+using System.Windows.Threading;
+using System.Runtime.InteropServices;
 using Microsoft.Win32;
-using LibVLCSharp.Shared;
+using MediaPlayer = LibVLCSharp.Shared.MediaPlayer;
 using StreamDesk.Probe.Core;
 using Wpf.Ui.Controls;
 
@@ -13,12 +18,16 @@ public partial class MainWindow : FluentWindow
     private readonly MainViewModel _viewModel;
     private readonly WindowDisplays _displays = new();
     private bool _closing, _closeComplete;
+    private readonly DispatcherTimer _controlsTimer = new() { Interval = TimeSpan.FromMilliseconds(250) };
+    private DateTime _lastInteraction = DateTime.UtcNow;
+    private ScreenPoint _lastCursor;
+    private bool _controlsHovered;
     public IReadOnlyList<DisplayChoice> Displays { get; } = WindowDisplays.Enumerate();
     public DisplayChoice? SelectedDisplay { get; set; }
     public ChannelLogoLoader LogoLoader { get; }
 
     public MainWindow(AppServices services) : this(
-        new MainViewModel(services.ProviderFactory, services.Playback, services.Profiles, services.Logger, services.Catalogs, services.Credentials), services.Logos)
+        new MainViewModel(services.ProviderFactory, services.Playback, services.Profiles, services.Logger, services.Catalogs, services.Credentials, services.Viewer), services.Logos)
     { }
 
     public MainWindow(MainViewModel viewModel, ChannelLogoLoader logoLoader)
@@ -32,7 +41,10 @@ public partial class MainWindow : FluentWindow
         _viewModel.PropertyChanged += ViewModelChanged;
         SystemEvents.PowerModeChanged += PowerModeChanged;
         Closing += WindowClosing;
-        PreviewKeyDown += (_, args) => { if (args.Key == Key.Escape && _displays.IsFullscreen) { ToggleFullscreen_Click(this, new RoutedEventArgs()); args.Handled = true; } };
+        PreviewKeyDown += WindowKeyDown;
+        SizeChanged += (_, _) => UpdateLayoutMode();
+        _controlsTimer.Tick += (_, _) => UpdateControls();
+        _controlsTimer.Start();
     }
 
     private async void Connect_Click(object sender, RoutedEventArgs e)
@@ -40,6 +52,7 @@ public partial class MainWindow : FluentWindow
         var password = PasswordBox.Password;
         PasswordBox.Clear();
         await _viewModel.ConnectAsync(BaseUrlBox.Text, UsernameBox.Text, password);
+        _viewModel.CurrentTabIndex = 1;
     }
 
     private async void CreateProfile_Click(object sender, RoutedEventArgs e)
@@ -50,9 +63,23 @@ public partial class MainWindow : FluentWindow
     }
 
     private async void PlaySelected_Click(object sender, RoutedEventArgs e) => await _viewModel.PlaySelectedAsync();
+    private async void Retry_Click(object sender, RoutedEventArgs e) => await _viewModel.RetryPlaybackAsync();
     private async void Stop_Click(object sender, RoutedEventArgs e) => await _viewModel.StopPlaybackAsync();
     private async void Previous_Click(object sender, RoutedEventArgs e) => await _viewModel.NavigateChannelAsync(-1);
     private async void Next_Click(object sender, RoutedEventArgs e) => await _viewModel.NavigateChannelAsync(1);
+    private async void TogglePlay_Click(object sender, RoutedEventArgs e) => await _viewModel.TogglePlaybackAsync();
+    private async void PlayLast_Click(object sender, RoutedEventArgs e) => await _viewModel.PlayLastAsync();
+    private async void AutoPlay_Click(object sender, RoutedEventArgs e) => await _viewModel.SetAutoPlayAsync(AutoPlayCheckBox.IsChecked == true);
+    private void Navigate_Click(object sender, RoutedEventArgs e) => _viewModel.CurrentTabIndex = int.Parse((string)((FrameworkElement)sender).Tag);
+    private void ClearFilters_Click(object sender, RoutedEventArgs e) => _viewModel.ClearFilters();
+    private void Category_Click(object sender, RoutedEventArgs e) => _viewModel.SelectedCategory = (XtreamCategory)((FrameworkElement)sender).DataContext;
+    private async void FavoriteRow_Click(object sender, RoutedEventArgs e)
+    { e.Handled = true; await _viewModel.ToggleFavoriteAsync((XtreamChannel)((FrameworkElement)sender).DataContext); }
+    private async void Channels_DoubleClick(object sender, MouseButtonEventArgs e)
+    {
+        if (HasEditingAncestor(e.OriginalSource as DependencyObject)) return;
+        if (_viewModel.SelectedChannel is not null) await _viewModel.PlaySelectedAsync();
+    }
     private void CancelCatalog_Click(object sender, RoutedEventArgs e) => _viewModel.CancelCatalog();
 
     private void VideoView_Loaded(object sender, RoutedEventArgs e)
@@ -62,12 +89,85 @@ public partial class MainWindow : FluentWindow
 
     private void ToggleFullscreen_Click(object sender, RoutedEventArgs e)
     {
-        try { _displays.Toggle(this, SelectedDisplay); }
+        try { _displays.Toggle(this, SelectedDisplay); UpdateLayoutMode(); RevealControls(); }
         catch (Exception exception) { _viewModel.ReportWindowError(exception); }
     }
 
     private void ViewModelChanged(object? sender, PropertyChangedEventArgs args)
-    { if (!_closing && args.PropertyName == nameof(MainViewModel.PlayerHandle)) VideoView_Loaded(this, new RoutedEventArgs()); }
+    {
+        if (_closing) return;
+        if (args.PropertyName == nameof(MainViewModel.PlayerHandle)) VideoView_Loaded(this, new RoutedEventArgs());
+        if (args.PropertyName is nameof(MainViewModel.CanHideControls) or nameof(MainViewModel.CurrentTabIndex)) RevealControls();
+    }
+
+    private async void WindowKeyDown(object sender, KeyEventArgs args)
+    {
+        RevealControls();
+        if (args.Key is Key.Up or Key.Down && HasListAncestor(args.OriginalSource as DependencyObject)) return;
+        var action = PlaybackShortcuts.Resolve(args.Key, Keyboard.Modifiers, HasEditingAncestor(args.OriginalSource as DependencyObject ?? Keyboard.FocusedElement as DependencyObject), _displays.IsFullscreen, _viewModel.ShowTv);
+        if (action == PlaybackShortcut.None || args.IsRepeat) return;
+        args.Handled = true;
+        switch (action)
+        {
+            case PlaybackShortcut.Toggle: await _viewModel.TogglePlaybackAsync(); break;
+            case PlaybackShortcut.Previous: await _viewModel.NavigateChannelAsync(-1); break;
+            case PlaybackShortcut.Next: await _viewModel.NavigateChannelAsync(1); break;
+            case PlaybackShortcut.VolumeUp: _viewModel.Volume += 5; break;
+            case PlaybackShortcut.VolumeDown: _viewModel.Volume -= 5; break;
+            case PlaybackShortcut.Mute: _viewModel.IsMuted = !_viewModel.IsMuted; break;
+            case PlaybackShortcut.Fullscreen: case PlaybackShortcut.ExitFullscreen: ToggleFullscreen_Click(this, new RoutedEventArgs()); break;
+        }
+    }
+    private static bool HasEditingAncestor(DependencyObject? source)
+    {
+        while (source is not null)
+        {
+            if (source is TextBoxBase or System.Windows.Controls.PasswordBox or ComboBox or Slider or ButtonBase) return true;
+            source = source is Visual ? VisualTreeHelper.GetParent(source) : LogicalTreeHelper.GetParent(source);
+        }
+        return false;
+    }
+    private static bool HasListAncestor(DependencyObject? source)
+    {
+        while (source is not null)
+        {
+            if (source is ListBox) return true;
+            source = source is Visual ? VisualTreeHelper.GetParent(source) : LogicalTreeHelper.GetParent(source);
+        }
+        return false;
+    }
+    private void UpdateLayoutMode()
+    {
+        if (Shell is null) return;
+        var fullscreen = _displays.IsFullscreen;
+        Shell.Margin = new Thickness(fullscreen ? 0 : 16);
+        Sidebar.Visibility = TvHeader.Visibility = ConnectionNotices.Visibility = CatalogPane.Visibility = StatusBar.Visibility = NowPlayingTitle.Visibility = fullscreen ? Visibility.Collapsed : Visibility.Visible;
+        SidebarColumn.Width = new GridLength(fullscreen ? 0 : ActualWidth < 1050 ? 132 : 158);
+        CatalogColumn.Width = new GridLength(fullscreen ? 0 : ActualWidth < 1050 ? 234 : 284);
+        Workspace.Margin = new Thickness(fullscreen ? 0 : 20, 0, 0, 0);
+    }
+    private void RevealControls() { _lastInteraction = DateTime.UtcNow; PlayerControls.Visibility = Visibility.Visible; }
+    private void Player_MouseMove(object sender, MouseEventArgs e) => RevealControls();
+    private void Player_MouseLeave(object sender, MouseEventArgs e) { _controlsHovered = false; }
+    private void Controls_MouseEnter(object sender, MouseEventArgs e) { _controlsHovered = true; RevealControls(); }
+    private void Controls_MouseLeave(object sender, MouseEventArgs e) { _controlsHovered = false; RevealControls(); }
+    private void UpdateControls()
+    {
+        // Poll the cursor because native video owns mouse messages inside its HWND.
+        if (_viewModel.ShowTv && GetCursorPos(out var cursor))
+        {
+            if ((cursor.X != _lastCursor.X || cursor.Y != _lastCursor.Y) && PlayerPane.IsVisible)
+            {
+                var point = PlayerPane.PointFromScreen(new Point(cursor.X, cursor.Y));
+                if (point.X >= 0 && point.Y >= 0 && point.X < PlayerPane.ActualWidth && point.Y < PlayerPane.ActualHeight) RevealControls();
+            }
+            _lastCursor = cursor;
+        }
+        if (!_viewModel.CanHideControls || _controlsHovered || PlayerControls.IsKeyboardFocusWithin) { PlayerControls.Visibility = Visibility.Visible; return; }
+        if (DateTime.UtcNow - _lastInteraction > TimeSpan.FromSeconds(3)) PlayerControls.Visibility = Visibility.Collapsed;
+    }
+    [StructLayout(LayoutKind.Sequential)] private struct ScreenPoint { public int X, Y; }
+    [DllImport("user32.dll")] [return: MarshalAs(UnmanagedType.Bool)] private static extern bool GetCursorPos(out ScreenPoint point);
 
     private void PowerModeChanged(object sender, PowerModeChangedEventArgs args)
     { if (args.Mode == PowerModes.Suspend && !_closing) _ = _viewModel.SuspendPlaybackAsync(); }
@@ -78,6 +178,7 @@ public partial class MainWindow : FluentWindow
         args.Cancel = true;
         if (_closing) return;
         _closing = true;
+        _controlsTimer.Stop();
         SystemEvents.PowerModeChanged -= PowerModeChanged;
         _viewModel.PropertyChanged -= ViewModelChanged;
         VideoView.MediaPlayer = null;

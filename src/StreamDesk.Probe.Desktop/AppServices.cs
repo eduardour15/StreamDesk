@@ -18,6 +18,7 @@ public sealed class AppServices : IDisposable
         Credentials = new DpapiCredentialStore(Path.Combine(localDataDirectory, "secrets"));
         Profiles = new ProfileService(Settings, Credentials);
         Catalogs = new CatalogService(new SqliteCatalogStore(Path.Combine(localDataDirectory, "streamdesk.db")));
+        Viewer = new SqliteViewerStore(Path.Combine(localDataDirectory, "streamdesk.db"));
         _httpServices = ProviderHttpClients.CreateServices();
         var factory = _httpServices.GetRequiredService<IHttpClientFactory>();
         ProviderFactory = (url, username, password) => new XtreamApiClient(url, username, password, httpClient: factory.CreateClient("Xtream"));
@@ -30,6 +31,7 @@ public sealed class AppServices : IDisposable
     public ICredentialStore Credentials { get; }
     public ProfileService Profiles { get; }
     public CatalogService Catalogs { get; }
+    public IViewerStore Viewer { get; }
     public ChannelLogoLoader Logos { get; }
     public Func<string, string, string, IIptvProvider> ProviderFactory { get; }
     public IPlaybackService Playback { get; }
