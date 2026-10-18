@@ -1,0 +1,80 @@
+using Microsoft.Data.Sqlite;
+using StreamDesk.Application;
+using StreamDesk.Probe.Core;
+
+namespace StreamDesk.Probe.Infrastructure;
+
+public sealed class SqliteViewerStore(string path, bool pooling = true) : IViewerStore
+{
+    private readonly string _connectionString = new SqliteConnectionStringBuilder
+        { DataSource = Path.GetFullPath(path), ForeignKeys = true, Pooling = pooling, DefaultTimeout = 5 }.ToString();
+
+    public Task<ViewerLibrary> LoadAsync(string profileId, CancellationToken cancellationToken = default) => Task.Run(() =>
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        using var connection = Open(); using var transaction = connection.BeginTransaction();
+        using var command = connection.CreateCommand(); command.Transaction = transaction;
+        command.Parameters.AddWithValue("$profile", profileId);
+        command.CommandText = "SELECT ChannelId FROM Favorites WHERE ProfileId=$profile AND ContentType='live';";
+        var favorites = new HashSet<string>(StringComparer.Ordinal);
+        using (var reader = command.ExecuteReader())
+            while (reader.Read()) { cancellationToken.ThrowIfCancellationRequested(); favorites.Add(reader.GetString(0)); }
+        command.CommandText = "SELECT ChannelId,PlayedAt FROM PlaybackHistory WHERE ProfileId=$profile AND ContentType='live' ORDER BY PlayedAt DESC,ChannelId LIMIT 50;";
+        var recents = new List<RecentChannel>();
+        using (var reader = command.ExecuteReader())
+            while (reader.Read()) { cancellationToken.ThrowIfCancellationRequested(); recents.Add(new(reader.GetString(0), DateTimeOffset.Parse(reader.GetString(1)))); }
+        command.CommandText = "SELECT AutoPlayLast FROM ProfilePreferences WHERE ProfileId=$profile;";
+        var autoPlay = command.ExecuteScalar() is long value && value == 1;
+        cancellationToken.ThrowIfCancellationRequested(); transaction.Commit();
+        return new ViewerLibrary(favorites, recents, autoPlay);
+    }, cancellationToken);
+
+    public Task SetFavoriteAsync(string profileId, string contentType, string channelId, bool favorite, CancellationToken cancellationToken = default) =>
+        WriteAsync(profileId, contentType, channelId, favorite ? """
+            INSERT INTO Favorites(ProfileId,ContentType,ChannelId,CreatedAt)
+            SELECT $profile,$type,$channel,$date WHERE EXISTS (SELECT 1 FROM Channels WHERE ProfileId=$profile AND ContentType=$type AND ProviderId=$channel)
+            ON CONFLICT(ProfileId,ContentType,ChannelId) DO NOTHING;
+            """ : "DELETE FROM Favorites WHERE ProfileId=$profile AND ContentType=$type AND ChannelId=$channel;", DateTimeOffset.UtcNow, cancellationToken);
+
+    public Task RecordPlayedAsync(string profileId, string contentType, string channelId, DateTimeOffset playedAt, CancellationToken cancellationToken = default) =>
+        WriteAsync(profileId, contentType, channelId, """
+            INSERT INTO PlaybackHistory(ProfileId,ContentType,ChannelId,PlayedAt)
+            SELECT $profile,$type,$channel,$date WHERE EXISTS (SELECT 1 FROM Channels WHERE ProfileId=$profile AND ContentType=$type AND ProviderId=$channel)
+            ON CONFLICT(ProfileId,ContentType,ChannelId) DO UPDATE SET PlayedAt=MAX(PlayedAt,excluded.PlayedAt);
+            DELETE FROM PlaybackHistory WHERE ProfileId=$profile AND ContentType=$type AND ChannelId NOT IN
+                (SELECT ChannelId FROM PlaybackHistory WHERE ProfileId=$profile AND ContentType=$type ORDER BY PlayedAt DESC,ChannelId LIMIT 50);
+            """, playedAt, cancellationToken);
+
+    private Task WriteAsync(string profile, string type, string channel, string sql, DateTimeOffset date, CancellationToken token) => Task.Run(() =>
+    {
+        token.ThrowIfCancellationRequested();
+        using var connection = Open(); using var transaction = connection.BeginTransaction();
+        using var command = connection.CreateCommand(); command.Transaction = transaction; command.CommandText = sql;
+        command.Parameters.AddWithValue("$profile", profile); command.Parameters.AddWithValue("$type", type);
+        command.Parameters.AddWithValue("$channel", channel); command.Parameters.AddWithValue("$date", date.ToUniversalTime().ToString("O"));
+        command.ExecuteNonQuery(); token.ThrowIfCancellationRequested(); transaction.Commit();
+    }, token);
+
+    public Task SetAutoPlayAsync(string profileId, bool enabled, CancellationToken cancellationToken = default) => Task.Run(() =>
+    {
+        cancellationToken.ThrowIfCancellationRequested(); using var connection = Open(); using var command = connection.CreateCommand();
+        command.CommandText = "INSERT INTO ProfilePreferences(ProfileId,AutoPlayLast) VALUES($profile,$enabled) ON CONFLICT(ProfileId) DO UPDATE SET AutoPlayLast=excluded.AutoPlayLast;";
+        command.Parameters.AddWithValue("$profile", profileId); command.Parameters.AddWithValue("$enabled", enabled);
+        command.ExecuteNonQuery();
+    }, cancellationToken);
+
+    public Task<string?> GetLastProfileAsync(CancellationToken cancellationToken = default) => Task.Run(() =>
+    {
+        cancellationToken.ThrowIfCancellationRequested(); using var connection = Open(); using var command = connection.CreateCommand();
+        command.CommandText = "SELECT LastProfileId FROM AppPreferences WHERE Id=1;"; return command.ExecuteScalar() as string;
+    }, cancellationToken);
+
+    public Task SetLastProfileAsync(string profileId, CancellationToken cancellationToken = default) => Task.Run(() =>
+    {
+        cancellationToken.ThrowIfCancellationRequested(); using var connection = Open(); using var command = connection.CreateCommand();
+        command.CommandText = "INSERT INTO AppPreferences(Id,LastProfileId) VALUES(1,$profile) ON CONFLICT(Id) DO UPDATE SET LastProfileId=excluded.LastProfileId;";
+        command.Parameters.AddWithValue("$profile", profileId); command.ExecuteNonQuery();
+    }, cancellationToken);
+
+    private SqliteConnection Open() { var connection = new SqliteConnection(_connectionString); connection.Open(); return connection; }
+}

@@ -1,0 +1,13 @@
+using StreamDesk.Probe.Core;
+
+namespace StreamDesk.Application;
+
+public interface IViewerStore
+{
+    Task<ViewerLibrary> LoadAsync(string profileId, CancellationToken cancellationToken = default);
+    Task SetFavoriteAsync(string profileId, string contentType, string channelId, bool favorite, CancellationToken cancellationToken = default);
+    Task RecordPlayedAsync(string profileId, string contentType, string channelId, DateTimeOffset playedAt, CancellationToken cancellationToken = default);
+    Task SetAutoPlayAsync(string profileId, bool enabled, CancellationToken cancellationToken = default);
+    Task<string?> GetLastProfileAsync(CancellationToken cancellationToken = default);
+    Task SetLastProfileAsync(string profileId, CancellationToken cancellationToken = default);
+}
