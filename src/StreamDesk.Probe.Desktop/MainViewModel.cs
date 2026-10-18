@@ -7,7 +7,7 @@ using StreamDesk.Probe.Core;
 
 namespace StreamDesk.Probe.Desktop;
 
-public sealed partial class MainViewModel : INotifyPropertyChanged, IDisposable
+public sealed partial class MainViewModel : INotifyPropertyChanged, IDisposable, IAsyncDisposable
 {
     private readonly Func<string, string, string, IIptvProvider> _providerFactory;
     private readonly IPlaybackService _playbackService;
@@ -52,18 +52,7 @@ public sealed partial class MainViewModel : INotifyPropertyChanged, IDisposable
         ReloadProfilesCommand = new AsyncRelayCommand(LoadProfilesAsync, () => !IsBusy);
         DeleteProfileCommand = new AsyncRelayCommand(DeleteSelectedProfileAsync, () => !IsBusy && SelectedProfile is not null);
         ConnectProfileCommand = new AsyncRelayCommand(ConnectProfileAsync, () => CanConnect && ActiveProfile is not null);
-        _playbackService.PlaybackStarted += PlaybackStarted;
-        _playbackService.PlaybackFailed += PlaybackFailed;
-        try
-        {
-            _playbackService.Initialize();
-            IsPlaybackReady = true;
-        }
-        catch (Exception exception)
-        {
-            _logger.LogError("playback_init", exception);
-            StatusMessage = "No se pudo iniciar el motor de video. La navegación y configuración local siguen disponibles.";
-        }
+        _playbackService.StateChanged += PlaybackStateChanged;
     }
 
     public event PropertyChangedEventHandler? PropertyChanged;
@@ -153,20 +142,24 @@ public sealed partial class MainViewModel : INotifyPropertyChanged, IDisposable
         finally { SetProfileBusy(false); }
     }
 
-    public void PlaySelected()
+    public async Task PlaySelectedAsync()
     {
         if (IsBusy || IsCatalogLoading || _disposed) return;
         if (_client is null || _account is null) { StatusMessage = "Primero conecta una cuenta válida."; return; }
         if (SelectedChannel is null) { StatusMessage = "Selecciona un canal para reproducir."; return; }
-        if (!_playbackService.IsReady) { StatusMessage = "LibVLC no está disponible en este equipo."; return; }
+        if (_account.ExpiresAt <= DateTimeOffset.UtcNow) { StatusMessage = new PlaybackException(PlaybackFailure.Expired).Message; return; }
         if (string.IsNullOrWhiteSpace(SelectedFormat)) { StatusMessage = "El proveedor no declaró un formato compatible."; return; }
         if (!_playbackService.HasActiveMedia && _account.HasReachedConnectionLimit)
         { StatusMessage = "La cuenta ya alcanzó el límite de conexiones que informó el proveedor."; return; }
         try
         {
-            _playbackService.Play(_client.CreateLiveStreamUri(SelectedChannel, SelectedFormat));
-            StatusMessage = "Solicitud enviada a LibVLC. Confirma visualmente imagen y audio.";
+            var source = _client.CreateLiveStreamUri(SelectedChannel, SelectedFormat);
+            _playingChannelId = SelectedChannel.Id;
+            await _playbackService.PlayAsync(source, _session.Token);
+            IsPlaybackReady = _playbackService.IsReady;
+            OnPropertyChanged(nameof(PlayerHandle));
         }
+        catch (OperationCanceledException) { }
         catch (XtreamApiException exception) { StatusMessage = exception.Message; }
         catch (Exception exception)
         {
@@ -175,26 +168,23 @@ public sealed partial class MainViewModel : INotifyPropertyChanged, IDisposable
         }
     }
 
-    public void StopPlayback() { _playbackService.Stop(); StatusMessage = "Reproducción detenida y medio liberado."; }
-
-    public void Dispose()
+    private async Task ShutdownCoreAsync()
     {
         if (_disposed) return;
         _disposed = true;
+        _playbackService.StateChanged -= PlaybackStateChanged;
         _shutdown.Cancel();
         DisposeCatalog();
-        _playbackService.PlaybackStarted -= PlaybackStarted;
-        _playbackService.PlaybackFailed -= PlaybackFailed;
-        _playbackService.Stop();
-        _playbackService.Dispose();
         _client?.Dispose();
         _client = null;
         _account = null;
-        _shutdown.Dispose();
+        try { await _playbackService.DisposeAsync().ConfigureAwait(false); }
+        catch (Exception exception) { _logger.LogError("playback_dispose", exception); }
+        finally { _shutdown.Dispose(); }
     }
-
-    private void PlaybackStarted(object? sender, EventArgs e) => System.Windows.Application.Current?.Dispatcher.BeginInvoke(() => StatusMessage = "LibVLC reporta reproducción; valida imagen y audio.");
-    private void PlaybackFailed(object? sender, EventArgs e) => System.Windows.Application.Current?.Dispatcher.BeginInvoke(() => StatusMessage = "LibVLC no pudo abrir el canal. Comprueba autorización y formato.");
+    private Task? _shutdownTask;
+    public ValueTask DisposeAsync() => new(_shutdownTask ??= ShutdownCoreAsync());
+    public void Dispose() => DisposeAsync().AsTask().GetAwaiter().GetResult();
 
     private static string FormatAccount(XtreamAccount account)
     {

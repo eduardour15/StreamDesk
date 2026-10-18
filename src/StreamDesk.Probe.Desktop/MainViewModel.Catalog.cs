@@ -49,7 +49,7 @@ public sealed partial class MainViewModel
     {
         var version = BeginCatalogSession();
         _client?.Dispose(); _client = null; _account = null; _connectedProfileId = null;
-        StopPlayback(); ClearCatalog(); ConnectionSummary = null;
+        ClearCatalog(); ConnectionSummary = null;
         BaseUrl = profile?.BaseUrl ?? string.Empty; Username = string.Empty;
         HttpWarning = profile?.BaseUrl.StartsWith("http://", StringComparison.OrdinalIgnoreCase) == true
             ? "Este servidor usa HTTP. Usuario y contraseña pueden viajar sin cifrar. Consulta si el proveedor ofrece HTTPS." : null;
@@ -57,6 +57,8 @@ public sealed partial class MainViewModel
         var token = _session.Token;
         try
         {
+            await StopPlaybackAsync();
+            token.ThrowIfCancellationRequested();
             var cached = profile is null ? null : await _catalogService.LoadAsync(profile.Id, token);
             if (version != _sessionVersion || _disposed) return;
             if (cached is not null)
@@ -112,7 +114,10 @@ public sealed partial class MainViewModel
     {
         token.ThrowIfCancellationRequested();
         if (version != _sessionVersion || _disposed) return;
-        StopPlayback(); _client?.Dispose(); _client = null; _account = null; _connectedProfileId = null;
+        await StopPlaybackAsync();
+        token.ThrowIfCancellationRequested();
+        if (version != _sessionVersion || _disposed) return;
+        _client?.Dispose(); _client = null; _account = null; _connectedProfileId = null;
         AvailableFormats.Clear(); SelectedFormat = null; ConnectionSummary = null;
         IIptvProvider? provider = _providerFactory(url, credentials.Username, credentials.Password);
         try

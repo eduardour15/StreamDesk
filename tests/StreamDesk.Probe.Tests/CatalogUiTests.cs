@@ -122,7 +122,7 @@ public sealed class CatalogUiTests
             await VerifyStaleCredentialReadDoesNotClearNewProfileAsync();
             await VerifyProfileChangeDoesNotUnlockProfileSaveAsync();
         }
-        finally { window.Close(); }
+        finally { window.Close(); await WaitAsync(() => !window.IsVisible); }
     }
 
     private static async Task VerifyLogosAsync()

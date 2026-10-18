@@ -127,17 +127,17 @@ La separación puede simplificarse si el MVP se vuelve innecesariamente complejo
 **Meta:** lograr reproducción robusta en uso diario.  
 **Entregable:** visor funcional con controles y recuperación ante desconexiones.
 
-- [ ] **F3-T01** Integrar LibVLCSharp en un servicio único de reproducción con estados claros (Idle, Loading, Playing, Buffering, Failed, Stopped).
-- [ ] **F3-T02** Crear URL de stream en memoria de forma correcta, sin exponer credenciales en UI/logs/telemetría.
-- [ ] **F3-T03** Implementar reproducir, detener, volumen, mute y selector anterior/siguiente.
-- [ ] **F3-T04** Permitir fullscreen, volver a ventana, conservar relación de aspecto y elegir monitor.
-- [ ] **F3-T05** Implementar control de buffer configurable y fallback de aceleración de video cuando falle el hardware.
-- [ ] **F3-T06** Permitir cambio rápido de canal con cancelación del canal anterior y sin streams duplicados.
-- [ ] **F3-T07** Incorporar reintentos controlados con backoff para interrupciones transitorias, y detenerlos para fallos definitivos.
-- [ ] **F3-T08** Gestionar cambio de perfil, suspensión del equipo, cierre de ventana y `Dispose()` de recursos nativos.
-- [ ] **F3-T09** Mostrar error comprensible si el stream no existe, expira o el proveedor niega la conexión.
-- [ ] **F3-T10** Medir CPU/RAM/GPU, arranque de video y cambios de canal; optimizar con perfiles reales.
-- [ ] **F3-T11** Probar transiciones repetidas entre 20 canales, desconexión de red y cierre mientras se reproduce.
+- [x] **F3-T01** Integrar LibVLCSharp en un servicio único de reproducción con estados claros (Idle, Loading, Playing, Buffering, Failed, Stopped).
+- [x] **F3-T02** Crear URL de stream en memoria de forma correcta, sin exponer credenciales en UI/logs/telemetría.
+- [x] **F3-T03** Implementar reproducir, detener, volumen, mute y selector anterior/siguiente.
+- [ ] **F3-T04** Permitir fullscreen, volver a ventana, conservar relación de aspecto y elegir monitor. PARCIAL: implementado; falta validación de video/DPI en monitores físicos.
+- [ ] **F3-T05** Implementar control de buffer configurable y fallback de aceleración de video cuando falle el hardware. PARCIAL: implementado/probado con backend controlado; falta medir fallback en hardware real.
+- [x] **F3-T06** Permitir cambio rápido de canal con cancelación del canal anterior y sin streams duplicados.
+- [x] **F3-T07** Incorporar reintentos controlados con backoff para interrupciones transitorias, y detenerlos para fallos definitivos.
+- [x] **F3-T08** Gestionar cambio de perfil, suspensión del equipo, cierre de ventana y `Dispose()` de recursos nativos.
+- [x] **F3-T09** Mostrar error comprensible si el stream no existe, expira o el proveedor niega la conexión.
+- [ ] **F3-T10** Medir CPU/RAM/GPU, arranque de video y cambios de canal; optimizar con perfiles reales. PARCIAL: recolector listo; medición IPTV real pendiente.
+- [ ] **F3-T11** Probar transiciones repetidas entre 20 canales, desconexión de red y cierre mientras se reproduce. PARCIAL: 20 cambios ficticios y 20 fixtures nativos locales probados; falta sesión IPTV real.
 
 **Aceptación:** el video se reproduce de forma estable, cambia de canal, puede detenerse y cerrarse sin fuga evidente de memoria ni reproducciones paralelas; los errores son recuperables.
 

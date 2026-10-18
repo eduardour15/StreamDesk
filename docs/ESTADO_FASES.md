@@ -4,16 +4,35 @@ Este archivo registra trabajo y evidencias reales. La confirmación del usuario 
 
 | Fase | Gate | Tareas completas | Última revisión | Bloqueos o dependencias |
 |---|---|---:|---|---|
-| F0 | PENDIENTE_DE_VALIDACION | 5/11 | 2026-10-17 | Auditoría: revalidar video/cambio/detención/controles tras fallo real de LibVLC reportado; F0-T05/T06/T07 PARCIAL. Métricas, condiciones del proveedor y avisos nativos pendientes. |
+| F0 | PENDIENTE_DE_VALIDACION | 5/11 | 2026-10-18 | Reanudada F0-T05: build y 67 tests correctos; sigue pendiente confirmar video real después de corregir LibVLC. F0-T05/T06/T07 PARCIAL. Métricas, condiciones del proveedor y avisos nativos pendientes. |
 | F1 | PENDIENTE_DE_VALIDACION | 10/10 | 2026-10-17 | Código y regresiones corregidos; falta confirmar preservación del playback real actual. |
 | F2 | PENDIENTE_DE_VALIDACION | 10/10 | 2026-10-17 | 67 tests en salida Release aislada, incluida WPF con 5.000 canales. Verificación técnica PASA; cierre condicionado a revalidación previa F0/F1. |
-| F3 | NO_INICIADA | 0/11 | — | Requiere cerrar la revalidación de F0/F1/F2 |
+| F3 | PENDIENTE_DE_VALIDACION | 7/11 | 2026-10-18 | Implementación completa por instrucción expresa de avanzar; T04/T05/T10/T11 PARCIAL por validación física/IPTV/mediciones pendiente. Gates F0/F1/F2 no se aprueban por anticipado. |
 | F4 | NO_INICIADA | 0/11 | — | Requiere F3 aprobada |
 | F5 | NO_INICIADA | 0/9 | — | Requiere F4 aprobada; EPG/VOD condicional |
 | F6 | NO_INICIADA | 0/12 | — | Requiere MVP estable |
 | F7 | NO_INICIADA | 0/6 | — | Opcional después de 1.0 |
 
 ## Bitácora de evidencias
+
+### 2026-10-18 (America/Managua) — Implementación F3 por solicitud expresa
+
+- **Autorización y dependencias:** el usuario solicitó «culmina la fase 3» después de informar que la revalidación real de F0/F1/F2 seguía pendiente. Se avanzó por esa instrucción, advirtiendo el riesgo de aceptación multimedia no verificada. Se conserva el estado real de los gates anteriores. F4 no se inicia.
+- **Implementación:** `PlaybackService` en Application coordina Idle/Loading/Playing/Buffering/Failed/Stopped, apertura/cierre serializados, cancelación de la solicitud previa, identificadores por intento, timeout y presupuesto de recuperación. `LibVlcBackend` encapsula un LibVLC/MediaPlayer, ejecuta trabajo nativo en tareas y clasifica diagnósticos en memoria sin registrar texto ni URLs. Contratos/modelos en `PlaybackContracts.cs` y `PlaybackModels.cs`; se sustituyó el antiguo `LibVlcPlaybackService.cs` por el backend separado y el coordinador probado.
+- **Controles y ciclo de vida:** WPF incorpora volumen/mute, anterior/siguiente sobre orden visible, reintentar, búfer 250–10.000 ms, modo software, monitor de pantalla completa y Esc para volver. `WindowDisplays` conserva/restaura posición/estilo con Win32; manifiesto PerMonitorV2. El VideoView permanece en su árbol visual. Cambio de perfil/suspensión cancelan reproducción y reconexión; no hay autoplay al reanudar. Cierre de ventana desacopla VideoView, espera DisposeAsync y difiere Close para evitar recursión si Dispose termina de inmediato.
+- **Recuperación:** dos reintentos por solicitud del usuario para red/timeout con backoff 1/2 s. No se reinicia el presupuesto al recibir Playing. 401/403/404, expiración, límites, formato y fallo desconocido no se reconectan automáticamente. Fallo específicamente clasificado de hardware permite una sola reapertura por software; no se aplica como respuesta a denegación.
+- **Pruebas:** 100 correctas, 0 fallidas/omitidas. Casos nuevos: 25 del coordinador/clasificador, 4 del ViewModel, 3 con motor nativo frente a servidor HTTP loopback 401/403/404 y una decodificación nativa de 20 BMP distintos generados localmente. Se verificaron píxeles del medio vigente, reemplazo y cierre, no solo eventos Playing. Los 67 casos anteriores siguen pasando, incluida WPF con 5.000 canales.
+- **Incidencia durante verificación:** la primera ejecución conjunta terminó con 99 pasadas y timeout de la ventana WPF por cierre recursivo. Se corrigió difiriendo el segundo Close al Dispatcher; la prueba WPF aislada y luego las 100 pruebas completas pasaron. No se oculta el fallo inicial ni se convierte un timeout en éxito.
+- **Comandos finales:** `dotnet build StreamDesk.sln --no-restore --verbosity minimal --maxcpucount:1 -p:UseSharedCompilation=false` (0 errores/advertencias); `dotnet test StreamDesk.sln --no-build --no-restore --verbosity minimal --maxcpucount:1` (100 pasadas); parser PowerShell de `scripts/Measure-Playback.ps1` sin errores; `git diff --check` sin defectos de whitespace. Paquetes existentes, sin dependencias nuevas. Captura WPF local revisada; no valida overlay/video nativo.
+- **Mediciones:** `scripts/Measure-Playback.ps1` prepara CSV de CPU/RAM/GPU por proceso y contexto de hardware en `artifacts/metrics`, fuera de Git. GPU/modelos no disponibles se distinguen de cero; no se capturan canales ni URLs. Se verificó sintaxis; no se ejecutó una sesión IPTV de rendimiento y no se inventan métricas ni ventajas de aceleración.
+- **Gate:** F3 `PENDIENTE_DE_VALIDACION`. Código previsto implementado; F3-T04/T05/T10/T11 `PARCIAL` hasta probar video/monitores, fallback medido y sesión de 20 canales reales. F3-T08 tiene ciclo de suspensión implementado y probado por llamada de aplicación, pero el evento físico de suspensión/reanudación sigue en el protocolo real. Checklist completo y aceptación en `CIERRE_F3.md`; pasos en `PRUEBA_MANUAL_F3.md`. Siguiente paso: validar esos puntos, sin iniciar F4.
+
+### 2026-10-18 (America/Managua) — Reanudación de la primera tarea pendiente, F0-T05
+
+- **Solicitud:** continuar con la siguiente tarea programada. Se inspeccionaron Git, ROADMAP, el estado vigente, los prompts F0/resolución de bloqueos y los ADRs. El siguiente trabajo admisible es revalidar F0-T05 y el flujo asociado F0-T06/T07; F3-T01 requiere F2 aprobada y el prototipo real funcionando.
+- **Verificación actual:** `dotnet build StreamDesk.sln --no-restore --verbosity minimal --maxcpucount:1 -p:UseSharedCompilation=false` (0 errores y 0 advertencias); `dotnet test StreamDesk.sln --no-build --no-restore --verbosity minimal --maxcpucount:1` (67 correctos, 0 fallidos/omitidos). Los tests comprueban inicialización y cierre del runtime nativo, catálogo y regresiones; no acreditan imagen/audio del proveedor.
+- **Estado:** F0-T05 continúa `PARCIAL` y los gates F0/F1/F2 siguen `PENDIENTE_DE_VALIDACION`. Se solicitó el resultado real de la versión corregida; todavía no se recibió confirmación posterior al fallo reportado. No se iniciaron tareas F3 ni se modificó código ya verificado. Se conserva `Error/error.txt`.
+- **Para continuar:** confirmar imagen/audio, cambio de canal, detener/cerrar y controles sobre video/fullscreen según `PRUEBA_MANUAL_F0.md`; registrar por separado formatos, DPI/monitores o métricas que no se hayan comprobado. No compartir credenciales ni URLs autenticadas.
 
 ### 2026-10-17 (America/Managua) — Auditoría y corrección de F0–F2 (estado vigente)
 

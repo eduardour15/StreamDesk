@@ -75,12 +75,18 @@ internal sealed class FixturePlayback : IPlaybackService
     public object? PlayerHandle => null;
     public bool IsReady => true;
     public bool HasActiveMedia { get; private set; }
-    public event EventHandler? PlaybackStarted { add { } remove { } }
-    public event EventHandler? PlaybackFailed { add { } remove { } }
-    public void Initialize() { }
-    public void Play(Uri streamUri) => HasActiveMedia = true;
-    public void Stop() => HasActiveMedia = false;
-    public void Dispose() => Stop();
+    public PlaybackSnapshot Snapshot { get; private set; } = new(0, PlaybackState.Idle);
+    public PlaybackOptions Options { get; set; } = new();
+    public int Volume { get; set; } = 75;
+    public bool IsMuted { get; set; }
+    public event EventHandler<PlaybackSnapshot>? StateChanged;
+    public Task InitializeAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
+    public Task PlayAsync(Uri streamUri, CancellationToken cancellationToken = default)
+    { HasActiveMedia = true; Snapshot = new(Snapshot.Sequence + 1, PlaybackState.Playing); StateChanged?.Invoke(this, Snapshot); return Task.CompletedTask; }
+    public Task StopAsync()
+    { HasActiveMedia = false; Snapshot = new(Snapshot.Sequence + 1, PlaybackState.Stopped); StateChanged?.Invoke(this, Snapshot); return Task.CompletedTask; }
+    public ValueTask DisposeAsync() { HasActiveMedia = false; return ValueTask.CompletedTask; }
+    public void Dispose() => HasActiveMedia = false;
 }
 
 internal sealed class FixtureLogger : IAppLogger

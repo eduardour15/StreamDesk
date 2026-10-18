@@ -1,0 +1,84 @@
+using StreamDesk.Probe.Core;
+
+namespace StreamDesk.Probe.Desktop;
+
+public sealed partial class MainViewModel
+{
+    private readonly SynchronizationContext? _ui = SynchronizationContext.Current;
+    private PlaybackSnapshot _playback = new(0, PlaybackState.Idle);
+    private string? _playingChannelId;
+    public string PlaybackStatus => _playback.Message + (_playback.UsingSoftware ? " Decodificación por software." : "") +
+        (_playback.WillRetry && _playback.RetryCount is > 0 and <= 2 && _playback.Failure is PlaybackFailure.Network or PlaybackFailure.Timeout
+            ? $" Intento de recuperación {_playback.RetryCount}/2." : "");
+    public bool ShowPlaybackPlaceholder => !_playback.IsActive;
+    public bool CanRetryPlayback => _playback.State == PlaybackState.Failed && !_playback.WillRetry;
+    public int Volume { get => _playbackService.Volume; set { _playbackService.Volume = value; OnPropertyChanged(); } }
+    public bool IsMuted { get => _playbackService.IsMuted; set { _playbackService.IsMuted = value; OnPropertyChanged(); } }
+    public int BufferMilliseconds
+    {
+        get => _playbackService.Options.BufferMilliseconds;
+        set { _playbackService.Options = (_playbackService.Options with { BufferMilliseconds = value }).Validate(); OnPropertyChanged(); }
+    }
+    public bool SoftwareDecoding
+    {
+        get => _playbackService.Options.Hardware == HardwareDecoding.Software;
+        set { _playbackService.Options = _playbackService.Options with { Hardware = value ? HardwareDecoding.Software : HardwareDecoding.Automatic }; OnPropertyChanged(); }
+    }
+
+    public async Task InitializePlaybackAsync()
+    {
+        try
+        {
+            await _playbackService.InitializeAsync(_shutdown.Token);
+            if (_disposed) return;
+            IsPlaybackReady = _playbackService.IsReady;
+            OnPropertyChanged(nameof(PlayerHandle));
+        }
+        catch (OperationCanceledException) { }
+        catch (Exception exception)
+        {
+            _logger.LogError("playback_init", exception);
+            StatusMessage = new PlaybackException(PlaybackFailure.Unavailable).Message;
+        }
+    }
+
+    public async Task StopPlaybackAsync()
+    {
+        _playingChannelId = null;
+        try { await _playbackService.StopAsync(); }
+        catch (Exception exception) { _logger.LogError("playback_stop", exception); }
+    }
+
+    public async Task NavigateChannelAsync(int direction)
+    {
+        if (_disposed || Channels.Count == 0 || direction is not (-1 or 1)) return;
+        var currentId = _playingChannelId ?? SelectedChannel?.Id;
+        var index = -1;
+        for (var position = 0; position < Channels.Count; position++) if (Channels[position].Id == currentId) { index = position; break; }
+        var next = index < 0 ? (direction > 0 ? 0 : Channels.Count - 1) : index + direction;
+        if (next < 0 || next >= Channels.Count) return;
+        SelectedChannel = Channels[next]; await PlaySelectedAsync();
+    }
+
+    public async Task SuspendPlaybackAsync()
+    {
+        await StopPlaybackAsync();
+        void Apply() { if (!_disposed) StatusMessage = "La reproducción se detuvo por suspensión. Vuelve a iniciarla cuando estés listo."; }
+        if (_ui is not null && SynchronizationContext.Current != _ui) _ui.Post(_ => Apply(), null); else Apply();
+    }
+
+    public void ReportWindowError(Exception exception)
+    { _logger.LogError("window_display", exception); StatusMessage = "No se pudo cambiar de pantalla. Intenta nuevamente con una pantalla disponible."; }
+
+    private void PlaybackStateChanged(object? sender, PlaybackSnapshot snapshot)
+    {
+        void Apply()
+        {
+            if (_disposed || snapshot.Sequence <= _playback.Sequence) return;
+            _playback = snapshot;
+            StatusMessage = PlaybackStatus;
+            OnPropertyChanged(nameof(PlaybackStatus)); OnPropertyChanged(nameof(ShowPlaybackPlaceholder)); OnPropertyChanged(nameof(CanRetryPlayback));
+        }
+        if (_ui is not null && SynchronizationContext.Current != _ui) _ui.Post(_ => Apply(), null); else Apply();
+    }
+}

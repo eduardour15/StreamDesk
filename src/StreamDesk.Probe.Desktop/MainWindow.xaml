@@ -149,20 +149,35 @@
                             <Border Grid.Row="0" CornerRadius="10" Background="#FF050608" ClipToBounds="True">
                                 <lvs:VideoView x:Name="VideoView" Loaded="VideoView_Loaded">
                                     <Grid Background="#01000000">
-                                        <TextBlock Text="El video solo se inicia cuando eliges un canal y pulsas Reproducir." HorizontalAlignment="Center" VerticalAlignment="Center" TextAlignment="Center" TextWrapping="Wrap" MaxWidth="500" Foreground="#FFE2E8F0" FontSize="17" Margin="24" />
+                                        <TextBlock Text="{Binding PlaybackStatus}" Visibility="{Binding ShowPlaybackPlaceholder, Converter={StaticResource BooleanToVisibilityConverter}}" HorizontalAlignment="Center" VerticalAlignment="Center" TextAlignment="Center" TextWrapping="Wrap" MaxWidth="500" Foreground="#FFE2E8F0" FontSize="17" Margin="24" />
                                         <Border VerticalAlignment="Bottom" Margin="12" Padding="10" CornerRadius="8" Background="#E6101218">
-                                            <DockPanel LastChildFill="False">
+                                            <WrapPanel>
+                                                <ui:Button Content="Anterior" Click="Previous_Click" Margin="0,0,8,0" />
                                                 <ui:Button Content="Reproducir seleccionado" Click="PlaySelected_Click" Margin="0,0,8,0" />
                                                 <ui:Button Content="Detener" Click="Stop_Click" Margin="0,0,14,0" />
+                                                <ui:Button Content="Siguiente" Click="Next_Click" Margin="0,0,8,0" />
+                                                <ui:Button Content="Reintentar" Click="PlaySelected_Click" IsEnabled="{Binding CanRetryPlayback}" Margin="0,0,8,0" />
                                                 <TextBlock Text="Formato" VerticalAlignment="Center" Margin="0,0,6,0" />
                                                 <ComboBox Width="90" ItemsSource="{Binding AvailableFormats}" SelectedItem="{Binding SelectedFormat, Mode=TwoWay}" />
                                                 <ui:Button Content="Pantalla completa" Click="ToggleFullscreen_Click" Margin="14,0,0,0" />
-                                            </DockPanel>
+                                            </WrapPanel>
                                         </Border>
                                     </Grid>
                                 </lvs:VideoView>
                             </Border>
-                            <TextBlock Grid.Row="1" Text="{Binding HttpWarning}" Visibility="{Binding HasHttpWarning, Converter={StaticResource BooleanToVisibilityConverter}}" Foreground="#FFFFC857" TextWrapping="Wrap" Margin="4,10,4,0" />
+                            <StackPanel Grid.Row="1" Margin="4,10,4,0">
+                                <TextBlock Text="{Binding PlaybackStatus}" TextWrapping="Wrap" Margin="0,0,0,8" />
+                                <WrapPanel VerticalAlignment="Center">
+                                    <TextBlock Text="Volumen" VerticalAlignment="Center" Margin="0,0,8,0" />
+                                    <Slider x:Name="VolumeSlider" Width="100" Minimum="0" Maximum="100" Value="{Binding Volume, Mode=TwoWay}" TickFrequency="1" IsSnapToTickEnabled="True" VerticalAlignment="Center" Margin="0,0,12,0" />
+                                    <CheckBox Content="Silenciar" IsChecked="{Binding IsMuted}" VerticalAlignment="Center" Margin="0,0,14,0" />
+                                    <TextBlock Text="Búfer (ms)" VerticalAlignment="Center" Margin="0,0,8,0" />
+                                    <TextBox Width="66" Text="{Binding BufferMilliseconds, UpdateSourceTrigger=LostFocus, ValidatesOnExceptions=True}" Margin="0,0,12,0" ToolTip="250–10000 ms. Se aplica al abrir el siguiente canal." />
+                                    <CheckBox Content="Video por software" IsChecked="{Binding SoftwareDecoding}" VerticalAlignment="Center" Margin="0,0,14,0" ToolTip="Se aplica al abrir el siguiente canal." />
+                                    <ComboBox Width="160" ItemsSource="{Binding Displays, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" SelectedItem="{Binding SelectedDisplay, RelativeSource={RelativeSource AncestorType={x:Type Window}}, Mode=TwoWay}" DisplayMemberPath="Name" ToolTip="Pantalla para modo completo" />
+                                </WrapPanel>
+                                <TextBlock Text="{Binding HttpWarning}" Visibility="{Binding HasHttpWarning, Converter={StaticResource BooleanToVisibilityConverter}}" Foreground="#FFFFC857" TextWrapping="Wrap" Margin="0,8,0,0" />
+                            </StackPanel>
                         </Grid>
                     </Grid>
                 </Grid>

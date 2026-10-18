@@ -11,18 +11,6 @@ public interface IIptvProvider : IDisposable
     Uri CreateLiveStreamUri(XtreamChannel channel, string format);
 }
 
-public interface IPlaybackService : IDisposable
-{
-    object? PlayerHandle { get; }
-    bool IsReady { get; }
-    bool HasActiveMedia { get; }
-    event EventHandler? PlaybackStarted;
-    event EventHandler? PlaybackFailed;
-    void Initialize();
-    void Play(Uri streamUri);
-    void Stop();
-}
-
 public interface ISettingsService
 {
     Task InitializeAsync(CancellationToken cancellationToken = default);

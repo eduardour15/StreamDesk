@@ -22,7 +22,7 @@ public sealed class AppServices : IDisposable
         var factory = _httpServices.GetRequiredService<IHttpClientFactory>();
         ProviderFactory = (url, username, password) => new XtreamApiClient(url, username, password, httpClient: factory.CreateClient("Xtream"));
         Logos = new ChannelLogoLoader(factory.CreateClient("Logos"));
-        Playback = new LibVlcPlaybackService();
+        Playback = new PlaybackService(new LibVlcBackend());
     }
 
     public IAppLogger Logger { get; }

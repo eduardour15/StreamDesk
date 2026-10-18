@@ -1,4 +1,7 @@
 using System.Windows;
+using System.ComponentModel;
+using System.Windows.Input;
+using Microsoft.Win32;
 using LibVLCSharp.Shared;
 using StreamDesk.Probe.Core;
 using Wpf.Ui.Controls;
@@ -8,10 +11,10 @@ namespace StreamDesk.Probe.Desktop;
 public partial class MainWindow : FluentWindow
 {
     private readonly MainViewModel _viewModel;
-    private bool _isFullscreen;
-    private WindowStyle _previousWindowStyle;
-    private ResizeMode _previousResizeMode;
-    private WindowState _previousWindowState;
+    private readonly WindowDisplays _displays = new();
+    private bool _closing, _closeComplete;
+    public IReadOnlyList<DisplayChoice> Displays { get; } = WindowDisplays.Enumerate();
+    public DisplayChoice? SelectedDisplay { get; set; }
     public ChannelLogoLoader LogoLoader { get; }
 
     public MainWindow(AppServices services) : this(
@@ -22,9 +25,14 @@ public partial class MainWindow : FluentWindow
     {
         _viewModel = viewModel;
         LogoLoader = logoLoader;
+        SelectedDisplay = Displays.FirstOrDefault();
         InitializeComponent();
         DataContext = _viewModel;
-        Loaded += async (_, _) => await _viewModel.LoadProfilesAsync();
+        Loaded += async (_, _) => { await _viewModel.InitializePlaybackAsync(); if (!_closing) await _viewModel.LoadProfilesAsync(); };
+        _viewModel.PropertyChanged += ViewModelChanged;
+        SystemEvents.PowerModeChanged += PowerModeChanged;
+        Closing += WindowClosing;
+        PreviewKeyDown += (_, args) => { if (args.Key == Key.Escape && _displays.IsFullscreen) { ToggleFullscreen_Click(this, new RoutedEventArgs()); args.Handled = true; } };
     }
 
     private async void Connect_Click(object sender, RoutedEventArgs e)
@@ -41,8 +49,10 @@ public partial class MainWindow : FluentWindow
         await _viewModel.CreateProfileAsync(password);
     }
 
-    private void PlaySelected_Click(object sender, RoutedEventArgs e) => _viewModel.PlaySelected();
-    private void Stop_Click(object sender, RoutedEventArgs e) => _viewModel.StopPlayback();
+    private async void PlaySelected_Click(object sender, RoutedEventArgs e) => await _viewModel.PlaySelectedAsync();
+    private async void Stop_Click(object sender, RoutedEventArgs e) => await _viewModel.StopPlaybackAsync();
+    private async void Previous_Click(object sender, RoutedEventArgs e) => await _viewModel.NavigateChannelAsync(-1);
+    private async void Next_Click(object sender, RoutedEventArgs e) => await _viewModel.NavigateChannelAsync(1);
     private void CancelCatalog_Click(object sender, RoutedEventArgs e) => _viewModel.CancelCatalog();
 
     private void VideoView_Loaded(object sender, RoutedEventArgs e)
@@ -52,27 +62,33 @@ public partial class MainWindow : FluentWindow
 
     private void ToggleFullscreen_Click(object sender, RoutedEventArgs e)
     {
-        if (!_isFullscreen)
-        {
-            _previousWindowStyle = WindowStyle;
-            _previousResizeMode = ResizeMode;
-            _previousWindowState = WindowState;
-            WindowStyle = WindowStyle.None;
-            ResizeMode = ResizeMode.NoResize;
-            WindowState = WindowState.Maximized;
-            _isFullscreen = true;
-            return;
-        }
-        WindowStyle = _previousWindowStyle;
-        ResizeMode = _previousResizeMode;
-        WindowState = _previousWindowState;
-        _isFullscreen = false;
+        try { _displays.Toggle(this, SelectedDisplay); }
+        catch (Exception exception) { _viewModel.ReportWindowError(exception); }
+    }
+
+    private void ViewModelChanged(object? sender, PropertyChangedEventArgs args)
+    { if (!_closing && args.PropertyName == nameof(MainViewModel.PlayerHandle)) VideoView_Loaded(this, new RoutedEventArgs()); }
+
+    private void PowerModeChanged(object sender, PowerModeChangedEventArgs args)
+    { if (args.Mode == PowerModes.Suspend && !_closing) _ = _viewModel.SuspendPlaybackAsync(); }
+
+    private async void WindowClosing(object? sender, CancelEventArgs args)
+    {
+        if (_closeComplete) return;
+        args.Cancel = true;
+        if (_closing) return;
+        _closing = true;
+        SystemEvents.PowerModeChanged -= PowerModeChanged;
+        _viewModel.PropertyChanged -= ViewModelChanged;
+        VideoView.MediaPlayer = null;
+        await _viewModel.DisposeAsync();
+        _closeComplete = true;
+        _ = Dispatcher.BeginInvoke(new Action(Close));
     }
 
     protected override void OnClosed(EventArgs e)
     {
         VideoView.MediaPlayer = null;
-        _viewModel.Dispose();
         VideoView.Dispose();
         base.OnClosed(e);
     }
