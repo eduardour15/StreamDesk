@@ -167,6 +167,12 @@ public sealed class PlaybackTests
 
 internal sealed class ControlledBackend : IPlaybackBackend
 {
+    public MediaPlaybackDetails Details { get; set; } = MediaPlaybackDetails.Empty;
+    public long? Sought { get; private set; }
+    public (bool Subtitles, int Id)? ChosenTrack { get; private set; }
+    public Task<MediaPlaybackDetails> ReadDetailsAsync(CancellationToken token) => Task.FromResult(Details);
+    public Task<bool> SeekAsync(long milliseconds, CancellationToken token) { Sought = milliseconds; return Task.FromResult(true); }
+    public Task<bool> SelectTrackAsync(bool subtitles, int id, CancellationToken token) { ChosenTrack = (subtitles, id); return Task.FromResult(true); }
     public record Opened(long Id, Uri Source, PlaybackOptions Options);
     public ConcurrentQueue<Opened> Opens { get; } = new();
     private bool _ready;

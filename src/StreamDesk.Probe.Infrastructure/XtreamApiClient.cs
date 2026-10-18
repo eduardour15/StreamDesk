@@ -6,7 +6,7 @@ using StreamDesk.Probe.Core;
 
 namespace StreamDesk.Probe.Infrastructure;
 
-public sealed class XtreamApiClient : IIptvProvider
+public sealed partial class XtreamApiClient : IIptvProvider, IContentProvider
 {
     private static readonly HashSet<string> SupportedFormats = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -231,7 +231,7 @@ public sealed class XtreamApiClient : IIptvProvider
         }
     }
 
-    private Uri BuildApiUri(string? action)
+    private Uri BuildApiUri(string? action, string? parameter = null, string? value = null)
     {
         ThrowIfDisposed();
         var baseUri = _baseUri!;
@@ -240,6 +240,7 @@ public sealed class XtreamApiClient : IIptvProvider
         {
             query = $"action={Uri.EscapeDataString(action)}&{query}";
         }
+        if (parameter is not null) query += $"&{Uri.EscapeDataString(parameter)}={Uri.EscapeDataString(value ?? "")}";
 
         return new UriBuilder(baseUri)
         {

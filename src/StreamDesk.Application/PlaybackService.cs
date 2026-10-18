@@ -2,7 +2,7 @@ using StreamDesk.Probe.Core;
 
 namespace StreamDesk.Application;
 
-public sealed class PlaybackService : IPlaybackService
+public sealed partial class PlaybackService : IPlaybackService
 {
     private readonly IPlaybackBackend _backend;
     private readonly PlaybackPolicy _policy;
@@ -91,7 +91,7 @@ public sealed class PlaybackService : IPlaybackService
         session.Attempt = ++_attempt;
         Publish(PlaybackState.Loading, session: session);
         await _backend.SetAudioAsync(Volume, IsMuted).ConfigureAwait(false);
-        await _backend.OpenAsync(session.Source, session.Options with { Hardware = session.Software ? HardwareDecoding.Software : session.Options.Hardware }, session.Attempt, session.Token).ConfigureAwait(false);
+        await _backend.OpenAsync(session.Source, session.Options with { Hardware = session.Software ? HardwareDecoding.Software : session.Options.Hardware, StartPositionMilliseconds = session.ResumePosition }, session.Attempt, session.Token).ConfigureAwait(false);
         ArmTimeout(session);
     }
 
@@ -113,7 +113,14 @@ public sealed class PlaybackService : IPlaybackService
                     else { if (Snapshot.State == PlaybackState.Playing) ArmTimeout(session); Publish(PlaybackState.Buffering, session: session, percent: signal.BufferPercent); }
                     break;
                 case PlaybackSignalKind.Ended:
-                    await FailAsync(session, PlaybackFailure.Network).ConfigureAwait(false); break;
+                    if (session.Options.OnDemand)
+                    {
+                        session.Attempt = 0; session.CancelTimeout();
+                        await _backend.StopAsync().ConfigureAwait(false);
+                        if (Current(session) && !session.Token.IsCancellationRequested) Publish(PlaybackState.Stopped, session: session, ended: true);
+                    }
+                    else await FailAsync(session, PlaybackFailure.Network).ConfigureAwait(false);
+                    break;
                 case PlaybackSignalKind.Failed:
                     await FailAsync(session, signal.Failure == PlaybackFailure.None ? PlaybackFailure.Unknown : signal.Failure).ConfigureAwait(false); break;
             }
@@ -125,6 +132,12 @@ public sealed class PlaybackService : IPlaybackService
     private async Task FailAsync(Session session, PlaybackFailure failure)
     {
         session.Attempt = 0; session.CancelTimeout();
+        if (session.Options.OnDemand && session.HasPlayed)
+        {
+            try { var details = await _backend.ReadDetailsAsync(session.Token).ConfigureAwait(false); if (details.LengthMilliseconds > 0) session.ResumePosition = details.TimeMilliseconds; }
+            catch (OperationCanceledException) { return; }
+            catch { /* Keep the last known position if the backend cannot report it. */ }
+        }
         await _backend.StopAsync().ConfigureAwait(false);
         if (!Current(session) || session.Token.IsCancellationRequested) return;
         var hardwareFallback = failure == PlaybackFailure.HardwareDecoder && !session.Software && session.Options.Hardware == HardwareDecoding.Automatic;
@@ -182,9 +195,9 @@ public sealed class PlaybackService : IPlaybackService
 
     private bool Current(Session session) => !_disposed && ReferenceEquals(_session, session) && session.Version == _version;
     private static PlaybackFailure SafeFailure(Exception error) => error is PlaybackException playback ? playback.Failure : PlaybackFailure.Unknown;
-    private void Publish(PlaybackState state, PlaybackFailure failure = PlaybackFailure.None, Session? session = null, float percent = 0, bool willRetry = false)
+    private void Publish(PlaybackState state, PlaybackFailure failure = PlaybackFailure.None, Session? session = null, float percent = 0, bool willRetry = false, bool ended = false)
     {
-        var value = new PlaybackSnapshot(++_sequence, state, failure, session?.Retries ?? 0, Math.Clamp(percent, 0, 100), session?.Software == true || session?.Options.Hardware == HardwareDecoding.Software, willRetry);
+        var value = new PlaybackSnapshot(++_sequence, state, failure, session?.Retries ?? 0, Math.Clamp(percent, 0, 100), session?.Software == true || session?.Options.Hardware == HardwareDecoding.Software, willRetry, ended);
         Volatile.Write(ref _snapshot, value); StateChanged?.Invoke(this, value);
     }
 
@@ -220,8 +233,9 @@ public sealed class PlaybackService : IPlaybackService
         public int Retries;
         public bool Software;
         public bool HasPlayed;
+        public long ResumePosition;
         public Session(long version, Uri source, PlaybackOptions options, CancellationToken token)
-        { Version = version; Source = source; Options = options; _cancel = CancellationTokenSource.CreateLinkedTokenSource(token); Token = _cancel.Token; }
+        { Version = version; Source = source; Options = options; ResumePosition = options.StartPositionMilliseconds; _cancel = CancellationTokenSource.CreateLinkedTokenSource(token); Token = _cancel.Token; }
         public CancellationToken? RestartTimeout()
         {
             lock (_timerSync)

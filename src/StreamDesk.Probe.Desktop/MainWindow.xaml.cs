@@ -6,6 +6,7 @@ using System.Windows.Controls.Primitives;
 using System.Windows.Media;
 using System.Windows.Threading;
 using System.Runtime.InteropServices;
+using System.IO;
 using Microsoft.Win32;
 using MediaPlayer = LibVLCSharp.Shared.MediaPlayer;
 using StreamDesk.Probe.Core;
@@ -19,6 +20,8 @@ public partial class MainWindow : FluentWindow
     private readonly WindowDisplays _displays = new();
     private bool _closing, _closeComplete;
     private readonly DispatcherTimer _controlsTimer = new() { Interval = TimeSpan.FromMilliseconds(250) };
+    private readonly DispatcherTimer _mediaTimer = new() { Interval = TimeSpan.FromSeconds(2) };
+    private bool _readingMedia;
     private DateTime _lastInteraction = DateTime.UtcNow;
     private ScreenPoint _lastCursor;
     private bool _controlsHovered;
@@ -27,7 +30,7 @@ public partial class MainWindow : FluentWindow
     public ChannelLogoLoader LogoLoader { get; }
 
     public MainWindow(AppServices services) : this(
-        new MainViewModel(services.ProviderFactory, services.Playback, services.Profiles, services.Logger, services.Catalogs, services.Credentials, services.Viewer), services.Logos)
+        new MainViewModel(services.ProviderFactory, services.Playback, services.Profiles, services.Logger, services.Catalogs, services.Credentials, services.Viewer, services.Content, new StreamDesk.Probe.Infrastructure.XmlTvReader()), services.Logos)
     { }
 
     public MainWindow(MainViewModel viewModel, ChannelLogoLoader logoLoader)
@@ -45,6 +48,14 @@ public partial class MainWindow : FluentWindow
         SizeChanged += (_, _) => UpdateLayoutMode();
         _controlsTimer.Tick += (_, _) => UpdateControls();
         _controlsTimer.Start();
+        _mediaTimer.Tick += async (_, _) =>
+        {
+            if (_readingMedia || _closing || AudioTrackBox.IsKeyboardFocusWithin || SubtitleTrackBox.IsKeyboardFocusWithin || SeekSlider.IsMouseCaptureWithin) return;
+            _readingMedia = true;
+            try { await _viewModel.RefreshPlaybackDetailsAsync(); }
+            finally { _readingMedia = false; }
+        };
+        _mediaTimer.Start();
     }
 
     private async void Connect_Click(object sender, RoutedEventArgs e)
@@ -70,6 +81,21 @@ public partial class MainWindow : FluentWindow
     private async void TogglePlay_Click(object sender, RoutedEventArgs e) => await _viewModel.TogglePlaybackAsync();
     private async void PlayLast_Click(object sender, RoutedEventArgs e) => await _viewModel.PlayLastAsync();
     private async void AutoPlay_Click(object sender, RoutedEventArgs e) => await _viewModel.SetAutoPlayAsync(AutoPlayCheckBox.IsChecked == true);
+    private async void ProbeContent_Click(object sender, RoutedEventArgs e) => await _viewModel.ProbeContentAsync();
+    private async void PlayMedia_Click(object sender, RoutedEventArgs e) => await _viewModel.PlayMediaAsync();
+    private async void RestartMedia_Click(object sender, RoutedEventArgs e) => await _viewModel.PlayMediaAsync(true);
+    private async void RefreshEpg_Click(object sender, RoutedEventArgs e) => await _viewModel.RefreshEpgAsync(true);
+    private async void ApplyAudio_Click(object sender, RoutedEventArgs e) => await _viewModel.SelectTrackAsync(false);
+    private async void ApplySubtitle_Click(object sender, RoutedEventArgs e) => await _viewModel.SelectTrackAsync(true);
+    private async void Seek_Completed(object sender, MouseButtonEventArgs e) => await _viewModel.SeekToAsync(SeekSlider.Value);
+    private async void Seek_KeyUp(object sender, KeyEventArgs e) { if (e.Key is Key.Left or Key.Right or Key.Home or Key.End) await _viewModel.SeekToAsync(SeekSlider.Value); }
+    private async void ImportEpg_Click(object sender, RoutedEventArgs e)
+    {
+        var dialog = new OpenFileDialog { Filter = "XMLTV (*.xml)|*.xml", Title = "Importar guía XMLTV autorizada" };
+        if (dialog.ShowDialog(this) != true) return;
+        try { await using var stream = File.OpenRead(dialog.FileName); await _viewModel.ImportEpgAsync(stream); }
+        catch (Exception exception) { _viewModel.ReportWindowError(exception); }
+    }
     private void Navigate_Click(object sender, RoutedEventArgs e) => _viewModel.CurrentTabIndex = int.Parse((string)((FrameworkElement)sender).Tag);
     private void ClearFilters_Click(object sender, RoutedEventArgs e) => _viewModel.ClearFilters();
     private void Category_Click(object sender, RoutedEventArgs e) => _viewModel.SelectedCategory = (XtreamCategory)((FrameworkElement)sender).DataContext;
@@ -179,6 +205,7 @@ public partial class MainWindow : FluentWindow
         if (_closing) return;
         _closing = true;
         _controlsTimer.Stop();
+        _mediaTimer.Stop();
         SystemEvents.PowerModeChanged -= PowerModeChanged;
         _viewModel.PropertyChanged -= ViewModelChanged;
         VideoView.MediaPlayer = null;

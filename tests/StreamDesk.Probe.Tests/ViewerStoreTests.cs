@@ -65,6 +65,7 @@ public sealed class ViewerStoreTests
         using var db = new TestDatabase(); await db.AddProfileAsync("first"); await db.Store.ReplaceAsync("first", CatalogFixtures.Create(10));
         db.Execute("""
             DROP TABLE PlaybackHistory; DROP TABLE ProfilePreferences; DROP TABLE AppPreferences;
+            DROP TABLE MediaCache; DROP TABLE MediaProgress; DROP TABLE EpgCache;
             CREATE TABLE PlaybackHistory(Id INTEGER PRIMARY KEY,ProfileId TEXT,ContentType TEXT,ChannelId TEXT,PlayedAt TEXT);
             INSERT INTO PlaybackHistory VALUES(1,'first','live','000003','2026-10-17T12:00:00Z'),(2,'first','live','000003','2026-10-18T12:00:00Z'),(3,'first','live','missing','2026-10-18T12:00:00Z');
             UPDATE SchemaVersion SET Version=2;

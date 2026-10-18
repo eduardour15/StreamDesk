@@ -1,5 +1,6 @@
 using System.Runtime.InteropServices;
 using LibVLCSharp.Shared;
+using MediaTrack = StreamDesk.Probe.Core.MediaTrack;
 using StreamDesk.Application;
 using StreamDesk.Probe.Core;
 
@@ -51,6 +52,8 @@ public sealed class LibVlcBackend : IPlaybackBackend
         media.AddOption(":network-caching=" + options.BufferMilliseconds);
         media.AddOption(":live-caching=" + options.BufferMilliseconds);
         media.AddOption(options.Hardware == HardwareDecoding.Software ? ":avcodec-hw=none" : ":avcodec-hw=any");
+        if (options.OnDemand && options.StartPositionMilliseconds > 0)
+            media.AddOption(":start-time=" + (options.StartPositionMilliseconds / 1000d).ToString(System.Globalization.CultureInfo.InvariantCulture));
         try
         {
             _media = media;
@@ -74,6 +77,17 @@ public sealed class LibVlcBackend : IPlaybackBackend
     private void Buffering(object? sender, MediaPlayerBufferingEventArgs args) => Emit(PlaybackSignalKind.Buffering, percent: args.Cache);
     private void Failed(object? sender, EventArgs args) => Emit(PlaybackSignalKind.Failed, (PlaybackFailure)Volatile.Read(ref _failure));
     private void Ended(object? sender, EventArgs args) => Emit(PlaybackSignalKind.Ended);
+    public Task<MediaPlaybackDetails> ReadDetailsAsync(CancellationToken token) => Task.Run(() =>
+    {
+        token.ThrowIfCancellationRequested();
+        return _player is null || _disposed ? MediaPlaybackDetails.Empty : new MediaPlaybackDetails(Math.Max(0, _player.Time), Math.Max(0, _player.Length), _player.IsSeekable,
+            _player.AudioTrackDescription.Select(item => new MediaTrack(item.Id, MediaMetadata.Text(item.Name, 256))).ToArray(),
+            _player.SpuDescription.Select(item => new MediaTrack(item.Id, MediaMetadata.Text(item.Name, 256))).ToArray(), _player.AudioTrack, _player.Spu);
+    }, token);
+    public Task<bool> SeekAsync(long milliseconds, CancellationToken token) => Task.Run(() =>
+    { token.ThrowIfCancellationRequested(); if (_player is null || !_player.IsSeekable || _disposed) return false; _player.Time = milliseconds; return true; }, token);
+    public Task<bool> SelectTrackAsync(bool subtitles, int id, CancellationToken token) => Task.Run(() =>
+    { token.ThrowIfCancellationRequested(); return _player is not null && !_disposed && (subtitles ? _player.SetSpu(id) : _player.SetAudioTrack(id)); }, token);
     private void Emit(PlaybackSignalKind kind, PlaybackFailure failure = PlaybackFailure.None, float percent = 0)
     { var attempt = Interlocked.Read(ref _attempt); if (attempt != 0 && !_disposed) Signal?.Invoke(this, new(attempt, kind, failure, percent)); }
     private void NativeLog(object? sender, LogEventArgs args)

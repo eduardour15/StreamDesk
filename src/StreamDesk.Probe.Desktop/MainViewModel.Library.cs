@@ -12,9 +12,9 @@ public sealed partial class MainViewModel
     private WatchRequest? _watch;
     private string? _catalogOwnerId;
     public bool ShowHome => CurrentTabIndex == 0;
-    public bool ShowTv => CurrentTabIndex is >= 1 and <= 3;
+    public bool ShowTv => CurrentTabIndex is >= 1 and <= 3 or >= 5 and <= 7;
     public bool ShowSettings => CurrentTabIndex == 4;
-    public string SectionTitle => CurrentTabIndex switch { 2 => "Favoritos", 3 => "Recientes", _ => "TV en vivo" };
+    public string SectionTitle => CurrentTabIndex switch { 2 => "Favoritos", 3 => "Recientes", 5 => "Películas", 6 => "Series", 7 => "Continuar viendo", _ => "TV en vivo" };
     public string ResultSummary => $"{Channels.Count} canales";
     public string EmptyMessage => _snapshot is null ? "Tu catálogo aparecerá aquí. Selecciona un perfil y pulsa Actualizar."
         : SearchText.Length > 0 ? "Sin resultados. Prueba otro nombre o limpia los filtros."

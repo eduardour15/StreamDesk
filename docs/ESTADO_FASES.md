@@ -9,11 +9,18 @@ Este archivo registra trabajo y evidencias reales. La confirmación del usuario 
 | F2 | PENDIENTE_DE_VALIDACION | 10/10 | 2026-10-17 | 67 tests en salida Release aislada, incluida WPF con 5.000 canales. Verificación técnica PASA; cierre condicionado a revalidación previa F0/F1. |
 | F3 | APROBADA | 7/11 verificadas; cierre solicitado | 2026-10-18 | COMPLETADA por decisión expresa del usuario. Se conservan las verificaciones físicas/IPTV/mediciones pendientes de T04/T05/T10/T11; esta decisión no constituye evidencia de esas pruebas. |
 | F4 | PENDIENTE_DE_VALIDACION | 9/11 | 2026-10-18 | MVP implementado, 113 tests y candidato win-x64 local. T09/T10 PARCIAL: DPI físicos/dos monitores y evaluación humana/IPTV pendientes. |
-| F5 | NO_INICIADA | 0/9 | — | Requiere F4 aprobada; EPG/VOD condicional |
-| F6 | NO_INICIADA | 0/12 | — | Requiere MVP estable |
+| F5 | PENDIENTE_DE_VALIDACION | 8/9 | 2026-10-18 | Código/fixtures y UI implementados; capacidades y calidad EPG/VOD reales pendientes. Avance conjunto F5/F6 solicitado; F4 no se aprueba por anticipado. |
+| F6 | EN_PROGRESO | 0/12 | 2026-10-18 | Estabilización/privacidad/empaquetado autorizados; 1.0 condicionada a pruebas reales y licencias. |
 | F7 | NO_INICIADA | 0/6 | — | Opcional después de 1.0 |
 
 ## Bitácora de evidencias
+
+### 2026-10-18 — F5 y avance solicitado a F6
+
+- Solicitud: «trabaja la fase 5 y 6». Se revisaron ambos prompts, ROADMAP, Git y ADRs. La base F4 se revalidó con 113 tests correctos. Se comunicó el riesgo de avanzar con DPI/humano/IPTV pendientes y se conserva el estado real de los gates.
+- F5 incorpora capacidades opcionales Xtream, EPG UTC/XMLTV seguro, películas/series/episodios, progreso por perfil y selección de pistas/seek mediante el mismo motor. SQLite v4 acota metadatos/EPG/progreso; posters solo en caché RAM existente. No se consultaron cuentas del usuario.
+- Evidencia y checklist completos en `CIERRE_F5.md`; verificación F5: build sin errores/advertencias y 123 tests. WPF con 5.000 películas ficticias, historial/seek, episodio siguiente y EPG; capturas fuera de Git. Protocolo real en `PRUEBA_MANUAL_F5.md`.
+- F5 `PENDIENTE_DE_VALIDACION`, T01 PARCIAL por calidad/capacidades reales. F6 se trabaja por la instrucción conjunta, sin aprobar fases anteriores ni publicar 1.0.
 
 ### 2026-10-18 (America/Managua) — F4: UX y candidato MVP 0.1
 

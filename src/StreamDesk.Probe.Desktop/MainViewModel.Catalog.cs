@@ -31,9 +31,9 @@ public sealed partial class MainViewModel
     public string SearchText { get => _searchText; set { if (SetProperty(ref _searchText, value)) _ = ApplyFilterAsync(true); } }
     public XtreamCategory? SelectedCategory { get => _selectedCategory; set { if (SetProperty(ref _selectedCategory, value)) _ = ApplyFilterAsync(false); } }
     public bool FavoritesOnly { get => _favoritesOnly; set { if (SetProperty(ref _favoritesOnly, value)) _ = ApplyFilterAsync(false); } }
-    public string CatalogSummary { get => _catalogSummary; private set => SetProperty(ref _catalogSummary, value); }
+    public string CatalogSummary { get => _catalogSummary; private set { if (SetProperty(ref _catalogSummary, value)) OnPropertyChanged(nameof(HeaderSummary)); } }
     public bool HasNoChannels => Channels.Count == 0 && !IsCatalogLoading;
-    public bool IsWorking => IsBusy || IsCatalogLoading;
+    public bool IsWorking => IsBusy || IsCatalogLoading || ContentBusy;
     public bool IsCatalogLoading
     {
         get => _isCatalogLoading;
@@ -70,6 +70,7 @@ public sealed partial class MainViewModel
             }
             else CatalogSummary = "No hay catálogo guardado. Conecta y pulsa Actualizar catálogo.";
             await LoadLibraryAsync(profile?.Id, version, token);
+            await LoadContentCacheAsync(profile?.Id, version, token);
             if (profile is not null && _viewer is not null && version == _sessionVersion)
                 await _viewer.SetLastProfileAsync(profile.Id, token);
         }

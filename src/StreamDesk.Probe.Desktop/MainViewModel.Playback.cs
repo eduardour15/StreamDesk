@@ -14,7 +14,7 @@ public sealed partial class MainViewModel
     public bool CanRetryPlayback => _playback.State == PlaybackState.Failed && !_playback.WillRetry;
     public bool IsPlaying => _playback.State == PlaybackState.Playing;
     public bool CanHideControls => IsPlaying && !IsWorking;
-    public string NowPlaying => _watch?.Channel.Name ?? "Elige un canal";
+    public string NowPlaying => _mediaWatch?.Item.Name ?? _watch?.Channel.Name ?? "Elige un canal";
     public string PlayAction => _playback.IsActive ? "Detener" : "Reproducir";
     public async Task TogglePlaybackAsync() { if (_playback.IsActive) await StopPlaybackAsync(); else await PlaySelectedAsync(); }
     public int Volume { get => _playbackService.Volume; set { _playbackService.Volume = value; OnPropertyChanged(); } }
@@ -49,6 +49,8 @@ public sealed partial class MainViewModel
 
     public async Task StopPlaybackAsync()
     {
+        await CaptureMediaAsync(true);
+        _mediaWatch = null;
         _playingChannelId = null;
         _watch = null;
         OnPropertyChanged(nameof(NowPlaying));
@@ -58,6 +60,7 @@ public sealed partial class MainViewModel
 
     public async Task NavigateChannelAsync(int direction)
     {
+        if (ShowMediaCatalog || ShowContinueWatching) { await NavigateEpisodeAsync(direction); return; }
         if (_disposed || Channels.Count == 0 || direction is not (-1 or 1)) return;
         var currentId = _playingChannelId ?? SelectedChannel?.Id;
         var index = -1;
@@ -80,6 +83,7 @@ public sealed partial class MainViewModel
     private void PlaybackStateChanged(object? sender, PlaybackSnapshot snapshot)
     {
         var watch = _watch;
+        var media = _mediaWatch;
         void Apply()
         {
             if (_disposed || snapshot.Sequence <= _playback.Sequence) return;
@@ -87,6 +91,11 @@ public sealed partial class MainViewModel
             StatusMessage = PlaybackStatus;
             OnPropertyChanged(nameof(PlaybackStatus)); OnPropertyChanged(nameof(ShowPlaybackPlaceholder)); OnPropertyChanged(nameof(CanRetryPlayback));
             OnPropertyChanged(nameof(IsPlaying)); OnPropertyChanged(nameof(CanHideControls)); OnPropertyChanged(nameof(PlayAction));
+            if (media is not null && ReferenceEquals(media, _mediaWatch) && snapshot.Sequence > media.AfterSequence)
+            {
+                if (snapshot.State == PlaybackState.Playing) media.Played = true;
+                if (snapshot.EndOfMedia) { media.Completed = true; _progressWrites = SaveMediaProgressAsync(_progressWrites, media); }
+            }
             if (snapshot.State == PlaybackState.Playing && watch is not null && ReferenceEquals(watch, _watch) && snapshot.Sequence > watch.AfterSequence && !watch.Recorded)
             {
                 watch.Recorded = true;

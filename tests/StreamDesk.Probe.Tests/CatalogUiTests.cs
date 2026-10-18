@@ -128,8 +128,76 @@ public sealed class CatalogUiTests
             await VerifyProfileChangeDoesNotUnlockProfileSaveAsync();
             await VerifyMvpUxAsync(directory, logos);
             await VerifyNativeControlPlacementAsync(logos);
+            await VerifyContentUiAsync(directory, logos);
         }
         finally { window.Close(); await WaitAsync(() => !window.IsVisible); }
+    }
+
+    private static async Task VerifyContentUiAsync(string artifacts, ChannelLogoLoader logos)
+    {
+        using var db = new TestDatabase(); await db.AddProfileAsync("first"); await db.AddProfileAsync("second");
+        var credentials = new FixtureCredentials(); var content = new SqliteContentStore(db.PathName, false);
+        var backend = new ControlledBackend { Details = new(60000, 180000, true, [new(3, "Español"), new(4, "Original")], [new(-1, "Desactivados"), new(2, "Español")]) };
+        var playback = new PlaybackService(backend);
+        var vm = new MainViewModel((_, _, _) => new ContentFixtureProvider(), playback, new ProfileService(db.Settings, credentials), new FixtureLogger(), new CatalogService(db.Store), credentials,
+            new SqliteViewerStore(db.PathName, false), content, new XmlTvReader());
+        var window = new MainWindow(vm, logos) { Left = -20000, Top = -20000, WindowStartupLocation = WindowStartupLocation.Manual, ShowActivated = false, ShowInTaskbar = false };
+        try
+        {
+            window.Show(); await WaitAsync(() => !vm.IsWorking && vm.ActiveProfile is not null);
+            Assert.False(vm.HasMovies); Assert.False(vm.HasSeries);
+            await vm.ProbeContentAsync(); Assert.True(vm.HasMovies); Assert.True(vm.HasSeries);
+            var originalVideo = window.FindName("VideoView");
+            vm.CurrentTabIndex = 5; await WaitAsync(() => vm.MediaItems.Count == 5000);
+            await Dispatcher.Yield(DispatcherPriority.ApplicationIdle); window.UpdateLayout();
+            var list = (ListBox)window.FindName("MediaList");
+            var realized = Enumerable.Range(0, 5000).Count(index => list.ItemContainerGenerator.ContainerFromIndex(index) is not null);
+            Assert.InRange(realized, 1, 100);
+            vm.MediaSearch = "pelicula aguila"; await WaitAsync(() => vm.MediaItems.Count == 1);
+            vm.SelectedMedia = vm.MediaItems[0]; await WaitAsync(() => vm.MediaDescription.Contains("Sin sinopsis", StringComparison.Ordinal));
+            await vm.PlayMediaAsync(); backend.Emit(new(backend.Opens.Last().Id, PlaybackSignalKind.Playing)); await WaitAsync(() => vm.IsPlaying);
+            await vm.RefreshPlaybackDetailsAsync(); Assert.True(vm.CanSeek);
+            await vm.SeekToAsync(70); Assert.Equal(70000, backend.Sought);
+            vm.SelectedAudioTrack = vm.AudioTracks.Single(track => track.Id == 4); await vm.SelectTrackAsync(false); Assert.Equal((false, 4), backend.ChosenTrack);
+            await vm.StopPlaybackAsync(); Assert.Equal(60000, Assert.Single(await content.LoadProgressAsync("first")).PositionMilliseconds);
+            vm.CurrentTabIndex = 7; vm.SelectedProgress = Assert.Single(vm.ContinueWatching); await vm.PlayMediaAsync();
+            Assert.Equal(60000, backend.Opens.Last().Options.StartPositionMilliseconds);
+            backend.Emit(new(backend.Opens.Last().Id, PlaybackSignalKind.Playing)); await WaitAsync(() => vm.IsPlaying);
+            backend.Emit(new(backend.Opens.Last().Id, PlaybackSignalKind.Ended)); await WaitAsync(() => vm.ContinueWatching.Count == 0);
+            vm.CurrentTabIndex = 6; vm.MediaSearch = ""; vm.MediaCategory = null; await WaitAsync(() => vm.MediaItems.Count == 1 && vm.MediaItems[0].Kind == ContentKind.Series);
+            vm.SelectedMedia = vm.MediaItems[0]; await WaitAsync(() => vm.Seasons.Count == 2);
+            vm.Season = vm.Seasons[1]; Assert.Empty(vm.Episodes); vm.Season = vm.Seasons[0]; Assert.Equal(2, vm.Episodes.Count);
+            vm.SelectedEpisode = vm.Episodes[0]; await vm.PlayMediaAsync(); await vm.NavigateEpisodeAsync(1); Assert.Equal("episode-2", vm.SelectedEpisode?.Id);
+            Assert.Equal(1, backend.Peak); Assert.Same(originalVideo, window.FindName("VideoView"));
+            await vm.StopPlaybackAsync();
+            vm.CurrentTabIndex = 1; await vm.LoadCatalogAsync(); vm.SelectedChannel = vm.Channels[0]; await vm.RefreshEpgAsync();
+            Assert.Contains("Programa actual", vm.EpgNow, StringComparison.Ordinal); Assert.Contains("Programa siguiente", vm.EpgNext, StringComparison.Ordinal);
+            vm.CurrentTabIndex = 5; vm.MediaSearch = ""; await WaitAsync(() => vm.MediaItems.Count == 5000);
+            await Dispatcher.Yield(DispatcherPriority.ApplicationIdle); window.UpdateLayout();
+            var bitmap = new RenderTargetBitmap(1360, 850, 96, 96, PixelFormats.Pbgra32); bitmap.Render((Visual)window.Content);
+            var png = new PngBitmapEncoder(); png.Frames.Add(BitmapFrame.Create(bitmap)); using (var file = File.Create(Path.Combine(artifacts, "f5-content.png"))) png.Save(file);
+            vm.ActiveProfile = vm.Profiles.Single(profile => profile.Id == "second"); await WaitAsync(() => !vm.IsWorking);
+            Assert.False(vm.HasMovies); Assert.False(vm.HasSeries); Assert.Empty(vm.ContinueWatching);
+        }
+        finally { window.Close(); await WaitAsync(() => !window.IsVisible); }
+    }
+
+    private sealed class ContentFixtureProvider : IIptvProvider, IContentProvider
+    {
+        public bool UsesUnencryptedTransport => false;
+        public Task<XtreamAccount> AuthenticateAsync(CancellationToken cancellationToken = default) => Task.FromResult(new XtreamAccount("Active", 0, 1, false, null, ["ts"]));
+        public Task<IReadOnlyList<XtreamCategory>> GetLiveCategoriesAsync(CancellationToken cancellationToken = default) => Task.FromResult<IReadOnlyList<XtreamCategory>>([]);
+        public Task<IReadOnlyList<XtreamChannel>> GetLiveChannelsAsync(CancellationToken cancellationToken = default) => Task.FromResult<IReadOnlyList<XtreamChannel>>([new("42", "Canal de prueba", null, "live", "ts", EpgChannelId: "fixture.epg")]);
+        public Uri CreateLiveStreamUri(XtreamChannel channel, string format) => new("https://provider.invalid/fixture.ts");
+        public Uri CreateMediaUri(MediaItem item) => new("https://provider.invalid/fixture.mp4");
+        public Task<MediaCatalog> GetMediaCatalogAsync(ContentKind kind, CancellationToken cancellationToken = default) => Task.FromResult(new MediaCatalog([new("fiction", "Ficción")],
+            kind == ContentKind.Movie ? Enumerable.Range(0, 5000).Select(i => new MediaItem(i.ToString(), i == 4999 ? "Película Águila" : $"Película {i}", kind, "fiction", "mp4")).ToArray() : [new("series-1", "Serie de prueba", kind)], DateTimeOffset.UtcNow));
+        public Task<MediaItem> GetMovieInfoAsync(MediaItem movie, CancellationToken cancellationToken = default) => Task.FromResult(movie with { Plot = "" });
+        public Task<MediaCatalog> GetEpisodesAsync(string seriesId, CancellationToken cancellationToken = default) => Task.FromResult(new MediaCatalog([new("1", "Temporada 1"), new("2", "Temporada vacía")],
+            [new("episode-1", "Episodio 1", ContentKind.Episode, "1", "mp4", SeriesId: seriesId, Season: 1, Episode: 1), new("episode-2", "Episodio 2", ContentKind.Episode, "1", "mp4", SeriesId: seriesId, Season: 1, Episode: 2)], DateTimeOffset.UtcNow));
+        public Task<IReadOnlyList<EpgProgram>> GetEpgAsync(string channelId, CancellationToken cancellationToken = default) => Task.FromResult<IReadOnlyList<EpgProgram>>(
+            [new("Programa actual", DateTimeOffset.UtcNow.AddMinutes(-10), DateTimeOffset.UtcNow.AddMinutes(20)), new("Programa siguiente", DateTimeOffset.UtcNow.AddMinutes(20), DateTimeOffset.UtcNow.AddMinutes(50))]);
+        public void Dispose() { }
     }
 
     private static async Task VerifyNativeControlPlacementAsync(ChannelLogoLoader logos)

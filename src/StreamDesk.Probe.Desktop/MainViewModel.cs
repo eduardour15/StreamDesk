@@ -41,7 +41,9 @@ public sealed partial class MainViewModel : INotifyPropertyChanged, IDisposable,
         IAppLogger logger,
         CatalogService catalogService,
         ICredentialStore credentials,
-        IViewerStore? viewer = null)
+        IViewerStore? viewer = null,
+        IContentStore? content = null,
+        IEpgImporter? epgImporter = null)
     {
         _providerFactory = providerFactory;
         _playbackService = playbackService;
@@ -50,6 +52,8 @@ public sealed partial class MainViewModel : INotifyPropertyChanged, IDisposable,
         _catalogService = catalogService;
         _credentials = credentials;
         _viewer = viewer;
+        _contentStore = content;
+        _epgImporter = epgImporter;
         LoadCatalogCommand = new AsyncRelayCommand(LoadCatalogAsync, () => CanConnect);
         ReloadProfilesCommand = new AsyncRelayCommand(LoadProfilesAsync, () => !IsBusy);
         DeleteProfileCommand = new AsyncRelayCommand(DeleteSelectedProfileAsync, () => !IsBusy && SelectedProfile is not null);
@@ -98,6 +102,15 @@ public sealed partial class MainViewModel : INotifyPropertyChanged, IDisposable,
                 _ = ApplyFilterAsync(false);
             }
             OnPropertyChanged(nameof(ShowHome)); OnPropertyChanged(nameof(ShowTv)); OnPropertyChanged(nameof(ShowSettings)); OnPropertyChanged(nameof(SectionTitle));
+            OnPropertyChanged(nameof(ShowLiveCatalog)); OnPropertyChanged(nameof(ShowMediaCatalog)); OnPropertyChanged(nameof(ShowContinueWatching));
+            if (ShowMediaCatalog)
+            {
+                _mediaSearch = ""; _mediaCategory = null; SelectedMedia = null; MediaItems = [];
+                OnPropertyChanged(nameof(MediaSearch)); OnPropertyChanged(nameof(MediaCategory)); OnPropertyChanged(nameof(MediaItems));
+            }
+            OnPropertyChanged(nameof(MediaCategories));
+            OnPropertyChanged(nameof(HeaderSummary));
+            _ = FilterMediaAsync();
         }
     }
 
@@ -168,8 +181,8 @@ public sealed partial class MainViewModel : INotifyPropertyChanged, IDisposable,
         finally { SetProfileBusy(false); }
     }
 
-    public Task PlaySelectedAsync() => PlayChannelAsync(SelectedChannel);
-    public Task RetryPlaybackAsync() => CanRetryPlayback ? PlayChannelAsync(_watch?.Channel) : Task.CompletedTask;
+    public Task PlaySelectedAsync() => ShowMediaCatalog || ShowContinueWatching ? PlayMediaAsync() : PlayChannelAsync(SelectedChannel);
+    public Task RetryPlaybackAsync() => !CanRetryPlayback ? Task.CompletedTask : _mediaWatch is { } media ? PlayMediaItemAsync(media.Item) : PlayChannelAsync(_watch?.Channel);
 
     private async Task PlayChannelAsync(XtreamChannel? channel)
     {
@@ -185,13 +198,18 @@ public sealed partial class MainViewModel : INotifyPropertyChanged, IDisposable,
         { StatusMessage = "La cuenta ya alcanzó el límite de conexiones que informó el proveedor."; return; }
         try
         {
+            await CaptureMediaAsync(true);
+            if (_disposed || version != _sessionVersion) return;
             var source = _client.CreateLiveStreamUri(channel, SelectedFormat);
+            _mediaWatch = null;
+            _playbackService.Options = _playbackService.Options with { OnDemand = false, StartPositionMilliseconds = 0 };
             _playingChannelId = channel.Id;
             _watch = new WatchRequest(_connectedProfileId, channel, version, _playbackService.Snapshot.Sequence);
             OnPropertyChanged(nameof(NowPlaying));
             await _playbackService.PlayAsync(source, _session.Token);
             IsPlaybackReady = _playbackService.IsReady;
             OnPropertyChanged(nameof(PlayerHandle));
+            _ = RefreshEpgAsync();
         }
         catch (OperationCanceledException) { }
         catch (XtreamApiException exception) { StatusMessage = exception.Message; }
@@ -206,6 +224,7 @@ public sealed partial class MainViewModel : INotifyPropertyChanged, IDisposable,
     {
         if (_disposed) return;
         _disposed = true;
+        await CaptureMediaAsync(true);
         _playbackService.StateChanged -= PlaybackStateChanged;
         _shutdown.Cancel();
         DisposeCatalog();
@@ -213,6 +232,7 @@ public sealed partial class MainViewModel : INotifyPropertyChanged, IDisposable,
         _client = null;
         _account = null;
         await _historyWrites.ConfigureAwait(false);
+        await _progressWrites.ConfigureAwait(false);
         try { await _playbackService.DisposeAsync().ConfigureAwait(false); }
         catch (Exception exception) { _logger.LogError("playback_dispose", exception); }
         finally { _shutdown.Dispose(); }
@@ -255,6 +275,7 @@ public sealed partial class MainViewModel : INotifyPropertyChanged, IDisposable,
         OnPropertyChanged(nameof(HasNoChannels));
         AvailableFormats.Clear(); SelectedChannel = null; SelectedFormat = null;
         ResetLibrary();
+        ResetContent();
     }
 
     private void NotifyCommands()

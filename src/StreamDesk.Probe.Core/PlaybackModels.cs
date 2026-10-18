@@ -4,18 +4,18 @@ public enum PlaybackState { Idle, Loading, Playing, Buffering, Failed, Stopped }
 public enum PlaybackFailure { None, Cancelled, InvalidSource, Unauthorized, Forbidden, NotFound, Expired, ConnectionLimit, Network, Timeout, HardwareDecoder, UnsupportedFormat, Unavailable, Unknown }
 public enum HardwareDecoding { Automatic, Software }
 
-public sealed record PlaybackOptions(int BufferMilliseconds = 1000, HardwareDecoding Hardware = HardwareDecoding.Automatic)
+public sealed record PlaybackOptions(int BufferMilliseconds = 1000, HardwareDecoding Hardware = HardwareDecoding.Automatic, bool OnDemand = false, long StartPositionMilliseconds = 0)
 {
     public PlaybackOptions Validate()
     {
-        if (BufferMilliseconds is < 250 or > 10000 || !Enum.IsDefined(Hardware))
+        if (BufferMilliseconds is < 250 or > 10000 || !Enum.IsDefined(Hardware) || StartPositionMilliseconds < 0)
             throw new ArgumentOutOfRangeException(nameof(BufferMilliseconds));
         return this;
     }
 }
 
 public sealed record PlaybackSnapshot(long Sequence, PlaybackState State, PlaybackFailure Failure = PlaybackFailure.None,
-    int RetryCount = 0, float BufferPercent = 0, bool UsingSoftware = false, bool WillRetry = false)
+    int RetryCount = 0, float BufferPercent = 0, bool UsingSoftware = false, bool WillRetry = false, bool EndOfMedia = false)
 {
     public bool IsActive => State is PlaybackState.Loading or PlaybackState.Playing or PlaybackState.Buffering;
     public string Message => Failure switch

@@ -164,15 +164,15 @@ La separación puede simplificarse si el MVP se vuelve innecesariamente complejo
 **Meta:** ampliar contenido sin deteriorar el MVP estable.  
 **Entregable:** versión **0.5**, condicionada a la disponibilidad del servicio.
 
-- [ ] **F5-T01** Investigar calidad real de EPG Xtream/XMLTV y mapear zona horaria correctamente.
-- [ ] **F5-T02** Añadir EPG de canal actual/siguiente con caché, actualización y estados sin datos.
-- [ ] **F5-T03** Integrar categorías y catálogo de películas (VOD), con búsquedas y filtros.
-- [ ] **F5-T04** Implementar ficha de película, reproducción y reanudación por posición.
-- [ ] **F5-T05** Integrar series, temporadas, episodios y avance por episodio.
-- [ ] **F5-T06** Añadir selección de subtítulos/pistas de audio cuando los streams lo permitan.
-- [ ] **F5-T07** Implementar historial/continuar viendo sin registrar información innecesaria.
-- [ ] **F5-T08** Limitar almacenamiento de carátulas/caché y limpiar contenido obsoleto.
-- [ ] **F5-T09** Probar metadatos inconsistentes, sinopsis vacías, streams inaccesibles y series grandes.
+- [ ] **F5-T01** Investigar calidad real de EPG Xtream/XMLTV y mapear zona horaria correctamente. PARCIAL: UTC/DST y formatos probados; calidad/capacidades de la cuenta real pendientes.
+- [x] **F5-T02** Añadir EPG de canal actual/siguiente con caché, actualización y estados sin datos.
+- [x] **F5-T03** Integrar categorías y catálogo de películas (VOD), con búsquedas y filtros.
+- [x] **F5-T04** Implementar ficha de película, reproducción y reanudación por posición.
+- [x] **F5-T05** Integrar series, temporadas, episodios y avance por episodio.
+- [x] **F5-T06** Añadir selección de subtítulos/pistas de audio cuando los streams lo permitan.
+- [x] **F5-T07** Implementar historial/continuar viendo sin registrar información innecesaria.
+- [x] **F5-T08** Limitar almacenamiento de carátulas/caché y limpiar contenido obsoleto.
+- [x] **F5-T09** Probar metadatos inconsistentes, sinopsis vacías, streams inaccesibles y series grandes.
 
 **Aceptación:** los módulos solo se muestran si el servicio provee datos utilizables, el catálogo no ralentiza la TV en vivo y la reproducción VOD no rompe el motor principal.
 
