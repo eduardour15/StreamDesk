@@ -31,6 +31,12 @@ public sealed class SqliteContentStore(string path, bool pooling = true, TimePro
         command.Parameters.AddWithValue("$date", _clock.GetUtcNow().ToString("O")); command.Parameters.AddWithValue("$json", json);
         command.CommandText = "INSERT INTO MediaCache VALUES($profile,$kind,$scope,$date,$json) ON CONFLICT(ProfileId,Kind,Scope) DO UPDATE SET UpdatedAt=excluded.UpdatedAt,Payload=excluded.Payload;";
         command.ExecuteNonQuery();
+        if (kind is ContentKind.Movie or ContentKind.Episode)
+        {
+            command.Parameters.AddWithValue("$keys", JsonSerializer.Serialize(sanitized.Items.Select(item => item.StorageKey)));
+            command.CommandText = "DELETE FROM MediaProgress WHERE ProfileId=$profile AND Kind=$kind AND ($kind=0 OR json_extract(Payload,'$.Item.SeriesId')=$scope) AND ItemKey NOT IN (SELECT value FROM json_each($keys));";
+            command.ExecuteNonQuery();
+        }
         command.Parameters.AddWithValue("$cutoff", _clock.GetUtcNow().AddDays(-7).ToString("O"));
         command.CommandText = """
             DELETE FROM MediaCache WHERE UpdatedAt < $cutoff;

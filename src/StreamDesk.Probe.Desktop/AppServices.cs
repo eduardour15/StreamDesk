@@ -20,6 +20,7 @@ public sealed class AppServices : IDisposable
         Catalogs = new CatalogService(new SqliteCatalogStore(Path.Combine(localDataDirectory, "streamdesk.db")));
         Viewer = new SqliteViewerStore(Path.Combine(localDataDirectory, "streamdesk.db"));
         Content = new SqliteContentStore(Path.Combine(localDataDirectory, "streamdesk.db"));
+        Recovery = new LocalRecoveryService(localDataDirectory);
         _httpServices = ProviderHttpClients.CreateServices();
         var factory = _httpServices.GetRequiredService<IHttpClientFactory>();
         ProviderFactory = (url, username, password) => new XtreamApiClient(url, username, password, httpClient: factory.CreateClient("Xtream"));
@@ -34,8 +35,9 @@ public sealed class AppServices : IDisposable
     public CatalogService Catalogs { get; }
     public IViewerStore Viewer { get; }
     public IContentStore Content { get; }
+    public IRecoveryService Recovery { get; }
     public ChannelLogoLoader Logos { get; }
     public Func<string, string, string, IIptvProvider> ProviderFactory { get; }
     public IPlaybackService Playback { get; }
-    public void Dispose() { Logos.Dispose(); Playback.Dispose(); _httpServices.Dispose(); }
+    public void Dispose() { Logos.Dispose(); Playback.Dispose(); _httpServices.Dispose(); (Logger as IDisposable)?.Dispose(); }
 }

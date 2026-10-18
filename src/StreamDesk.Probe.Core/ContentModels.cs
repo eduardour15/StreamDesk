@@ -34,7 +34,11 @@ public static class MediaMetadata
     public static bool SafeImage(string? value) => Uri.TryCreate(value, UriKind.Absolute, out var uri)
         && uri.Scheme is "https" or "http" && uri.UserInfo.Length == 0 && uri.Query.Length == 0 && uri.Fragment.Length == 0;
     public static bool SafeExtension(string? value) => value is "mp4" or "mkv" or "avi" or "mov" or "m4v" or "ts" or "m3u8" or "webm" or "mpg" or "mpeg";
-    public static MediaItem Sanitize(MediaItem item) => item with
-    { Name = Text(item.Name, 512), Plot = Text(item.Plot), PosterUrl = SafeImage(item.PosterUrl) ? item.PosterUrl : null,
-      Extension = SafeExtension(item.Extension) ? item.Extension : null };
+    public static bool Identifier([System.Diagnostics.CodeAnalysis.NotNullWhen(true)] string? value) => !string.IsNullOrWhiteSpace(value) && value.Length <= 256 && !value.Contains("://", StringComparison.Ordinal) && !value.Any(char.IsControl);
+    public static MediaItem Sanitize(MediaItem item)
+    {
+        if (!Identifier(item.Id) || !Enum.IsDefined(item.Kind) || (item.Kind == ContentKind.Episode && !Identifier(item.SeriesId))) throw new ArgumentException("Identificador de contenido no válido.");
+        return item with { Name = Text(item.Name, 512), Plot = Text(item.Plot), PosterUrl = SafeImage(item.PosterUrl) ? item.PosterUrl : null,
+            Extension = SafeExtension(item.Extension) ? item.Extension : null };
+    }
 }

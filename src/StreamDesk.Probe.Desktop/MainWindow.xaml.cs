@@ -30,7 +30,7 @@ public partial class MainWindow : FluentWindow
     public ChannelLogoLoader LogoLoader { get; }
 
     public MainWindow(AppServices services) : this(
-        new MainViewModel(services.ProviderFactory, services.Playback, services.Profiles, services.Logger, services.Catalogs, services.Credentials, services.Viewer, services.Content, new StreamDesk.Probe.Infrastructure.XmlTvReader()), services.Logos)
+        new MainViewModel(services.ProviderFactory, services.Playback, services.Profiles, services.Logger, services.Catalogs, services.Credentials, services.Viewer, services.Content, new StreamDesk.Probe.Infrastructure.XmlTvReader(), services.Recovery), services.Logos)
     { }
 
     public MainWindow(MainViewModel viewModel, ChannelLogoLoader logoLoader)
@@ -86,6 +86,8 @@ public partial class MainWindow : FluentWindow
     private async void RestartMedia_Click(object sender, RoutedEventArgs e) => await _viewModel.PlayMediaAsync(true);
     private async void RefreshEpg_Click(object sender, RoutedEventArgs e) => await _viewModel.RefreshEpgAsync(true);
     private async void ApplyAudio_Click(object sender, RoutedEventArgs e) => await _viewModel.SelectTrackAsync(false);
+    private async void Backup_Click(object sender, RoutedEventArgs e) => await _viewModel.CreateBackupAsync();
+    private async void Diagnostics_Click(object sender, RoutedEventArgs e) => await _viewModel.CreateBackupAsync(true);
     private async void ApplySubtitle_Click(object sender, RoutedEventArgs e) => await _viewModel.SelectTrackAsync(true);
     private async void Seek_Completed(object sender, MouseButtonEventArgs e) => await _viewModel.SeekToAsync(SeekSlider.Value);
     private async void Seek_KeyUp(object sender, KeyEventArgs e) { if (e.Key is Key.Left or Key.Right or Key.Home or Key.End) await _viewModel.SeekToAsync(SeekSlider.Value); }

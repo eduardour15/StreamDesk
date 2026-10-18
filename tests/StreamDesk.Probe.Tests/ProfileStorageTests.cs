@@ -105,14 +105,15 @@ public sealed class ProfileStorageTests
     }
 
     [Fact]
-    public void SafeFileLoggerOmitsExceptionMessagesAndRequestData()
+    public async Task SafeFileLoggerOmitsExceptionMessagesAndRequestData()
     {
         var root = CreateTempDirectory();
         try
         {
             var path = Path.Combine(root, "streamdesk.log");
-            var logger = new SafeFileLogger(path);
+            await using var logger = new SafeFileLogger(path);
             logger.LogError("provider-failure", new InvalidOperationException("https://provider.invalid/live/user-fixture/password-fixture"));
+            await logger.DisposeAsync();
 
             var log = File.ReadAllText(path);
             Assert.Contains("provider-failure InvalidOperationException", log, StringComparison.Ordinal);

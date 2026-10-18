@@ -61,12 +61,14 @@ public sealed partial class MainViewModel
         if (_disposed || ContentBusy || !CanConnect) return;
         var version = _sessionVersion;
         ContentBusy = true;
+        CancellationTokenSource? operation = null;
+        var failed = false;
         try
         {
             if (_client is null) await ConnectProfileAsync();
             if (version != _sessionVersion || _disposed) return;
             if (_client is not IContentProvider provider) { ContentStatus = "Este adaptador no ofrece películas o series."; return; }
-            using var operation = CancellationTokenSource.CreateLinkedTokenSource(_shutdown.Token, _session.Token);
+            operation = CancellationTokenSource.CreateLinkedTokenSource(_shutdown.Token, _session.Token);
             _operation = operation;
             foreach (var kind in new[] { ContentKind.Movie, ContentKind.Series })
             {
@@ -80,14 +82,15 @@ public sealed partial class MainViewModel
                     if (kind == ContentKind.Movie) _movies = catalog; else _series = catalog;
                 }
                 catch (OperationCanceledException) { throw; }
-                catch (Exception error) { _logger.LogError("content_catalog", error); ContentStatus = "No se pudo consultar parte del contenido; se conserva la caché conocida."; }
+                catch (Exception error) { failed = true; _logger.LogError("content_catalog", error); }
             }
-            ContentStatus = $"Películas: {_movies?.Items.Count ?? 0} · Series: {_series?.Items.Count ?? 0}. La disponibilidad depende de la cuenta.";
+            if (version != _sessionVersion || _disposed) return;
+            ContentStatus = $"Películas: {_movies?.Items.Count ?? 0} · Series: {_series?.Items.Count ?? 0}. " + (failed ? "Algunas consultas fallaron; se conserva la caché conocida. Puedes reintentar." : "La disponibilidad depende de la cuenta.");
             NotifyContent(); await FilterMediaAsync();
         }
-        catch (OperationCanceledException) { ContentStatus = "Consulta de contenido cancelada."; }
-        catch (Exception error) { _logger.LogError("content_probe", error); ContentStatus = "No se pudo consultar el contenido. Reintenta cuando haya conexión."; }
-        finally { _operation = null; ContentBusy = false; }
+        catch (OperationCanceledException) { if (version == _sessionVersion) ContentStatus = "Consulta de contenido cancelada."; }
+        catch (Exception error) { _logger.LogError("content_probe", error); if (version == _sessionVersion) ContentStatus = "No se pudo consultar el contenido. Reintenta cuando haya conexión."; }
+        finally { if (ReferenceEquals(_operation, operation)) _operation = null; operation?.Dispose(); ContentBusy = false; }
     }
 
     private async Task LoadContentCacheAsync(string? profile, int version, CancellationToken token)
@@ -171,6 +174,7 @@ public sealed partial class MainViewModel
             var resume = _progress.FirstOrDefault(entry => entry.Item.Kind == item.Kind && entry.Item.StorageKey == item.StorageKey);
             var position = restart || resume?.Completed != false ? 0 : resume.PositionMilliseconds;
             _watch = null; _playingChannelId = null;
+            _mediaDetails = MediaPlaybackDetails.Empty; NotifyMediaDetails();
             _mediaWatch = new(item, _connectedProfileId, version, _playbackService.Snapshot.Sequence) { Position = position, Length = resume?.DurationMilliseconds ?? 0 };
             _playbackService.Options = _playbackService.Options with { OnDemand = true, StartPositionMilliseconds = position };
             OnPropertyChanged(nameof(NowPlaying));

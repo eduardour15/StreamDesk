@@ -51,6 +51,7 @@ public sealed partial class MainViewModel
     {
         await CaptureMediaAsync(true);
         _mediaWatch = null;
+        _mediaDetails = MediaPlaybackDetails.Empty; NotifyMediaDetails();
         _playingChannelId = null;
         _watch = null;
         OnPropertyChanged(nameof(NowPlaying));

@@ -43,7 +43,8 @@ public sealed partial class MainViewModel : INotifyPropertyChanged, IDisposable,
         ICredentialStore credentials,
         IViewerStore? viewer = null,
         IContentStore? content = null,
-        IEpgImporter? epgImporter = null)
+        IEpgImporter? epgImporter = null,
+        IRecoveryService? recovery = null)
     {
         _providerFactory = providerFactory;
         _playbackService = playbackService;
@@ -54,6 +55,7 @@ public sealed partial class MainViewModel : INotifyPropertyChanged, IDisposable,
         _viewer = viewer;
         _contentStore = content;
         _epgImporter = epgImporter;
+        _recovery = recovery;
         LoadCatalogCommand = new AsyncRelayCommand(LoadCatalogAsync, () => CanConnect);
         ReloadProfilesCommand = new AsyncRelayCommand(LoadProfilesAsync, () => !IsBusy);
         DeleteProfileCommand = new AsyncRelayCommand(DeleteSelectedProfileAsync, () => !IsBusy && SelectedProfile is not null);
@@ -202,6 +204,7 @@ public sealed partial class MainViewModel : INotifyPropertyChanged, IDisposable,
             if (_disposed || version != _sessionVersion) return;
             var source = _client.CreateLiveStreamUri(channel, SelectedFormat);
             _mediaWatch = null;
+            _mediaDetails = MediaPlaybackDetails.Empty; NotifyMediaDetails();
             _playbackService.Options = _playbackService.Options with { OnDemand = false, StartPositionMilliseconds = 0 };
             _playingChannelId = channel.Id;
             _watch = new WatchRequest(_connectedProfileId, channel, version, _playbackService.Snapshot.Sequence);

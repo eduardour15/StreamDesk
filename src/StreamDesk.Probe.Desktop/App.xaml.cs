@@ -23,8 +23,7 @@ public partial class App : System.Windows.Application
             var exitCode = 0;
             try
             {
-                await using var playback = new StreamDesk.Application.PlaybackService(new StreamDesk.Probe.Playback.LibVlcBackend());
-                await playback.InitializeAsync();
+                await RuntimeVerifier.VerifyAsync();
             }
             catch { exitCode = 2; }
             Shutdown(exitCode);

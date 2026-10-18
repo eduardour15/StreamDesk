@@ -44,12 +44,12 @@ public sealed partial class XtreamApiClient
             foreach (var season in episodes.EnumerateObject())
             {
                 if (season.Value.ValueKind != JsonValueKind.Array) throw new XtreamApiException(XtreamFailureKind.UnsupportedResponse);
-                var seasonNumber = int.TryParse(season.Name, NumberStyles.None, CultureInfo.InvariantCulture, out var number) ? number : 0;
+                if (!int.TryParse(season.Name, NumberStyles.None, CultureInfo.InvariantCulture, out var seasonNumber)) throw new XtreamApiException(XtreamFailureKind.UnsupportedResponse);
                 seasons.Add(seasonNumber);
                 foreach (var episode in season.Value.EnumerateArray())
                 {
                     cancellationToken.ThrowIfCancellationRequested();
-                    var item = ParseMedia(episode, ContentKind.Episode) with { SeriesId = seriesId, Season = seasonNumber, CategoryId = seasonNumber.ToString(CultureInfo.InvariantCulture) };
+                    var item = ParseMedia(episode, ContentKind.Episode, seriesId, seasonNumber) with { CategoryId = seasonNumber.ToString(CultureInfo.InvariantCulture) };
                     if (seen.Add(item.StorageKey)) items.Add(item);
                     if (items.Count > 20000) throw new XtreamApiException(XtreamFailureKind.UnsupportedResponse);
                 }
@@ -84,17 +84,23 @@ public sealed partial class XtreamApiClient
         return new Uri(_baseUri.GetLeftPart(UriPartial.Authority) + path, new UriCreationOptions { DangerousDisablePathAndQueryCanonicalization = true });
     }
 
-    private MediaItem ParseMedia(JsonElement item, ContentKind kind)
+    private MediaItem ParseMedia(JsonElement item, ContentKind kind, string? seriesId = null, int season = 0)
     {
         if (item.ValueKind != JsonValueKind.Object) throw new XtreamApiException(XtreamFailureKind.UnsupportedResponse);
         var id = ReadString(item, kind == ContentKind.Series ? "series_id" : kind == ContentKind.Episode ? "id" : "stream_id");
         var name = SafeText(ReadString(item, "name") ?? ReadString(item, "title"));
-        if (string.IsNullOrWhiteSpace(id) || name.Length == 0) throw new XtreamApiException(XtreamFailureKind.UnsupportedResponse);
+        if (!MediaMetadata.Identifier(id) || name.Length == 0 || (kind == ContentKind.Episode && !MediaMetadata.Identifier(seriesId))) throw new XtreamApiException(XtreamFailureKind.UnsupportedResponse);
         return MediaMetadata.Sanitize(new(id.Trim(), name, kind, ReadString(item, "category_id"),
             ReadString(item, "container_extension")?.Trim().TrimStart('.').ToLowerInvariant(), SafeLogoUrl(ReadString(item, "stream_icon") ?? ReadString(item, "cover")),
-            SafeText(ReadString(item, "plot")), Episode: ReadInt(item, "episode_num") ?? 0));
+            SafeText(ReadString(item, "plot")), SeriesId: seriesId, Season: season, Episode: ReadInt(item, "episode_num") ?? 0));
     }
-    private string SafeText(string? value) => MediaMetadata.Text(value).Replace(_username!, "[oculto]", StringComparison.Ordinal).Replace(_password!, "[oculto]", StringComparison.Ordinal);
+    private string SafeText(string? value)
+    {
+        var text = MediaMetadata.Text(value); var username = _username; var password = _password;
+        if (!string.IsNullOrEmpty(username)) text = text.Replace(username, "[oculto]", StringComparison.Ordinal);
+        if (!string.IsNullOrEmpty(password)) text = text.Replace(password, "[oculto]", StringComparison.Ordinal);
+        return text;
+    }
     private static string? DecodeText(string? value)
     {
         if (string.IsNullOrWhiteSpace(value) || value.Length > 16384) return null;
