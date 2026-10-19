@@ -200,10 +200,10 @@ La separación puede simplificarse si el MVP se vuelve innecesariamente complejo
 
 - [x] **F7-T01** Ventana flotante/Picture-in-Picture siempre visible. Código/WPF y fixture nativo verificados; DPI/monitores/proveedor físicos pendientes de validación.
 - [x] **F7-T02** Adaptador M3U/M3U8 de importación local y remota. Código, parseo y protecciones verificados; prueba manual con lista autorizada pendiente.
-- [ ] **F7-T03** Perfiles de proveedor múltiples y administración de conexiones.
-- [ ] **F7-T04** Sincronización cifrada de favoritos e historial entre casa y trabajo (sin sincronizar secretos innecesariamente).
-- [ ] **F7-T05** Temas, tamaños, idioma y atajos personalizables.
-- [ ] **F7-T06** Control parental, grabación o catch-up solo cuando sean viables y autorizados.
+- [x] **F7-T03** Perfiles de proveedor múltiples y administración de conexiones. Implementado con soporte Xtream + M3U, migración v5 en SQLite, desconexión limpia y garantía de 1 solo stream activo.
+- [x] **F7-T04** Sincronización cifrada de favoritos e historial entre casa y trabajo (sin sincronizar secretos innecesariamente). Implementado con AES-256-GCM + PBKDF2 (100k iteraciones), cero URLs o credenciales exportadas y resolución Last-Write-Wins.
+- [x] **F7-T05** Temas, tamaños, idioma y atajos personalizables. Implementado con temas Dark/Light, escalado de interfaz 100/115/130%, selector de idioma y atajos de teclado documentados.
+- [x] **F7-T06** Control parental, grabación o catch-up solo cuando sean viables y autorizados. Implementado control parental con PIN cifrado PBKDF2 y filtrado de categorías adultas; estudio de factibilidad documentado (DVR desestimada por 1-stream limit, catch-up postergado a 1.1+).
 
 ## D. Modelo mínimo de datos
 
