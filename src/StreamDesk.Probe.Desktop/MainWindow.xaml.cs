@@ -30,7 +30,7 @@ public partial class MainWindow : FluentWindow
     public ChannelLogoLoader LogoLoader { get; }
 
     public MainWindow(AppServices services) : this(
-        new MainViewModel(services.ProviderFactory, services.Playback, services.Profiles, services.Logger, services.Catalogs, services.Credentials, services.Viewer, services.Content, new StreamDesk.Probe.Infrastructure.XmlTvReader(), services.Recovery), services.Logos)
+        new MainViewModel(services.ProviderFactory, services.Playback, services.Profiles, services.Logger, services.Catalogs, services.Credentials, services.Viewer, services.Content, new StreamDesk.Probe.Infrastructure.XmlTvReader(), services.Recovery, services.Playlists), services.Logos)
     { }
 
     public MainWindow(MainViewModel viewModel, ChannelLogoLoader logoLoader)
@@ -116,6 +116,23 @@ public partial class MainWindow : FluentWindow
         if (dialog.ShowDialog(this) != true) return;
         try { await using var stream = File.OpenRead(dialog.FileName); await _viewModel.ImportEpgAsync(stream); }
         catch (Exception exception) { _viewModel.ReportWindowError(exception); }
+    }
+    private async void ImportPlaylistFile_Click(object sender, RoutedEventArgs e)
+    {
+        var dialog = new OpenFileDialog { Filter = "Listas M3U (*.m3u;*.m3u8)|*.m3u;*.m3u8", Title = "Importar lista M3U/M3U8" };
+        if (dialog.ShowDialog(this) == true) await _viewModel.ImportLocalPlaylistAsync(dialog.FileName);
+    }
+    private async void ImportPlaylistUrl_Click(object sender, RoutedEventArgs e)
+    {
+        var source = RemotePlaylistBox.Text.Trim();
+        if (Uri.TryCreate(source, UriKind.Absolute, out var uri) && uri.Scheme == "http")
+        {
+            var choice = System.Windows.MessageBox.Show(this,
+                "Esta lista usa HTTP sin cifrar. Los datos y tokens que incluya podrían ser visibles durante la descarga. Si tu proveedor ofrece HTTPS, úsalo. ¿Continuar de todos modos?",
+                "Conexión sin cifrar", System.Windows.MessageBoxButton.YesNo, System.Windows.MessageBoxImage.Warning);
+            if (choice != System.Windows.MessageBoxResult.Yes) return;
+        }
+        await _viewModel.ImportRemotePlaylistAsync(source);
     }
     private void Navigate_Click(object sender, RoutedEventArgs e) => _viewModel.CurrentTabIndex = int.Parse((string)((FrameworkElement)sender).Tag);
     private void ClearFilters_Click(object sender, RoutedEventArgs e) => _viewModel.ClearFilters();

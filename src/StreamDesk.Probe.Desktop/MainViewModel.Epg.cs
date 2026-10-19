@@ -59,4 +59,11 @@ public sealed partial class MainViewModel
         EpgNext = _epgPrograms.FirstOrDefault(item => item.StartUtc > now)?.Label ?? "Sin programación siguiente.";
         OnPropertyChanged(nameof(EpgNow)); OnPropertyChanged(nameof(EpgNext));
     }
+
+    private void ClearEpgForPlaylist()
+    {
+        _epgPrograms = [];
+        UpdateEpgLabels();
+        EpgStatus = "La guía EPG no está disponible para esta lista.";
+    }
 }

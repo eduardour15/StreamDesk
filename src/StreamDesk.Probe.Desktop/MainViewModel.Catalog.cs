@@ -52,7 +52,7 @@ public sealed partial class MainViewModel
         private set
         {
             if (!SetProperty(ref _isCatalogLoading, value)) return;
-            OnPropertyChanged(nameof(CanConnect)); OnPropertyChanged(nameof(IsWorking)); OnPropertyChanged(nameof(HasNoChannels));
+            OnPropertyChanged(nameof(CanConnect)); OnPropertyChanged(nameof(CanImportPlaylist)); OnPropertyChanged(nameof(IsWorking)); OnPropertyChanged(nameof(HasNoChannels));
             NotifyCommands();
         }
     }
@@ -254,6 +254,7 @@ public sealed partial class MainViewModel
         var version = ++_sessionVersion;
         _session.Cancel(); _session.Dispose(); _session = new();
         _operation?.Cancel(); _filter?.Cancel();
+        ClearImportedPlaylist();
         return version;
     }
     private void DisposeCatalog()

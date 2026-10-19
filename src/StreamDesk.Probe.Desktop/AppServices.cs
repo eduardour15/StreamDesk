@@ -24,6 +24,7 @@ public sealed class AppServices : IDisposable
         _httpServices = ProviderHttpClients.CreateServices();
         var factory = _httpServices.GetRequiredService<IHttpClientFactory>();
         ProviderFactory = (url, username, password) => new XtreamApiClient(url, username, password, httpClient: factory.CreateClient("Xtream"));
+        Playlists = new M3uPlaylistImporter();
         Logos = new ChannelLogoLoader(factory.CreateClient("Logos"));
         Playback = new PlaybackService(new LibVlcBackend());
     }
@@ -37,7 +38,8 @@ public sealed class AppServices : IDisposable
     public IContentStore Content { get; }
     public IRecoveryService Recovery { get; }
     public ChannelLogoLoader Logos { get; }
+    public M3uPlaylistImporter Playlists { get; }
     public Func<string, string, string, IIptvProvider> ProviderFactory { get; }
     public IPlaybackService Playback { get; }
-    public void Dispose() { Logos.Dispose(); Playback.Dispose(); _httpServices.Dispose(); (Logger as IDisposable)?.Dispose(); }
+    public void Dispose() { Logos.Dispose(); Playlists.Dispose(); Playback.Dispose(); _httpServices.Dispose(); (Logger as IDisposable)?.Dispose(); }
 }

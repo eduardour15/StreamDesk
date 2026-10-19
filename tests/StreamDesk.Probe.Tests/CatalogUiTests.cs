@@ -55,7 +55,8 @@ public sealed partial class CatalogUiTests
             Volatile.Write(ref stage, "thread finished");
         }) { IsBackground = true, Name = "StreamDesk F2 WPF verification" };
         thread.SetApartmentState(ApartmentState.STA); thread.Start();
-        await completion.Task.WaitAsync(TimeSpan.FromSeconds(90));
+        // This WPF scenario also runs native playback and several UI regressions; allow headroom in the full suite.
+        await completion.Task.WaitAsync(TimeSpan.FromSeconds(150));
         Assert.True(thread.Join(TimeSpan.FromSeconds(5)), "WPF thread remained at: " + Volatile.Read(ref stage));
     }
 

@@ -21,8 +21,10 @@ public sealed partial class MainViewModel
         : _recentsOnly ? "Aún no has visto canales en este perfil."
         : FavoritesOnly ? "Pulsa ⭐ en cualquier canal para guardarlo aquí."
         : "No hay canales en esta categoría.";
-    public IReadOnlySet<string> FavoriteChannelIds => _snapshot?.FavoriteChannelIds ?? _library.Favorites;
-    public bool CanFavorite => !_disposed && !_libraryBusy && _viewer is not null && ActiveProfile is not null && _catalogOwnerId == ActiveProfile.Id && _snapshot is not null;
+    public IReadOnlySet<string> FavoriteChannelIds => _hasImportedPlaylist ? _playlistFavoriteIds : _snapshot?.FavoriteChannelIds ?? _library.Favorites;
+    public bool CanFavorite => !_disposed && (_hasImportedPlaylist
+        ? !IsBusy && !IsCatalogLoading && _snapshot is not null
+        : !_libraryBusy && _viewer is not null && ActiveProfile is not null && _catalogOwnerId == ActiveProfile.Id && _snapshot is not null);
     public bool SelectedIsFavorite => SelectedChannel is not null && FavoriteChannelIds.Contains(SelectedChannel.Id);
     public string FavoriteAction => SelectedIsFavorite ? "★ Quitar favorito" : "☆ Favorito";
     public bool AutoPlayLast => _library.AutoPlayLast;
@@ -35,6 +37,17 @@ public sealed partial class MainViewModel
     {
         channel ??= SelectedChannel;
         if (!CanFavorite || channel is null) return;
+        if (_hasImportedPlaylist)
+        {
+            if (_playlistFavoriteIds.Contains(channel.Id)) _playlistFavoriteIds.Remove(channel.Id);
+            else _playlistFavoriteIds.Add(channel.Id);
+            _snapshot = _snapshot! with { FavoriteChannelIds = new HashSet<string>(_playlistFavoriteIds, StringComparer.Ordinal) };
+            OnPropertyChanged(nameof(FavoriteChannelIds));
+            NotifySelection();
+            await ApplyFilterAsync(false);
+            StatusMessage = _playlistFavoriteIds.Contains(channel.Id) ? "Canal guardado en favoritos durante esta sesión." : "Canal eliminado de favoritos.";
+            return;
+        }
         var profileId = ActiveProfile!.Id; var version = _sessionVersion; var token = _session.Token;
         var add = !FavoriteChannelIds.Contains(channel.Id);
         _libraryBusy = true; OnPropertyChanged(nameof(CanFavorite));

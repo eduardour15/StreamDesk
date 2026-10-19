@@ -199,7 +199,7 @@ La separación puede simplificarse si el MVP se vuelve innecesariamente complejo
 **No bloquean 1.0.**
 
 - [x] **F7-T01** Ventana flotante/Picture-in-Picture siempre visible. Código/WPF y fixture nativo verificados; DPI/monitores/proveedor físicos pendientes de validación.
-- [ ] **F7-T02** Adaptador M3U/M3U8 de importación local y remota si no entró en MVP.
+- [x] **F7-T02** Adaptador M3U/M3U8 de importación local y remota. Código, parseo y protecciones verificados; prueba manual con lista autorizada pendiente.
 - [ ] **F7-T03** Perfiles de proveedor múltiples y administración de conexiones.
 - [ ] **F7-T04** Sincronización cifrada de favoritos e historial entre casa y trabajo (sin sincronizar secretos innecesariamente).
 - [ ] **F7-T05** Temas, tamaños, idioma y atajos personalizables.

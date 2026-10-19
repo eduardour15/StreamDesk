@@ -1,6 +1,17 @@
 using StreamDesk.Probe.Core;
-
 namespace StreamDesk.Application;
+
+/// <summary>In-memory playlist catalog. Stream URLs deliberately stay out of CatalogSnapshot and persistence.</summary>
+public sealed record ImportedPlaylist(CatalogSnapshot Catalog, IReadOnlyDictionary<string, Uri> StreamUris);
+
+public interface IPlaylistImporter
+{
+    Task<ImportedPlaylist> ImportLocalAsync(string path, CancellationToken cancellationToken = default);
+    Task<ImportedPlaylist> ImportRemoteAsync(Uri source, CancellationToken cancellationToken = default);
+    Task EnsureSafeStreamUriAsync(Uri streamUri, CancellationToken cancellationToken = default);
+}
+
+public sealed class PlaylistImportException(string message) : Exception(message);
 
 public interface IIptvProvider : IDisposable
 {

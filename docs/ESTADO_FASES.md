@@ -11,9 +11,29 @@ Este archivo registra trabajo y evidencias reales. La confirmación del usuario 
 | F4 | PENDIENTE_DE_VALIDACION | 9/11 | 2026-10-18 | MVP implementado, 113 tests y candidato win-x64 local. T09/T10 PARCIAL: DPI físicos/dos monitores y evaluación humana/IPTV pendientes. |
 | F5 | PENDIENTE_DE_VALIDACION | 8/9 | 2026-10-18 | Código/fixtures y UI implementados; capacidades y calidad EPG/VOD reales pendientes. Avance conjunto F5/F6 solicitado; F4 no se aprueba por anticipado. |
 | F6 | PENDIENTE_DE_VALIDACION | 6/12 | 2026-10-18 | Candidato autocontenido e instalación verificados localmente; 4 parciales, T08 pendiente y T12 bloqueada hasta pruebas físicas/licencias. Sin release 1.0. |
-| F7 | PENDIENTE_DE_VALIDACION | 1/6 | 2026-10-19 | F7-T01 implementada y verificada con WPF/motor nativo local. PiP físico/IPTV pendiente; F6 conserva sus gates. T02–T06 no iniciadas por el alcance de una mejora por entrega. |
+| F7 | PENDIENTE_DE_VALIDACION | 2/6 | 2026-10-19 | F7-T01/T02 implementadas y verificadas automáticamente. Falta prueba manual con una lista autorizada; F6 conserva los pendientes específicos de sus gates. T03–T06 no iniciadas. |
 
 ## Bitácora de evidencias
+
+### 2026-10-19 — F7-T02: importación M3U/M3U8
+
+- **Solicitud y estado previo:** el usuario confirma que las fases anteriores están validadas y pide continuar con la siguiente programada. Se registra esta confirmación para avanzar; los subcriterios físicos, métricas y licencias que ya constaban pendientes no se sustituyen por datos no aportados.
+- **Implementación:** importación desde archivo `.m3u`/`.m3u8` o URL HTTP(S); reconocimiento de `#EXTM3U`, `#EXTINF`, nombres Unicode y categorías `group-title`; filtros y favoritos de sesión; reproducción directa con validación de host público y sin abrir una autenticación Xtream por accidente. Logos externos y EPG de M3U quedan fuera.
+- **Privacidad y límites:** las URI de canales solo viven en memoria, no se guardan en SQLite ni en estados/logs; credenciales en `userinfo`, esquemas distintos de HTTP(S), redirecciones y destinos privados se rechazan. Descarga limitada a 16 MiB/20 s, 50.000 canales y 16 KiB por línea. HTTP muestra una advertencia; HTTPS se recomienda si está disponible. La llamada final la realiza LibVLC, que resuelve el host por su cuenta después de la validación previa; esa ventana de DNS queda como riesgo residual.
+- **Archivos principales:** `src/StreamDesk.Application/Contracts.cs`, `src/StreamDesk.Probe.Infrastructure/M3uPlaylistImporter.cs`, `src/StreamDesk.Probe.Desktop/MainViewModel.Playlist.cs`, `MainViewModel.cs`, `MainViewModel.Library.cs`, `MainWindow.xaml`, `MainWindow.xaml.cs`, `AppServices.cs` y `tests/StreamDesk.Probe.Tests/M3uPlaylistImporterTests.cs`. Diseño en [`ADR-008`](ADR/ADR-008-importacion-m3u.md); pasos manuales en [`PRUEBA_MANUAL_F7_T02.md`](PRUEBA_MANUAL_F7_T02.md).
+- **Comandos ejecutados:** `dotnet build StreamDesk.sln -c Release --no-restore --verbosity minimal --maxcpucount:1 -p:UseSharedCompilation=false` terminó con 0 advertencias y 0 errores. `dotnet test tests/StreamDesk.Probe.Tests/StreamDesk.Probe.Tests.csproj -c Release --no-build --no-restore --verbosity minimal --filter FullyQualifiedName~M3uPlaylistImporterTests` pasó con **20/20**. `dotnet test StreamDesk.sln -c Release --no-build --no-restore --verbosity minimal --maxcpucount:1` pasó con **151/151**, 0 omitidas; la colección de WPF/VLC corre sin paralelo con otras colecciones para evitar competencia por estado nativo.
+- **Validación manual/proveedor:** `PENDIENTE_DE_VALIDACION`. El código de UI y reproducción pasó la suite local, pero no se descargó ni reprodujo una lista real del usuario. No se afirma compatibilidad con su proveedor.
+
+| ID | Estado | Evidencia o pendiente |
+|---|---|---|
+| F7-T01 | COMPLETADA | Código y pruebas locales WPF/VLC; validación física de DPI, monitores y proveedor continúa pendiente. |
+| F7-T02 | COMPLETADA | Importación/parsing, redirecciones, SSRF, cancelación, límites, secretos y ruta de reproducción cubiertos automáticamente; lista autorizada real pendiente. |
+| F7-T03 | PENDIENTE | Perfiles de proveedor múltiples y administración de conexiones. |
+| F7-T04 | PENDIENTE | Sincronización cifrada opcional. |
+| F7-T05 | PENDIENTE | Temas, tamaños, idioma y atajos personalizables. |
+| F7-T06 | PENDIENTE | Estudio de viabilidad y autorización para controles parentales/grabación/catch-up. |
+
+- **Gate F7:** `PENDIENTE_DE_VALIDACION`. Esta mejora no requiere ni aprueba F6/1.0; falta validar manualmente la importación y reproducción con una lista autorizada. Se detiene aquí; siguiente mejora recomendada: F7-T03, después de revisión.
 
 ### 2026-10-19 — Auditoría integral F0–F7-T01 y mejora UX/UI
 

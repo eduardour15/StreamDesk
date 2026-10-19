@@ -13,6 +13,7 @@ public sealed partial class MainViewModel : INotifyPropertyChanged, IDisposable,
     private readonly IPlaybackService _playbackService;
     private readonly ProfileService _profilesService;
     private readonly IAppLogger _logger;
+    private readonly IPlaylistImporter? _playlistImporter;
     private readonly CancellationTokenSource _shutdown = new();
     private IIptvProvider? _client;
     private XtreamAccount? _account;
@@ -44,7 +45,8 @@ public sealed partial class MainViewModel : INotifyPropertyChanged, IDisposable,
         IViewerStore? viewer = null,
         IContentStore? content = null,
         IEpgImporter? epgImporter = null,
-        IRecoveryService? recovery = null)
+        IRecoveryService? recovery = null,
+        IPlaylistImporter? playlistImporter = null)
     {
         _providerFactory = providerFactory;
         _playbackService = playbackService;
@@ -56,6 +58,7 @@ public sealed partial class MainViewModel : INotifyPropertyChanged, IDisposable,
         _contentStore = content;
         _epgImporter = epgImporter;
         _recovery = recovery;
+        _playlistImporter = playlistImporter;
         LoadCatalogCommand = new AsyncRelayCommand(LoadCatalogAsync, () => CanConnect);
         ReloadProfilesCommand = new AsyncRelayCommand(LoadProfilesAsync, () => !IsBusy);
         DeleteProfileCommand = new AsyncRelayCommand(DeleteSelectedProfileAsync, () => !IsBusy && SelectedProfile is not null);
@@ -197,31 +200,42 @@ public sealed partial class MainViewModel : INotifyPropertyChanged, IDisposable,
     {
         if (IsBusy || IsCatalogLoading || _disposed) return;
         if (channel is null) { StatusMessage = "Haz clic en un canal para reproducir."; return; }
+        var isPlaylistChannel = _playlistStreams.TryGetValue(channel.Id, out var playlistUri);
         var version = _sessionVersion;
-        if (_client is null && ActiveProfile is not null) await ConnectProfileAsync();
+        if (!isPlaylistChannel && _client is null && ActiveProfile is not null) await ConnectProfileAsync();
         if (_disposed || version != _sessionVersion) return;
-        if (_client is null || _account is null) { StatusMessage = "Configura o selecciona una cuenta antes de reproducir."; return; }
-        if (_account.ExpiresAt <= DateTimeOffset.UtcNow) { StatusMessage = new PlaybackException(PlaybackFailure.Expired).Message; return; }
-        if (string.IsNullOrWhiteSpace(SelectedFormat)) { StatusMessage = "El servidor no indicó un formato de video compatible."; return; }
-        if (!_playbackService.HasActiveMedia && _account.HasReachedConnectionLimit)
-        { StatusMessage = "Tu cuenta alcanzó el límite de pantallas simultáneas."; return; }
+        if (!isPlaylistChannel)
+        {
+            if (_client is null || _account is null) { StatusMessage = "Configura o selecciona una cuenta antes de reproducir."; return; }
+            if (_account.ExpiresAt <= DateTimeOffset.UtcNow) { StatusMessage = new PlaybackException(PlaybackFailure.Expired).Message; return; }
+            if (string.IsNullOrWhiteSpace(SelectedFormat)) { StatusMessage = "El servidor no indicó un formato de video compatible."; return; }
+            if (!_playbackService.HasActiveMedia && _account.HasReachedConnectionLimit)
+            { StatusMessage = "Tu cuenta alcanzó el límite de pantallas simultáneas."; return; }
+        }
         try
         {
+            if (isPlaylistChannel)
+            {
+                await _playlistImporter!.EnsureSafeStreamUriAsync(playlistUri!, _session.Token);
+                if (_disposed || version != _sessionVersion) return;
+            }
             await CaptureMediaAsync(true);
             if (_disposed || version != _sessionVersion) return;
-            var source = _client.CreateLiveStreamUri(channel, SelectedFormat);
+            var source = isPlaylistChannel ? playlistUri! : _client!.CreateLiveStreamUri(channel, SelectedFormat!);
             _mediaWatch = null;
             _mediaDetails = MediaPlaybackDetails.Empty; NotifyMediaDetails();
             _playbackService.Options = _playbackService.Options with { OnDemand = false, StartPositionMilliseconds = 0 };
             _playingChannelId = channel.Id;
-            _watch = new WatchRequest(_connectedProfileId, channel, version, _playbackService.Snapshot.Sequence);
+            _watch = new WatchRequest(isPlaylistChannel ? null : _connectedProfileId, channel, version, _playbackService.Snapshot.Sequence);
             OnPropertyChanged(nameof(NowPlaying));
             await _playbackService.PlayAsync(source, _session.Token);
             IsPlaybackReady = _playbackService.IsReady;
             OnPropertyChanged(nameof(PlayerHandle));
-            _ = RefreshEpgAsync();
+            if (isPlaylistChannel) ClearEpgForPlaylist();
+            else _ = RefreshEpgAsync();
         }
         catch (OperationCanceledException) { }
+        catch (PlaylistImportException exception) { StatusMessage = exception.Message; }
         catch (XtreamApiException exception) { StatusMessage = exception.Message; }
         catch (Exception exception)
         {
@@ -277,6 +291,7 @@ public sealed partial class MainViewModel : INotifyPropertyChanged, IDisposable,
 
     private void ClearCatalog()
     {
+        ClearImportedPlaylist();
         _snapshot = null;
         _catalogOwnerId = null;
         _search = new CatalogSearch([]);
@@ -303,6 +318,7 @@ public sealed partial class MainViewModel : INotifyPropertyChanged, IDisposable,
     private void NotifyBusyChanged()
     {
         OnPropertyChanged(nameof(IsBusy)); OnPropertyChanged(nameof(CanConnect)); OnPropertyChanged(nameof(IsWorking));
+        OnPropertyChanged(nameof(CanImportPlaylist));
         NotifyCommands();
     }
 

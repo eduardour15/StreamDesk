@@ -139,6 +139,17 @@
                 </Grid>
                 <StackPanel x:Name="ConnectionNotices" Grid.Row="1">
                     <TextBlock Text="{Binding HttpWarning}" Visibility="{Binding HasHttpWarning, Converter={StaticResource BooleanToVisibilityConverter}}" Foreground="#FFFFCF72" FontSize="12" TextWrapping="Wrap" Margin="0,0,0,6"/>
+                    <Expander Header="📂 Importar lista M3U/M3U8" Visibility="{Binding ShowLiveCatalog, Converter={StaticResource BooleanToVisibilityConverter}}" Margin="0,0,0,6">
+                        <StackPanel Margin="8,4">
+                            <TextBlock Text="La lista solo se conserva durante esta sesión. Vuelve a importarla al reiniciar." Foreground="{StaticResource TextMutedBrush}" FontSize="12" Margin="0,0,0,6"/>
+                            <WrapPanel VerticalAlignment="Center">
+                                <ui:Button Content="📁 Abrir archivo" Click="ImportPlaylistFile_Click" IsEnabled="{Binding CanImportPlaylist}" Margin="0,0,8,6" ToolTip="Importar un archivo .m3u o .m3u8"/>
+                                <TextBox x:Name="RemotePlaylistBox" Text="{Binding RemotePlaylistUrl, UpdateSourceTrigger=PropertyChanged}" Tag="https://ejemplo.com/lista.m3u8" Width="320" MaxWidth="460" UndoLimit="0" AutomationProperties.Name="Dirección de la lista M3U" Margin="0,0,8,6"/>
+                                <ui:Button Content="🌐 Importar URL" Click="ImportPlaylistUrl_Click" IsEnabled="{Binding CanImportPlaylist}" Margin="0,0,8,6"/>
+                                <TextBlock Text="{Binding PlaylistStatus}" Visibility="{Binding HasPlaylistStatus, Converter={StaticResource BooleanToVisibilityConverter}}" Foreground="{StaticResource TextMutedBrush}" FontSize="12" VerticalAlignment="Center" TextWrapping="Wrap" Margin="0,0,0,6" AutomationProperties.LiveSetting="Polite"/>
+                            </WrapPanel>
+                        </StackPanel>
+                    </Expander>
                     <ProgressBar Height="3" IsIndeterminate="True" Visibility="{Binding IsWorking, Converter={StaticResource BooleanToVisibilityConverter}}" Margin="0,0,0,6"/>
                     <ui:Button Content="✕ Cancelar carga" Click="CancelCatalog_Click" Visibility="{Binding IsWorking, Converter={StaticResource BooleanToVisibilityConverter}}" HorizontalAlignment="Left" Margin="0,0,0,6"/>
                 </StackPanel>
