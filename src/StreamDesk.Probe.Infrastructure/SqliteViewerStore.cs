@@ -76,5 +76,39 @@ public sealed class SqliteViewerStore(string path, bool pooling = true) : IViewe
         command.Parameters.AddWithValue("$profile", profileId); command.ExecuteNonQuery();
     }, cancellationToken);
 
+    public Task<IReadOnlyList<SyncFavoriteItem>> GetFavoritesForSyncAsync(string profileId, CancellationToken cancellationToken = default) => Task.Run(() =>
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        using var connection = Open();
+        using var command = connection.CreateCommand();
+        command.Parameters.AddWithValue("$profile", profileId);
+        command.CommandText = "SELECT ContentType, ChannelId, CreatedAt FROM Favorites WHERE ProfileId=$profile;";
+        var list = new List<SyncFavoriteItem>();
+        using var reader = command.ExecuteReader();
+        while (reader.Read())
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            list.Add(new SyncFavoriteItem(reader.GetString(0), reader.GetString(1), DateTimeOffset.Parse(reader.GetString(2))));
+        }
+        return (IReadOnlyList<SyncFavoriteItem>)list;
+    }, cancellationToken);
+
+    public Task<IReadOnlyList<SyncHistoryItem>> GetHistoryForSyncAsync(string profileId, CancellationToken cancellationToken = default) => Task.Run(() =>
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        using var connection = Open();
+        using var command = connection.CreateCommand();
+        command.Parameters.AddWithValue("$profile", profileId);
+        command.CommandText = "SELECT ContentType, ChannelId, PlayedAt FROM PlaybackHistory WHERE ProfileId=$profile ORDER BY PlayedAt DESC;";
+        var list = new List<SyncHistoryItem>();
+        using var reader = command.ExecuteReader();
+        while (reader.Read())
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            list.Add(new SyncHistoryItem(reader.GetString(0), reader.GetString(1), DateTimeOffset.Parse(reader.GetString(2))));
+        }
+        return (IReadOnlyList<SyncHistoryItem>)list;
+    }, cancellationToken);
+
     private SqliteConnection Open() { var connection = new SqliteConnection(_connectionString); connection.Open(); return connection; }
 }

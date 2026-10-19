@@ -33,7 +33,22 @@ public partial class MainWindow : FluentWindow
     public ChannelLogoLoader LogoLoader { get; }
 
     public MainWindow(AppServices services) : this(
-        new MainViewModel(services.ProviderFactory, services.Playback, services.Profiles, services.Logger, services.Catalogs, services.Credentials, services.Viewer, services.Content, new StreamDesk.Probe.Infrastructure.XmlTvReader(), services.Recovery, services.Playlists), services.Logos)
+        new MainViewModel(
+            services.ProviderFactory,
+            services.Playback,
+            services.Profiles,
+            services.Logger,
+            services.Catalogs,
+            services.Credentials,
+            services.Viewer,
+            services.Content,
+            new StreamDesk.Probe.Infrastructure.XmlTvReader(),
+            services.Recovery,
+            services.Playlists,
+            services.Settings,
+            services.Sync,
+            services.ParentalControl),
+        services.Logos)
     { }
 
     public MainWindow(MainViewModel viewModel, ChannelLogoLoader logoLoader)
@@ -44,7 +59,14 @@ public partial class MainWindow : FluentWindow
         InitializeComponent();
         DataContext = _viewModel;
         SourceInitialized += (_, _) => EnsureNativeCaptionButtons();
-        Loaded += async (_, _) => { await _viewModel.InitializePlaybackAsync(); if (!_closing) await _viewModel.LoadProfilesAsync(); };
+        Loaded += async (_, _) =>
+        {
+            await _viewModel.InitializePlaybackAsync();
+            await _viewModel.InitializeSettingsAsync();
+            if (!_closing) await _viewModel.LoadProfilesAsync();
+        };
+        _viewModel.ThemeChanged += ApplyTheme;
+        _viewModel.UiScaleChanged += ApplyUiScale;
         _viewModel.PropertyChanged += ViewModelChanged;
         SystemEvents.PowerModeChanged += PowerModeChanged;
         Closing += WindowClosing;
@@ -138,6 +160,69 @@ public partial class MainWindow : FluentWindow
             if (choice != System.Windows.MessageBoxResult.Yes) return;
         }
         await _viewModel.ImportRemotePlaylistAsync(source);
+    }
+    private async void CreateM3uProfile_Click(object sender, RoutedEventArgs e) => await _viewModel.CreateM3uProfileAsync();
+    private async void ExportSync_Click(object sender, RoutedEventArgs e)
+    {
+        var dialog = new SaveFileDialog
+        {
+            Filter = "Paquete de sincronización StreamDesk (*.streamdesk-sync)|*.streamdesk-sync|Todos los archivos (*.*)|*.*",
+            FileName = $"streamdesk-sync-{DateTime.Now:yyyyMMdd-HHmm}.streamdesk-sync",
+            Title = "Exportar favoritos e historial cifrados"
+        };
+        if (dialog.ShowDialog(this) == true)
+        {
+            _viewModel.SyncPassphrase = SyncPasswordBox.Password;
+            await _viewModel.ExportSyncAsync(dialog.FileName);
+            SyncPasswordBox.Clear();
+        }
+    }
+    private async void ImportSync_Click(object sender, RoutedEventArgs e)
+    {
+        var dialog = new OpenFileDialog
+        {
+            Filter = "Paquete de sincronización StreamDesk (*.streamdesk-sync)|*.streamdesk-sync|Todos los archivos (*.*)|*.*",
+            Title = "Importar favoritos e historial cifrados"
+        };
+        if (dialog.ShowDialog(this) == true)
+        {
+            _viewModel.SyncPassphrase = SyncPasswordBox.Password;
+            await _viewModel.ImportSyncAsync(dialog.FileName);
+            SyncPasswordBox.Clear();
+        }
+    }
+    private async void ConfigureParental_Click(object sender, RoutedEventArgs e)
+    {
+        var pin = ParentalPasswordBox.Password;
+        if (await _viewModel.ConfigureParentalControlAsync(pin)) ParentalPasswordBox.Clear();
+    }
+    private void UnlockParental_Click(object sender, RoutedEventArgs e)
+    {
+        var pin = ParentalPasswordBox.Password;
+        if (_viewModel.UnlockParental(pin)) ParentalPasswordBox.Clear();
+    }
+    private void LockParental_Click(object sender, RoutedEventArgs e) => _viewModel.LockParental();
+    private async void DisableParental_Click(object sender, RoutedEventArgs e)
+    {
+        var pin = ParentalPasswordBox.Password;
+        if (await _viewModel.DisableParentalControlAsync(pin)) ParentalPasswordBox.Clear();
+    }
+    private void ApplyTheme(string theme)
+    {
+        var isLight = string.Equals(theme, "Light", StringComparison.OrdinalIgnoreCase);
+        Resources["CanvasBrush"] = new SolidColorBrush(isLight ? Color.FromRgb(243, 243, 243) : Color.FromRgb(15, 17, 21));
+        Resources["BackgroundBrush"] = new SolidColorBrush(isLight ? Color.FromRgb(243, 243, 243) : Color.FromRgb(18, 18, 18));
+        Resources["SurfaceBrush"] = new SolidColorBrush(isLight ? Color.FromRgb(255, 255, 255) : Color.FromRgb(30, 30, 30));
+        Resources["SurfaceRaisedBrush"] = new SolidColorBrush(isLight ? Color.FromRgb(235, 235, 235) : Color.FromRgb(40, 40, 40));
+        Resources["TextPrimaryBrush"] = new SolidColorBrush(isLight ? Color.FromRgb(26, 26, 26) : Color.FromRgb(255, 255, 255));
+        Resources["TextSecondaryBrush"] = new SolidColorBrush(isLight ? Color.FromRgb(102, 102, 102) : Color.FromRgb(160, 160, 160));
+        Resources["BorderBrush"] = new SolidColorBrush(isLight ? Color.FromRgb(220, 220, 220) : Color.FromRgb(46, 46, 46));
+        Resources["AccentBrush"] = new SolidColorBrush(isLight ? Color.FromRgb(0, 120, 212) : Color.FromRgb(96, 205, 255));
+    }
+    private void ApplyUiScale(string scale)
+    {
+        var factor = scale switch { "115%" => 1.15, "130%" => 1.30, _ => 1.0 };
+        if (Shell is not null) Shell.LayoutTransform = factor == 1.0 ? Transform.Identity : new ScaleTransform(factor, factor);
     }
     private void Navigate_Click(object sender, RoutedEventArgs e) => _viewModel.CurrentTabIndex = int.Parse((string)((FrameworkElement)sender).Tag);
     private void ClearFilters_Click(object sender, RoutedEventArgs e) => _viewModel.ClearFilters();

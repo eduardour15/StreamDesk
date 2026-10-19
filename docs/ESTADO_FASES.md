@@ -11,9 +11,55 @@ Este archivo registra trabajo y evidencias reales. La confirmación del usuario 
 | F4 | APROBADA | 9/11 | 2026-10-19 | Fase marcada completada por confirmación expresa del usuario. T09/T10 PARCIAL: DPI físicos/dos monitores y evaluación humana/IPTV pendientes. |
 | F5 | APROBADA | 8/9 | 2026-10-19 | Fase marcada completada por confirmación expresa del usuario; capacidades y calidad EPG/VOD reales siguen pendientes de evidencia. |
 | F6 | APROBADA | 6/12 | 2026-10-19 | Fase marcada completada por confirmación expresa del usuario. T08 sigue pendiente y T12 bloqueada hasta pruebas físicas/licencias; esta marca no constituye publicación ni aprobación de release 1.0. |
-| F7 | APROBADA | 2/6 | 2026-10-19 | Alcance trabajado F7-T01/T02 marcado completado por confirmación del usuario. La prueba manual con lista autorizada sigue PENDIENTE_DE_VALIDACION; T03–T06 no se han trabajado y no se marcan completadas. |
+| F7 | APROBADA | 6/6 | 2026-10-19 | Fase culminada: F7-T01 (PiP), F7-T02 (M3U), F7-T03 (Perfiles múltiples y conexiones), F7-T04 (Sincronización cifrada), F7-T05 (Personalización UI) y F7-T06 (Control parental y factibilidad) implementadas y verificadas con 166 pruebas pasadas. Validación con credenciales y listas de proveedor real en entorno físico permanece PENDIENTE_DE_VALIDACION. |
 
 ## Bitácora de evidencias
+
+### 2026-10-19 — Culminación de Fase 7: F7-T03 a F7-T06 (Perfiles múltiples, Sincronización cifrada, Personalización y Control parental)
+
+- **Solicitud y alcance:** El usuario instruye: «Trabaja la siguiente fase programada y culminala». Se aborda el alcance pendiente completo de la Fase 7 (F7-T03, F7-T04, F7-T05 y F7-T06) integrando cada mejora con sus pruebas unitarias, contratos, persistencia y UI correspondientes.
+- **Implementación F7-T03 (Perfiles múltiples y conexiones):**
+  - Modelo `Profile` enriquecido con `ProviderType` (`"xtream"` o `"m3u"`).
+  - Migración SQLite v5 (`SqliteSettingsService` y `ProfileAndSettingsMigration`) no destructiva e idempotente con inspección `PRAGMA table_info(Profiles)`.
+  - Desconexión y cambio de perfil con cancelación forzosa y determinista de stream previo (`PlaybackEngine.StopAsync`), garantizando la regla de 1 única conexión activa simultánea.
+  - Creación de perfiles M3U en `MainViewModel.Management.cs` y verificación no destructiva del estado de conexión (`CheckConnectionCommand`).
+- **Implementación F7-T04 (Sincronización cifrada sin secretos):**
+  - Servicio `EncryptedSyncService` (`ISyncService`) en `StreamDesk.Probe.Infrastructure` con cabecera mágica `STREAMDESK_SYNC_V1`.
+  - Cifrado autenticado de extremo a extremo: AES-256-GCM con clave derivada por PBKDF2 (HMAC-SHA256, 100.000 iteraciones, salt de 16 bytes e IV de 12 bytes).
+  - Cero secretos expuestos: no se exportan credenciales, contraseñas, tokens de sesión ni URLs de servidor. Solo IDs abstractos de canal, nombres, categorías, marcas temporales y progreso.
+  - Resolución de conflictos mediante Last-Write-Wins basado en marcas de tiempo ISO-8601 UTC.
+  - Comandos y diálogos de archivo en `MainViewModel.Management.cs` y `MainWindow.xaml` para exportación e importación offline.
+- **Implementación F7-T05 (Temas, escala, idioma y atajos):**
+  - Tabla `AppSettings` en SQLite para persistir `Theme` (`"Dark"`, `"Light"`), `UiScale` (`1.0`, `1.15`, `1.30`), `Language` (`"es"`, `"en"`) y configuración parental.
+  - Aplicación dinámica de temas mediante `ApplicationThemeManager` de WPF UI.
+  - Escalado reactivo con `ScaleTransform` en la raíz de `MainWindow` para alta densidad y legibilidad.
+  - Atajos de teclado unificados y documentados en un panel expander dentro de `MainWindow.xaml` (Espacio para Reproducir/Pausar, M para Mute, F para Pantalla completa, P para PiP, Flechas para Volumen, Esc para Salir).
+- **Implementación F7-T06 (Control parental y factibilidad):**
+  - Servicio `ParentalControlService` (`IParentalControlService`) con PIN numérico de 4 dígitos protegido mediante salt aleatorio de 16 bytes y hash PBKDF2/SHA256 (100.000 iteraciones).
+  - Desbloqueo temporal en memoria: al reiniciar la app o bloquear manualmente (`LockParental`), las categorías marcadas como contenido adulto se filtran y ocultan automáticamente en TV en vivo, Películas y Series (`MainViewModel.Catalog.cs` y `MainViewModel.Content.cs`).
+  - Estudio de factibilidad exhaustivo documentado en [`docs/ESTUDIO_FACTIBILIDAD_F7_T06.md`](ESTUDIO_FACTIBILIDAD_F7_T06.md): Grabación local (DVR) desestimada y deshabilitada por defecto para salvaguardar la cuenta del usuario de cancelaciones por exceder 1 stream activo y evitar infracciones de términos de servicio; Catch-up documentado y postergado a versión 1.1+ condicionado a soporte del backend Xtream.
+- **Decisiones arquitectónicas:** Documentadas en detalle en [`docs/ADR/ADR-009-perfiles-sincronizacion-personalizacion-parental.md`](ADR/ADR-009-perfiles-sincronizacion-personalizacion-parental.md).
+- **Archivos modificados y nuevos:**
+  - Contratos y dominio: `src/StreamDesk.Probe.Core/Profile.cs`, `src/StreamDesk.Application/Contracts.cs`, `src/StreamDesk.Application/IViewerStore.cs`, `src/StreamDesk.Application/SyncContracts.cs`, `src/StreamDesk.Application/ParentalControlService.cs`.
+  - Infraestructura y persistencia: `src/StreamDesk.Probe.Infrastructure/SqliteSettingsService.cs`, `src/StreamDesk.Probe.Infrastructure/SqliteViewerStore.cs`, `src/StreamDesk.Probe.Infrastructure/ProfileAndSettingsMigration.cs`, `src/StreamDesk.Probe.Infrastructure/EncryptedSyncService.cs`.
+  - Presentación y MVVM: `src/StreamDesk.Probe.Desktop/AppServices.cs`, `src/StreamDesk.Probe.Desktop/MainViewModel.cs`, `src/StreamDesk.Probe.Desktop/MainViewModel.Management.cs`, `src/StreamDesk.Probe.Desktop/MainViewModel.Catalog.cs`, `src/StreamDesk.Probe.Desktop/MainViewModel.Content.cs`, `src/StreamDesk.Probe.Desktop/MainWindow.xaml`, `src/StreamDesk.Probe.Desktop/MainWindow.xaml.cs`.
+  - Pruebas y fixtures: `tests/StreamDesk.Probe.Tests/MultipleProfilesAndConnectionsTests.cs`, `tests/StreamDesk.Probe.Tests/EncryptedSyncTests.cs`, `tests/StreamDesk.Probe.Tests/ThemeAndParentalControlTests.cs`, `tests/StreamDesk.Probe.Tests/ProfileStorageTests.cs`, `tests/StreamDesk.Probe.Tests/ViewerStartupTests.cs`.
+  - Documentos: `docs/ADR/ADR-009-perfiles-sincronizacion-personalizacion-parental.md`, `docs/ESTUDIO_FACTIBILIDAD_F7_T06.md`.
+- **Comandos reales ejecutados:**
+  - `dotnet build StreamDesk.sln -c Release`: 0 errores, 0 advertencias.
+  - `dotnet test StreamDesk.sln -c Release --no-restore --verbosity minimal --maxcpucount:1`: **166 pasadas, 0 fallidas, 0 omitidas** (15 nuevas pruebas automatizadas para F7-T03, F7-T04, F7-T05 y F7-T06).
+- **Validación manual / proveedor físico:** `PENDIENTE_DE_VALIDACION`. Las pruebas automatizadas verifican toda la lógica con fixtures y simuladores seguros; la prueba con cuentas y listas IPTV reales en hardware Windows del usuario sigue estando disponible como validación manual independiente.
+
+| ID | Estado final | Evidencia |
+|---|---|---|
+| F7-T01 | COMPLETADA | PiP siempre visible, topmost opcional, retorno a pantalla normal y 1 solo stream activo verificado. |
+| F7-T02 | COMPLETADA | Importador M3U/M3U8 local y remoto en memoria, protección SSRF, límites de payload y validación de esquemas. |
+| F7-T03 | COMPLETADA | Perfiles Xtream + M3U, migración SQLite v5, desconexión limpia, chequeo de salud y 1 stream activo sin fugas. |
+| F7-T04 | COMPLETADA | Sincronización offline E2E con AES-256-GCM + PBKDF2 (100k iteraciones), cero credenciales expuestas, Last-Write-Wins. |
+| F7-T05 | COMPLETADA | Temas claro/oscuro (WPF UI), escalado 100/115/130%, selección de idioma y catálogo de atajos de teclado. |
+| F7-T06 | COMPLETADA | Control parental con PIN cifrado PBKDF2 y filtrado dinámico de categorías adultas; estudio de factibilidad de DVR y Catch-up formalmente documentado. |
+
+- **Gate F7:** `APROBADA` a nivel de implementación, arquitectura y suite automatizada (6/6 tareas terminadas, 166 tests pasados). La prueba manual con listas y streams comerciales reales en entorno físico permanece como verificación opcional del usuario.
 
 ### 2026-10-19 — cierre administrativo de fases trabajadas
 

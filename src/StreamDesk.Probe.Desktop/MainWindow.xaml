@@ -423,12 +423,93 @@
                     </Border>
                     <Border Background="{StaticResource SurfaceBrush}" Padding="18" CornerRadius="10" Margin="0,0,0,14">
                         <StackPanel>
-                            <TextBlock Text="📂 Mis cuentas guardadas" FontSize="18" FontWeight="SemiBold" Margin="0,0,0,10"/>
+                            <TextBlock Text="📂 Mis cuentas guardadas y conexiones" FontSize="18" FontWeight="SemiBold" Margin="0,0,0,10"/>
                             <ListBox ItemsSource="{Binding Profiles}" SelectedItem="{Binding SelectedProfile, Mode=TwoWay}" MinHeight="56" MaxHeight="140" DisplayMemberPath="Name" AutomationProperties.Name="Cuentas guardadas"/>
                             <WrapPanel Margin="0,10,0,0">
                                 <ui:Button Content="📺 Usar esta cuenta" Click="UseSelectedProfile_Click" Margin="0,0,8,0"/>
+                                <ui:Button Content="🔄 Comprobar conexión" Command="{Binding CheckConnectionCommand}" Margin="0,0,8,0"/>
+                                <ui:Button Content="🔌 Desconectar" Command="{Binding DisconnectProfileCommand}" Margin="0,0,8,0"/>
                                 <ui:Button Content="🗑 Eliminar cuenta" Command="{Binding DeleteProfileCommand}"/>
                             </WrapPanel>
+                            <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
+                                <TextBlock Text="Pantallas:" Foreground="{StaticResource TextMutedBrush}" FontSize="12" Margin="0,0,6,0"/>
+                                <TextBlock Text="{Binding ActiveConnectionsInfo}" Foreground="{StaticResource AccentBrush}" FontSize="12" Margin="0,0,16,0"/>
+                                <TextBlock Text="Vencimiento:" Foreground="{StaticResource TextMutedBrush}" FontSize="12" Margin="0,0,6,0"/>
+                                <TextBlock Text="{Binding AccountExpirationInfo}" Foreground="{StaticResource TextPrimaryBrush}" FontSize="12"/>
+                            </StackPanel>
+                        </StackPanel>
+                    </Border>
+                    <Border Background="{StaticResource SurfaceBrush}" Padding="18" CornerRadius="10" Margin="0,0,0,14">
+                        <StackPanel>
+                            <TextBlock Text="📋 Guardar lista M3U/M3U8 como perfil" FontSize="18" FontWeight="SemiBold" Margin="0,0,0,10"/>
+                            <Grid>
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="2*"/></Grid.ColumnDefinitions>
+                                <StackPanel Margin="0,0,8,12">
+                                    <TextBlock Text="Nombre del perfil" FontSize="12" Margin="0,0,0,4"/>
+                                    <TextBox Text="{Binding M3uProfileName, UpdateSourceTrigger=PropertyChanged}" Tag="Ej: Lista IPTV Personal" AutomationProperties.Name="Nombre perfil M3U"/>
+                                </StackPanel>
+                                <StackPanel Grid.Column="1" Margin="8,0,0,12">
+                                    <TextBlock Text="Archivo local (.m3u/.m3u8) o URL web (HTTP/HTTPS)" FontSize="12" Margin="0,0,0,4"/>
+                                    <TextBox Text="{Binding M3uProfilePathOrUrl, UpdateSourceTrigger=PropertyChanged}" Tag="Ej: C:\listas\tv.m3u o https://servidor.com/lista.m3u" AutomationProperties.Name="Ruta o URL M3U"/>
+                                </StackPanel>
+                            </Grid>
+                            <ui:Button Content="💾 Guardar lista como perfil" Click="CreateM3uProfile_Click" IsEnabled="{Binding CanConnect}"/>
+                        </StackPanel>
+                    </Border>
+                    <Border Background="{StaticResource SurfaceBrush}" Padding="18" CornerRadius="10" Margin="0,0,0,14">
+                        <StackPanel>
+                            <TextBlock Text="🔄 Sincronización cifrada (casa y trabajo)" FontSize="18" FontWeight="SemiBold" Margin="0,0,0,6"/>
+                            <TextBlock Text="Transfiere tus favoritos e historial entre tus computadoras de forma segura. Se genera un paquete cifrado con tu clave, sin incluir contraseñas ni URLs de cuentas." TextWrapping="Wrap" FontSize="12" Foreground="{StaticResource TextMutedBrush}" Margin="0,0,0,12"/>
+                            <StackPanel Margin="0,0,0,12">
+                                <TextBlock Text="🔑 Contraseña de cifrado (mínimo 4 caracteres)" FontSize="12" Margin="0,0,0,4"/>
+                                <PasswordBox x:Name="SyncPasswordBox" MaxWidth="320" HorizontalAlignment="Left" MinHeight="36" AutomationProperties.Name="Contraseña de sincronización"/>
+                            </StackPanel>
+                            <WrapPanel>
+                                <ui:Button Content="📤 Exportar sincronización" Click="ExportSync_Click" Margin="0,0,10,0"/>
+                                <ui:Button Content="📥 Importar sincronización" Click="ImportSync_Click"/>
+                            </WrapPanel>
+                            <TextBlock Text="{Binding SyncStatus}" TextWrapping="Wrap" Foreground="{StaticResource AccentBrush}" FontSize="12" Margin="0,10,0,0" Visibility="{Binding HasSyncStatus, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+                        </StackPanel>
+                    </Border>
+                    <Border Background="{StaticResource SurfaceBrush}" Padding="18" CornerRadius="10" Margin="0,0,0,14">
+                        <StackPanel>
+                            <TextBlock Text="🎨 Personalización y atajos de teclado" FontSize="18" FontWeight="SemiBold" Margin="0,0,0,10"/>
+                            <WrapPanel VerticalAlignment="Center" Margin="0,0,0,12">
+                                <TextBlock Text="Tema:" VerticalAlignment="Center" Margin="0,0,6,6"/>
+                                <ComboBox Width="110" ItemsSource="{Binding AvailableThemes}" SelectedItem="{Binding SelectedTheme, Mode=TwoWay}" Margin="0,0,16,6"/>
+                                <TextBlock Text="Tamaño interfaz:" VerticalAlignment="Center" Margin="0,0,6,6"/>
+                                <ComboBox Width="110" ItemsSource="{Binding AvailableUiScales}" SelectedItem="{Binding SelectedUiScale, Mode=TwoWay}" Margin="0,0,16,6"/>
+                                <TextBlock Text="Idioma:" VerticalAlignment="Center" Margin="0,0,6,6"/>
+                                <ComboBox Width="120" ItemsSource="{Binding AvailableLanguages}" SelectedItem="{Binding SelectedLanguage, Mode=TwoWay}" Margin="0,0,0,6"/>
+                            </WrapPanel>
+                            <Expander Header="⌨️ Atajos de teclado útiles">
+                                <StackPanel Margin="10,8">
+                                    <TextBlock Text="• Espacio o K : Reproducir / Pausar" Margin="0,2"/>
+                                    <TextBlock Text="• F : Pantalla completa" Margin="0,2"/>
+                                    <TextBlock Text="• P : Ventana flotante (PiP)" Margin="0,2"/>
+                                    <TextBlock Text="• M : Silenciar / Activar sonido (Mute)" Margin="0,2"/>
+                                    <TextBlock Text="• Flechas Arriba / Abajo : Subir / Bajar volumen" Margin="0,2"/>
+                                    <TextBlock Text="• Flechas Izquierda / Derecha : Canal anterior / siguiente" Margin="0,2"/>
+                                    <TextBlock Text="• Esc : Salir de pantalla completa o ventana flotante" Margin="0,2"/>
+                                </StackPanel>
+                            </Expander>
+                        </StackPanel>
+                    </Border>
+                    <Border Background="{StaticResource SurfaceBrush}" Padding="18" CornerRadius="10" Margin="0,0,0,14">
+                        <StackPanel>
+                            <TextBlock Text="🔒 Control parental (protección con PIN)" FontSize="18" FontWeight="SemiBold" Margin="0,0,0,6"/>
+                            <TextBlock Text="Protege y oculta categorías para adultos (18+ / Adultos) en TV en vivo, películas y series mediante un PIN numérico seguro de 4 dígitos." TextWrapping="Wrap" FontSize="12" Foreground="{StaticResource TextMutedBrush}" Margin="0,0,0,12"/>
+                            <StackPanel Margin="0,0,0,12">
+                                <TextBlock Text="🔢 PIN de 4 a 8 dígitos" FontSize="12" Margin="0,0,0,4"/>
+                                <PasswordBox x:Name="ParentalPasswordBox" MaxWidth="220" HorizontalAlignment="Left" MinHeight="36" AutomationProperties.Name="PIN parental"/>
+                            </StackPanel>
+                            <WrapPanel>
+                                <ui:Button Content="🔐 Configurar PIN" Click="ConfigureParental_Click" Margin="0,0,10,0"/>
+                                <ui:Button Content="🔓 Desbloquear con PIN" Click="UnlockParental_Click" Margin="0,0,10,0"/>
+                                <ui:Button Content="🔒 Bloquear ahora" Click="LockParental_Click" Margin="0,0,10,0"/>
+                                <ui:Button Content="Desactivar control" Click="DisableParental_Click"/>
+                            </WrapPanel>
+                            <TextBlock Text="{Binding ParentalStatus}" TextWrapping="Wrap" Foreground="{StaticResource AccentBrush}" FontSize="12" Margin="0,10,0,0" Visibility="{Binding HasParentalStatus, Converter={StaticResource BooleanToVisibilityConverter}}"/>
                         </StackPanel>
                     </Border>
                     <Border Background="{StaticResource SurfaceBrush}" Padding="18" CornerRadius="10" Margin="0,0,0,14">

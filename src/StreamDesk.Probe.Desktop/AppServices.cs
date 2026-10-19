@@ -27,6 +27,8 @@ public sealed class AppServices : IDisposable
         Playlists = new M3uPlaylistImporter();
         Logos = new ChannelLogoLoader(factory.CreateClient("Logos"));
         Playback = new PlaybackService(new LibVlcBackend());
+        Sync = new EncryptedSyncService(Viewer);
+        ParentalControl = new ParentalControlService(Settings);
     }
 
     public IAppLogger Logger { get; }
@@ -41,5 +43,7 @@ public sealed class AppServices : IDisposable
     public M3uPlaylistImporter Playlists { get; }
     public Func<string, string, string, IIptvProvider> ProviderFactory { get; }
     public IPlaybackService Playback { get; }
+    public ISyncService Sync { get; }
+    public ParentalControlService ParentalControl { get; }
     public void Dispose() { Logos.Dispose(); Playlists.Dispose(); Playback.Dispose(); _httpServices.Dispose(); (Logger as IDisposable)?.Dispose(); }
 }

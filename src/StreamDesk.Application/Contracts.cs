@@ -27,7 +27,10 @@ public interface ISettingsService
     Task InitializeAsync(CancellationToken cancellationToken = default);
     Task<IReadOnlyList<Profile>> GetProfilesAsync(CancellationToken cancellationToken = default);
     Task AddProfileAsync(Profile profile, CancellationToken cancellationToken = default);
+    Task UpdateProfileAsync(Profile profile, CancellationToken cancellationToken = default);
     Task DeleteProfileAsync(string profileId, CancellationToken cancellationToken = default);
+    Task<AppSettings> GetAppSettingsAsync(CancellationToken cancellationToken = default);
+    Task SaveAppSettingsAsync(AppSettings settings, CancellationToken cancellationToken = default);
 }
 
 public interface ICredentialStore
@@ -63,7 +66,7 @@ public sealed class ProfileService(ISettingsService settings, ICredentialStore c
             throw new ArgumentException("Usa una URL base HTTP o HTTPS sin credenciales ni parámetros.", nameof(baseUrl));
 
         var id = Guid.NewGuid().ToString("N");
-        var profile = new Profile(id, normalizedName, uri!.ToString().TrimEnd('/'), id, DateTimeOffset.UtcNow);
+        var profile = new Profile(id, normalizedName, uri!.ToString().TrimEnd('/'), id, DateTimeOffset.UtcNow, "xtream");
         await credentials.SaveAsync(id, new StoredCredentials(username.Trim(), password), cancellationToken);
         try
         {
@@ -74,6 +77,54 @@ public sealed class ProfileService(ISettingsService settings, ICredentialStore c
             await credentials.DeleteAsync(id, CancellationToken.None);
             throw;
         }
+    }
+
+    public async Task CreateM3uProfileAsync(
+        string name,
+        string sourcePathOrUrl,
+        CancellationToken cancellationToken = default)
+    {
+        var normalizedName = name.Trim();
+        if (normalizedName.Length is < 1 or > 80)
+            throw new ArgumentException("El nombre debe tener entre 1 y 80 caracteres.", nameof(name));
+        var trimmedSource = sourcePathOrUrl?.Trim() ?? string.Empty;
+        if (string.IsNullOrWhiteSpace(trimmedSource))
+            throw new ArgumentException("Ingresa un archivo o dirección M3U válida.", nameof(sourcePathOrUrl));
+
+        var isHttp = trimmedSource.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ||
+                     trimmedSource.StartsWith("https://", StringComparison.OrdinalIgnoreCase);
+        if (isHttp)
+        {
+            if (!Uri.TryCreate(trimmedSource, UriKind.Absolute, out _))
+                throw new ArgumentException("La dirección URL de la lista no es válida.", nameof(sourcePathOrUrl));
+        }
+        else
+        {
+            if (!File.Exists(trimmedSource))
+                throw new ArgumentException("El archivo de lista M3U no existe en este equipo.", nameof(sourcePathOrUrl));
+        }
+
+        var id = Guid.NewGuid().ToString("N");
+        var profile = new Profile(id, normalizedName, trimmedSource, id, DateTimeOffset.UtcNow, "m3u");
+        await credentials.SaveAsync(id, new StoredCredentials("m3u", "m3u"), cancellationToken);
+        try
+        {
+            await settings.AddProfileAsync(profile, cancellationToken);
+        }
+        catch
+        {
+            await credentials.DeleteAsync(id, CancellationToken.None);
+            throw;
+        }
+    }
+
+    public async Task UpdateAsync(Profile profile, CancellationToken cancellationToken = default)
+    {
+        if (profile is null) throw new ArgumentNullException(nameof(profile));
+        var normalizedName = profile.Name.Trim();
+        if (normalizedName.Length is < 1 or > 80)
+            throw new ArgumentException("El nombre debe tener entre 1 y 80 caracteres.", nameof(profile));
+        await settings.UpdateProfileAsync(profile with { Name = normalizedName }, cancellationToken);
     }
 
     public async Task DeleteAsync(string id, CancellationToken cancellationToken = default)

@@ -45,7 +45,17 @@ public sealed partial class MainViewModel
     public string MediaPosterUrl => (_selectedDetails ?? SelectedMedia)?.PosterUrl ?? "";
     public string MediaCategoryLabel => SelectedMedia is null ? "" : MediaCategories.FirstOrDefault(category => category.Id == SelectedMedia.CategoryId)?.Name ?? "";
     public string SeriesSummary => $"{Seasons.Count} temporadas · {_episodes?.Items.Count ?? 0} episodios";
-    public IReadOnlyList<XtreamCategory> MediaCategories => new[] { new XtreamCategory("", "Todas las categorías") }.Concat((CurrentTabIndex == 6 ? _series : _movies)?.Categories ?? []).ToArray();
+    public IReadOnlyList<XtreamCategory> MediaCategories
+    {
+        get
+        {
+            var rawCategories = (CurrentTabIndex == 6 ? _series : _movies)?.Categories ?? [];
+            var allowed = _parentalControl?.IsLocked == true
+                ? rawCategories.Where(c => !_parentalControl.IsRestrictedCategory(c.Name))
+                : rawCategories;
+            return new[] { new XtreamCategory("", "Todas las categorías") }.Concat(allowed).ToArray();
+        }
+    }
     public IReadOnlyList<XtreamCategory> VisibleMediaCategories
     {
         get
@@ -177,12 +187,16 @@ public sealed partial class MainViewModel
         if (_disposed) return;
         _mediaFilter?.Cancel(); using var request = CancellationTokenSource.CreateLinkedTokenSource(_shutdown.Token, _session.Token); _mediaFilter = request;
         var catalog = CurrentTabIndex == 6 ? _series : _movies; var query = CatalogSearch.Normalize(MediaSearch); var category = MediaCategory?.Id;
+        var restrictedCatIds = _parentalControl?.IsLocked == true
+            ? (catalog?.Categories ?? []).Where(c => _parentalControl.IsRestrictedCategory(c.Name)).Select(c => c.Id).ToHashSet(StringComparer.OrdinalIgnoreCase)
+            : null;
         try
         {
             if (debounce) await Task.Delay(180, request.Token);
             var matches = await Task.Run(() => (catalog?.Items ?? []).Where(item =>
             {
                 request.Token.ThrowIfCancellationRequested();
+                if (restrictedCatIds is not null && restrictedCatIds.Contains(item.CategoryId ?? "")) return false;
                 return (string.IsNullOrEmpty(category) || item.CategoryId == category) && CatalogSearch.Normalize(item.Name).Contains(query, StringComparison.Ordinal);
             }).ToArray(), request.Token);
             if (!ReferenceEquals(_mediaFilter, request) || _disposed) return;

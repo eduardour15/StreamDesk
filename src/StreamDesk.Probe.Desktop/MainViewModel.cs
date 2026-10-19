@@ -34,6 +34,9 @@ public sealed partial class MainViewModel : INotifyPropertyChanged, IDisposable,
     private bool _isProfileBusy;
     private bool _isPlaybackReady;
     private bool _disposed;
+    private readonly ISettingsService? _settingsService;
+    private readonly ISyncService? _syncService;
+    private readonly ParentalControlService? _parentalControl;
 
     public MainViewModel(
         Func<string, string, string, IIptvProvider> providerFactory,
@@ -46,7 +49,10 @@ public sealed partial class MainViewModel : INotifyPropertyChanged, IDisposable,
         IContentStore? content = null,
         IEpgImporter? epgImporter = null,
         IRecoveryService? recovery = null,
-        IPlaylistImporter? playlistImporter = null)
+        IPlaylistImporter? playlistImporter = null,
+        ISettingsService? settings = null,
+        ISyncService? syncService = null,
+        ParentalControlService? parentalControl = null)
     {
         _providerFactory = providerFactory;
         _playbackService = playbackService;
@@ -59,10 +65,15 @@ public sealed partial class MainViewModel : INotifyPropertyChanged, IDisposable,
         _epgImporter = epgImporter;
         _recovery = recovery;
         _playlistImporter = playlistImporter;
+        _settingsService = settings;
+        _syncService = syncService;
+        _parentalControl = parentalControl;
         LoadCatalogCommand = new AsyncRelayCommand(LoadCatalogAsync, () => CanConnect);
         ReloadProfilesCommand = new AsyncRelayCommand(LoadProfilesAsync, () => !IsBusy);
         DeleteProfileCommand = new AsyncRelayCommand(DeleteSelectedProfileAsync, () => !IsBusy && SelectedProfile is not null);
         ConnectProfileCommand = new AsyncRelayCommand(ConnectProfileAsync, () => CanConnect && ActiveProfile is not null);
+        DisconnectProfileCommand = new AsyncRelayCommand(DisconnectProfileAsync, () => !IsBusy && _client is not null);
+        CheckConnectionCommand = new AsyncRelayCommand(CheckConnectionAsync, () => !IsBusy && ActiveProfile is not null);
         _playbackService.StateChanged += PlaybackStateChanged;
     }
 
@@ -74,6 +85,8 @@ public sealed partial class MainViewModel : INotifyPropertyChanged, IDisposable,
     public ICommand LoadCatalogCommand { get; }
     public ICommand ReloadProfilesCommand { get; }
     public ICommand DeleteProfileCommand { get; }
+    public ICommand DisconnectProfileCommand { get; }
+    public ICommand CheckConnectionCommand { get; }
 
     public string BaseUrl { get => _baseUrl; set => SetProperty(ref _baseUrl, value); }
     public string Username { get => _username; set => SetProperty(ref _username, value); }
@@ -319,6 +332,8 @@ public sealed partial class MainViewModel : INotifyPropertyChanged, IDisposable,
         ((AsyncRelayCommand)ReloadProfilesCommand).NotifyCanExecuteChanged();
         ((AsyncRelayCommand)DeleteProfileCommand).NotifyCanExecuteChanged();
         ((AsyncRelayCommand)ConnectProfileCommand).NotifyCanExecuteChanged();
+        ((AsyncRelayCommand)DisconnectProfileCommand).NotifyCanExecuteChanged();
+        ((AsyncRelayCommand)CheckConnectionCommand).NotifyCanExecuteChanged();
     }
 
     private void SetProfileBusy(bool value) { _isProfileBusy = value; NotifyBusyChanged(); }

@@ -47,5 +47,7 @@ public sealed class ViewerStartupTests
         public Task SetAutoPlayAsync(string p, bool e, CancellationToken token = default) => inner.SetAutoPlayAsync(p, e, token);
         public Task<string?> GetLastProfileAsync(CancellationToken token = default) => inner.GetLastProfileAsync(token);
         public Task SetLastProfileAsync(string p, CancellationToken token = default) => inner.SetLastProfileAsync(p, token);
+        public Task<IReadOnlyList<SyncFavoriteItem>> GetFavoritesForSyncAsync(string p, CancellationToken token = default) => inner.GetFavoritesForSyncAsync(p, token);
+        public Task<IReadOnlyList<SyncHistoryItem>> GetHistoryForSyncAsync(string p, CancellationToken token = default) => inner.GetHistoryForSyncAsync(p, token);
     }
 }

@@ -57,10 +57,13 @@ public sealed partial class MainViewModel
     {
         get
         {
+            var allowedCategories = _parentalControl?.IsLocked == true
+                ? Categories.Where(c => string.IsNullOrEmpty(c.Id) || !_parentalControl.IsRestrictedCategory(c.Name)).ToArray()
+                : Categories;
             var query = CatalogSearch.Normalize(CategorySearch);
-            if (query.Length == 0 || Categories.Count == 0) return Categories;
-            var all = Categories[0];
-            return new[] { all }.Concat(Categories.Skip(1).Where(category =>
+            if (query.Length == 0 || allowedCategories.Count == 0) return allowedCategories;
+            var all = allowedCategories[0];
+            return new[] { all }.Concat(allowedCategories.Skip(1).Where(category =>
                 category.Id == SelectedCategory?.Id || CatalogSearch.Normalize(category.Name).Contains(query, StringComparison.Ordinal))).ToArray();
         }
     }
@@ -95,17 +98,34 @@ public sealed partial class MainViewModel
         {
             await StopPlaybackAsync();
             token.ThrowIfCancellationRequested();
-            var cached = profile is null ? null : await _catalogService.LoadAsync(profile.Id, token);
-            if (version != _sessionVersion || _disposed) return;
-            if (cached is not null)
+            if (profile?.ProviderType == "m3u" && _playlistImporter is not null)
             {
-                await ApplySnapshotAsync(cached, version, token);
-                CatalogSummary = $"{cached.Channels.Count} canales · {cached.SyncedAt.LocalDateTime:g}";
-                StatusMessage = "Catálogo listo. Elige un canal para verlo.";
+                var isHttp = profile.BaseUrl.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ||
+                             profile.BaseUrl.StartsWith("https://", StringComparison.OrdinalIgnoreCase);
+                var imported = isHttp && Uri.TryCreate(profile.BaseUrl, UriKind.Absolute, out var uri)
+                    ? await _playlistImporter.ImportRemoteAsync(uri, token)
+                    : await _playlistImporter.ImportLocalAsync(profile.BaseUrl, token);
+                if (version != _sessionVersion || _disposed) return;
+                _playlistStreams = imported.StreamUris.ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal);
+                _hasImportedPlaylist = true;
+                await ApplySnapshotAsync(imported.Catalog, version, token);
+                CatalogSummary = $"{imported.Catalog.Channels.Count} canales (M3U) · guardado";
+                StatusMessage = "Lista M3U cargada.";
             }
-            else CatalogSummary = "Sin canales guardados. Pulsa Actualizar canales.";
-            await LoadLibraryAsync(profile?.Id, version, token);
-            await LoadContentCacheAsync(profile?.Id, version, token);
+            else
+            {
+                var cached = profile is null ? null : await _catalogService.LoadAsync(profile.Id, token);
+                if (version != _sessionVersion || _disposed) return;
+                if (cached is not null)
+                {
+                    await ApplySnapshotAsync(cached, version, token);
+                    CatalogSummary = $"{cached.Channels.Count} canales · {cached.SyncedAt.LocalDateTime:g}";
+                    StatusMessage = "Catálogo listo. Elige un canal para verlo.";
+                }
+                else CatalogSummary = "Sin canales guardados. Pulsa Actualizar canales.";
+                await LoadLibraryAsync(profile?.Id, version, token);
+                await LoadContentCacheAsync(profile?.Id, version, token);
+            }
             if (profile is not null && _viewer is not null && version == _sessionVersion)
                 await _viewer.SetLastProfileAsync(profile.Id, token);
         }
@@ -246,6 +266,15 @@ public sealed partial class MainViewModel
             var result = await Task.Run(() =>
             {
                 var matches = index.Filter(query, category, favoritesOnly, snapshot?.FavoriteChannelIds, filter.Token);
+                if (_parentalControl?.IsLocked == true)
+                {
+                    var restrictedIds = Categories
+                        .Where(c => !string.IsNullOrEmpty(c.Id) && _parentalControl.IsRestrictedCategory(c.Name))
+                        .Select(c => c.Id)
+                        .ToHashSet(StringComparer.OrdinalIgnoreCase);
+                    if (restrictedIds.Count > 0)
+                        matches = matches.Where(item => item.CategoryId is null || !restrictedIds.Contains(item.CategoryId)).ToArray();
+                }
                 return recentsOnly ? matches.Where(item => recentOrder.ContainsKey(item.Id)).OrderBy(item => recentOrder[item.Id]).ToArray() : matches;
             }, filter.Token);
             if (version != _sessionVersion || _disposed || !ReferenceEquals(_filter, filter)) return;

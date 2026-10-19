@@ -10,4 +10,6 @@ public interface IViewerStore
     Task SetAutoPlayAsync(string profileId, bool enabled, CancellationToken cancellationToken = default);
     Task<string?> GetLastProfileAsync(CancellationToken cancellationToken = default);
     Task SetLastProfileAsync(string profileId, CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<SyncFavoriteItem>> GetFavoritesForSyncAsync(string profileId, CancellationToken cancellationToken = default);
+    Task<IReadOnlyList<SyncHistoryItem>> GetHistoryForSyncAsync(string profileId, CancellationToken cancellationToken = default);
 }
