@@ -86,6 +86,36 @@ public sealed class AuditRegressionTests
         Assert.Equal(5, uri.AbsolutePath.Split('/', StringSplitOptions.RemoveEmptyEntries).Length);
         Assert.EndsWith("/fixture-password/42.ts", uri.AbsolutePath, StringComparison.Ordinal);
     }
+
+    [Fact]
+    public async Task ProfileCreationSearchStateAndRapidSwitchDisposalAreDeterministic()
+    {
+        using var db = new TestDatabase();
+        await db.Settings.InitializeAsync();
+        var credentials = new AuditCredentials();
+        await using (var vm = new MainViewModel((_, _, _) => new FixtureProvider(CatalogFixtures.Create(5)), new FixturePlayback(),
+            new ProfileService(db.Settings, credentials), new FixtureLogger(), new CatalogService(db.Store), credentials))
+        {
+            Assert.False(vm.HasSearchText);
+            Assert.False(vm.HasMediaSearch);
+            vm.SearchText = "deportes";
+            vm.MediaSearch = "matrix";
+            Assert.True(vm.HasSearchText);
+            Assert.True(vm.HasMediaSearch);
+            vm.SearchText = "";
+            vm.MediaSearch = "";
+            Assert.False(vm.HasSearchText);
+            Assert.False(vm.HasMediaSearch);
+
+            Assert.False(await vm.CreateProfileAsync(""));
+            vm.ProfileName = "Sala";
+            vm.ProfileBaseUrl = "https://provider.invalid";
+            vm.ProfileUsername = "fixture-user";
+            Assert.True(await vm.CreateProfileAsync("fixture-password"));
+            Assert.NotNull(vm.ActiveProfile);
+            Assert.Equal(vm.ActiveProfile?.Id, vm.SelectedProfile?.Id);
+        }
+    }
 }
 
 internal sealed class AuditCredentials : ICredentialStore

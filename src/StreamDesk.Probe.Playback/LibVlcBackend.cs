@@ -8,6 +8,7 @@ namespace StreamDesk.Probe.Playback;
 
 public sealed class LibVlcBackend : IPlaybackBackend
 {
+    private static readonly object CoreSync = new();
     private LibVLC? _libVlc;
     private MediaPlayer? _player;
     private Media? _media;
@@ -27,7 +28,7 @@ public sealed class LibVlcBackend : IPlaybackBackend
         var directory = Path.Combine(AppContext.BaseDirectory, "libvlc", architecture);
         if (!File.Exists(Path.Combine(directory, "libvlc.dll")) || !File.Exists(Path.Combine(directory, "libvlccore.dll")))
             throw new PlaybackException(PlaybackFailure.Unavailable);
-        LibVLCSharp.Shared.Core.Initialize(directory);
+        lock (CoreSync) LibVLCSharp.Shared.Core.Initialize(directory);
         var lib = new LibVLC("--no-video-title-show");
         try
         {
@@ -51,6 +52,7 @@ public sealed class LibVlcBackend : IPlaybackBackend
         var media = new Media(_libVlc, source);
         media.AddOption(":network-caching=" + options.BufferMilliseconds);
         media.AddOption(":live-caching=" + options.BufferMilliseconds);
+        media.AddOption(":file-caching=" + options.BufferMilliseconds);
         media.AddOption(options.Hardware == HardwareDecoding.Software ? ":avcodec-hw=none" : ":avcodec-hw=any");
         if (options.OnDemand && options.StartPositionMilliseconds > 0)
             media.AddOption(":start-time=" + (options.StartPositionMilliseconds / 1000d).ToString(System.Globalization.CultureInfo.InvariantCulture));

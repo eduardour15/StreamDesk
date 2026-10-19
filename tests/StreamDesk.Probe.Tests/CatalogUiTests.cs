@@ -18,6 +18,7 @@ using StreamDesk.Probe.Desktop;
 
 namespace StreamDesk.Probe.Tests;
 
+[Collection("NativePlayback")]
 public sealed partial class CatalogUiTests
 {
     [Fact]

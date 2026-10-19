@@ -145,7 +145,8 @@ public sealed partial class PlaybackService : IPlaybackService
         if (hardwareFallback) session.Software = true;
         else if (retry) session.Retries++;
         Publish(PlaybackState.Failed, failure, session, willRetry: hardwareFallback || retry);
-        if (hardwareFallback || retry) _ = RecoverAsync(session, hardwareFallback ? TimeSpan.Zero : _policy.RetryDelay * session.Retries);
+        if (hardwareFallback) await OpenAsync(session).ConfigureAwait(false);
+        else if (retry) _ = RecoverAsync(session, _policy.RetryDelay * session.Retries);
     }
 
     private async Task RecoverAsync(Session session, TimeSpan delay)
@@ -173,7 +174,12 @@ public sealed partial class PlaybackService : IPlaybackService
     }
     private async Task WatchTimeoutAsync(long attempt, CancellationToken token)
     {
-        try { await Task.Delay(_policy.StartupTimeout, token).ConfigureAwait(false); await ProcessSignalAsync(new(attempt, PlaybackSignalKind.Failed, PlaybackFailure.Timeout)).ConfigureAwait(false); }
+        try
+        {
+            await Task.Delay(_policy.StartupTimeout, token).ConfigureAwait(false);
+            if (!token.IsCancellationRequested)
+                await ProcessSignalAsync(new(attempt, PlaybackSignalKind.Failed, PlaybackFailure.Timeout)).ConfigureAwait(false);
+        }
         catch (OperationCanceledException) { }
     }
 

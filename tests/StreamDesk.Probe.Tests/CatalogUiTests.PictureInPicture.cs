@@ -87,8 +87,7 @@ public sealed partial class CatalogUiTests
         Click(window, "PipButton"); await SettleAsync(window);
         AssertCompactControls(window); Assert.Equal(hwnd, player.Hwnd); Assert.Same(video, window.FindName("VideoView")); Assert.True(vm.IsPlaying);
         var path = Path.Combine(temporary, "pip-native.png");
-        Assert.True(await Task.Run(() => player.TakeSnapshot(0, path, 16, 16)));
-        await WaitAsync(() => File.Exists(path) && new FileInfo(path).Length > 0);
+        await WaitAsync(() => player.TakeSnapshot(0, path, 16, 16) && File.Exists(path) && new FileInfo(path).Length > 0);
         using (var file = File.OpenRead(path))
         {
             var image = new FormatConvertedBitmap(BitmapFrame.Create(file, BitmapCreateOptions.None, BitmapCacheOption.OnLoad), PixelFormats.Bgra32, null, 0);

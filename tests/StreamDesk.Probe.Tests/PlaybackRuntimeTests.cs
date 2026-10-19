@@ -6,6 +6,7 @@ using LibVLCSharp.Shared;
 
 namespace StreamDesk.Probe.Tests;
 
+[Collection("NativePlayback")]
 public sealed class PlaybackRuntimeTests
 {
     [Fact]

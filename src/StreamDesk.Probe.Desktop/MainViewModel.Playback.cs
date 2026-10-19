@@ -7,9 +7,9 @@ public sealed partial class MainViewModel
     private readonly SynchronizationContext? _ui = SynchronizationContext.Current;
     private PlaybackSnapshot _playback = new(0, PlaybackState.Idle);
     private string? _playingChannelId;
-    public string PlaybackStatus => _playback.Message + (_playback.UsingSoftware ? " Decodificación por software." : "") +
+    public string PlaybackStatus => _playback.Message + (_playback.UsingSoftware ? " · Modo compatible" : "") +
         (_playback.WillRetry && _playback.RetryCount is > 0 and <= 2 && _playback.Failure is PlaybackFailure.Network or PlaybackFailure.Timeout
-            ? $" Intento de recuperación {_playback.RetryCount}/2." : "");
+            ? $" · Reintento {_playback.RetryCount}/2" : "");
     public bool ShowPlaybackPlaceholder => !_playback.IsActive;
     public bool CanRetryPlayback => _playback.State == PlaybackState.Failed && !_playback.WillRetry;
     public bool IsPlaying => _playback.State == PlaybackState.Playing;
@@ -74,12 +74,12 @@ public sealed partial class MainViewModel
     public async Task SuspendPlaybackAsync()
     {
         await StopPlaybackAsync();
-        void Apply() { if (!_disposed) StatusMessage = "La reproducción se detuvo por suspensión. Vuelve a iniciarla cuando estés listo."; }
+        void Apply() { if (!_disposed) StatusMessage = "Reproducción en pausa tras suspensión del equipo."; }
         if (_ui is not null && SynchronizationContext.Current != _ui) _ui.Post(_ => Apply(), null); else Apply();
     }
 
     public void ReportWindowError(Exception exception)
-    { _logger.LogError("window_display", exception); StatusMessage = "No se pudo cambiar de pantalla. Intenta nuevamente con una pantalla disponible."; }
+    { _logger.LogError("window_display", exception); StatusMessage = "No se pudo cambiar el modo de ventana."; }
 
     private void PlaybackStateChanged(object? sender, PlaybackSnapshot snapshot)
     {

@@ -20,15 +20,27 @@ public sealed partial class MainViewModel
     private XtreamCategory? _selectedCategory;
     private bool _favoritesOnly;
     private bool _isCatalogLoading;
-    private string _catalogSummary = "Selecciona un perfil guardado o conecta una sesión temporal.";
+    private string _catalogSummary = "Elige un perfil o conecta tu lista.";
 
     public ICommand ConnectProfileCommand { get; }
     public Profile? ActiveProfile
     {
         get => _activeProfile;
-        set { if (SetProperty(ref _activeProfile, value)) _profileLoad = LoadProfileCacheAsync(value); }
+        set { if (SetProperty(ref _activeProfile, value)) _profileLoad = Task.WhenAll(_profileLoad, LoadProfileCacheAsync(value)); }
     }
-    public string SearchText { get => _searchText; set { if (SetProperty(ref _searchText, value)) _ = ApplyFilterAsync(true); } }
+    public string SearchText
+    {
+        get => _searchText;
+        set
+        {
+            if (SetProperty(ref _searchText, value))
+            {
+                OnPropertyChanged(nameof(HasSearchText));
+                _ = ApplyFilterAsync(true);
+            }
+        }
+    }
+    public bool HasSearchText => !string.IsNullOrEmpty(SearchText);
     public XtreamCategory? SelectedCategory { get => _selectedCategory; set { if (SetProperty(ref _selectedCategory, value)) _ = ApplyFilterAsync(false); } }
     public bool FavoritesOnly { get => _favoritesOnly; set { if (SetProperty(ref _favoritesOnly, value)) _ = ApplyFilterAsync(false); } }
     public string CatalogSummary { get => _catalogSummary; private set { if (SetProperty(ref _catalogSummary, value)) OnPropertyChanged(nameof(HeaderSummary)); } }
@@ -53,7 +65,7 @@ public sealed partial class MainViewModel
         _catalogOwnerId = profile?.Id;
         BaseUrl = profile?.BaseUrl ?? string.Empty; Username = string.Empty;
         HttpWarning = profile?.BaseUrl.StartsWith("http://", StringComparison.OrdinalIgnoreCase) == true
-            ? "Este servidor usa HTTP. Usuario y contraseña pueden viajar sin cifrar. Consulta si el proveedor ofrece HTTPS." : null;
+            ? "⚠️ Conexión sin cifrar (HTTP). Si tu proveedor ofrece HTTPS, es más seguro." : null;
         IsBusy = false; IsCatalogLoading = true;
         var token = _session.Token;
         try
@@ -65,10 +77,10 @@ public sealed partial class MainViewModel
             if (cached is not null)
             {
                 await ApplySnapshotAsync(cached, version, token);
-                CatalogSummary = $"Catálogo local · {cached.Channels.Count} canales · {cached.SyncedAt.LocalDateTime:g}";
-                StatusMessage = "Metadatos disponibles sin conexión. Conecta o actualiza para reproducir.";
+                CatalogSummary = $"{cached.Channels.Count} canales · {cached.SyncedAt.LocalDateTime:g}";
+                StatusMessage = "Catálogo listo. Elige un canal para verlo.";
             }
-            else CatalogSummary = "No hay catálogo guardado. Conecta y pulsa Actualizar catálogo.";
+            else CatalogSummary = "Sin canales guardados. Pulsa Actualizar canales.";
             await LoadLibraryAsync(profile?.Id, version, token);
             await LoadContentCacheAsync(profile?.Id, version, token);
             if (profile is not null && _viewer is not null && version == _sessionVersion)
@@ -78,7 +90,7 @@ public sealed partial class MainViewModel
         catch (Exception exception)
         {
             _logger.LogError("catalog_cache_load", exception);
-            if (version == _sessionVersion) CatalogSummary = "No se pudo leer la caché. Puedes intentar actualizarla.";
+            if (version == _sessionVersion) CatalogSummary = "No se pudo abrir el catálogo guardado. Pulsa Actualizar.";
         }
         finally { if (version == _sessionVersion) IsCatalogLoading = false; }
     }
@@ -88,7 +100,7 @@ public sealed partial class MainViewModel
         if (!CanConnect || _disposed) return;
         BeginCatalogSession();
         ClearCatalog();
-        CatalogSummary = "Sesión temporal: guarda un perfil en Configuración para conservar su catálogo.";
+        CatalogSummary = "Sesión rápida activa. Guárdala en Ajustes si quieres conservarla.";
         await RunConnectionAsync(baseUrl, new(username, password), null);
     }
 
@@ -108,7 +120,7 @@ public sealed partial class MainViewModel
         try
         {
             credentials ??= await _credentials.GetAsync(profile!.CredentialKey, operation.Token);
-            if (credentials is null) { StatusMessage = "Las credenciales de este perfil no están disponibles para tu usuario de Windows."; return; }
+            if (credentials is null) { StatusMessage = "No se encontraron los datos de acceso de este perfil."; return; }
             await AuthenticateCoreAsync(baseUrl, credentials, profile?.Id, version, operation.Token);
         }
         catch (Exception exception) { ReportCatalogError(exception, version); }
@@ -128,7 +140,7 @@ public sealed partial class MainViewModel
         try
         {
             HttpWarning = provider.UsesUnencryptedTransport
-                ? "Este servidor usa HTTP. Usuario y contraseña pueden viajar sin cifrar. Consulta si hay HTTPS soportado." : null;
+                ? "⚠️ Conexión sin cifrar (HTTP). Si tu proveedor ofrece HTTPS, es más seguro." : null;
             var account = await provider.AuthenticateAsync(token);
             token.ThrowIfCancellationRequested();
             if (version != _sessionVersion || _disposed) return;
@@ -137,8 +149,8 @@ public sealed partial class MainViewModel
             foreach (var format in account.AllowedOutputFormats) AvailableFormats.Add(format);
             SelectedFormat = AvailableFormats.FirstOrDefault();
             StatusMessage = account.HasReachedConnectionLimit
-                ? "Cuenta autenticada. El límite de conexiones está ocupado; puedes consultar el catálogo."
-                : "Cuenta autenticada. Actualiza el catálogo o selecciona un canal de la caché.";
+                ? "Conectado, pero tu cuenta ya está en uso en otro dispositivo."
+                : "Conectado. Elige un canal o actualiza la lista.";
         }
         finally { provider?.Dispose(); }
     }
@@ -156,14 +168,14 @@ public sealed partial class MainViewModel
             if (_client is null)
             {
                 var profile = ActiveProfile;
-                if (profile is null) { StatusMessage = "Selecciona un perfil o conecta una sesión temporal."; return; }
+                if (profile is null) { StatusMessage = "Elige un perfil o conecta una cuenta primero."; return; }
                 var credentials = await _credentials.GetAsync(profile.CredentialKey, token);
-                if (credentials is null) { StatusMessage = "No se encontraron credenciales protegidas para este perfil."; return; }
+                if (credentials is null) { StatusMessage = "No se encontraron los datos guardados de este perfil."; return; }
                 await AuthenticateCoreAsync(profile.BaseUrl, credentials, profile.Id, version, token);
             }
             token.ThrowIfCancellationRequested();
             if (version != _sessionVersion || _client is null) return;
-            StatusMessage = "Actualizando categorías y canales…";
+            StatusMessage = "Descargando canales…";
             var provider = _client;
             var snapshot = _connectedProfileId is string profileId
                 ? await _catalogService.RefreshAsync(profileId, provider, token)
@@ -174,8 +186,8 @@ public sealed partial class MainViewModel
             if (version != _sessionVersion || _disposed) return;
             await LoadLibraryAsync(_connectedProfileId, version, token);
             if (version != _sessionVersion || _disposed) return;
-            CatalogSummary = $"{(_connectedProfileId is null ? "Sesión temporal" : "Actualizado")} · {snapshot.Channels.Count} canales · {snapshot.SyncedAt.LocalDateTime:g}";
-            StatusMessage = snapshot.Channels.Count == 0 ? "El proveedor devolvió un catálogo vacío." : "Catálogo actualizado. La búsqueda y los filtros funcionan sin conexión.";
+            CatalogSummary = $"{snapshot.Channels.Count} canales · {snapshot.SyncedAt.LocalDateTime:g}";
+            StatusMessage = snapshot.Channels.Count == 0 ? "Tu cuenta no devolvió canales." : "Canales actualizados.";
         }
         catch (Exception exception) { ReportCatalogError(exception, version); }
         finally { if (ReferenceEquals(_operation, operation)) _operation = null; if (version == _sessionVersion) IsBusy = false; }
@@ -228,12 +240,12 @@ public sealed partial class MainViewModel
         if (version != _sessionVersion || _disposed) return;
         StatusMessage = exception switch
         {
-            OperationCanceledException => "Solicitud cancelada.",
+            OperationCanceledException => "Operación cancelada.",
             XtreamApiException apiError => apiError.Message,
-            _ => "No se pudo completar la consulta. Revisa la conexión y vuelve a intentarlo."
+            _ => "No se pudo conectar. Revisa tu internet e inténtalo de nuevo."
         };
         if (exception is not OperationCanceledException) _logger.LogError("catalog_operation", exception);
-        if (_snapshot is not null) StatusMessage += " Se conserva el catálogo conocido; puedes buscar o reintentar.";
+        if (_snapshot is not null) StatusMessage += " Se conserva el catálogo guardado.";
     }
 
     public void CancelCatalog() => _operation?.Cancel();
@@ -246,6 +258,8 @@ public sealed partial class MainViewModel
     }
     private void DisposeCatalog()
     {
-        _session.Cancel(); _operation?.Cancel(); _filter?.Cancel(); _session.Dispose();
+        _session.Cancel(); _operation?.Cancel(); _filter?.Cancel();
+        _mediaFilter?.Cancel(); _detailRequest?.Cancel(); _epgRequest?.Cancel();
+        _session.Dispose();
     }
 }

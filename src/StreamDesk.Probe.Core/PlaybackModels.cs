@@ -20,25 +20,25 @@ public sealed record PlaybackSnapshot(long Sequence, PlaybackState State, Playba
     public bool IsActive => State is PlaybackState.Loading or PlaybackState.Playing or PlaybackState.Buffering;
     public string Message => Failure switch
     {
-        PlaybackFailure.Unauthorized or PlaybackFailure.Forbidden => "El proveedor negó la reproducción. Comprueba tu cuenta y sus permisos.",
-        PlaybackFailure.Expired => "La cuenta venció. Renueva el acceso antes de reproducir.",
-        PlaybackFailure.ConnectionLimit => "La cuenta alcanzó su límite de conexiones. Detén otras reproducciones autorizadas.",
-        PlaybackFailure.NotFound => "El canal no existe o ya no está disponible. Actualiza el catálogo.",
+        PlaybackFailure.Unauthorized or PlaybackFailure.Forbidden => "El proveedor rechazó el acceso. Revisa tu cuenta.",
+        PlaybackFailure.Expired => "Tu cuenta venció. Renueva el acceso con tu proveedor.",
+        PlaybackFailure.ConnectionLimit => "Alcanzaste el límite de pantallas simultáneas de tu cuenta.",
+        PlaybackFailure.NotFound => "Este canal no está disponible ahora. Intenta actualizar la lista.",
         PlaybackFailure.InvalidSource => "La dirección del canal no es válida.",
         PlaybackFailure.Timeout => "El canal tardó demasiado en responder. Puedes reintentar.",
-        PlaybackFailure.Network => "Se interrumpió la conexión con el canal.",
-        PlaybackFailure.UnsupportedFormat => "El motor no pudo decodificar el formato de este canal.",
-        PlaybackFailure.HardwareDecoder => "Falló el decodificador de video. Prueba el modo por software.",
-        PlaybackFailure.Unavailable => "No se pudo iniciar el motor de video. Reinstala la aplicación completa e inténtalo nuevamente.",
-        PlaybackFailure.Unknown => "No se pudo abrir el canal. Comprueba autorización, formato y disponibilidad.",
+        PlaybackFailure.Network => "Se interrumpió la señal del canal.",
+        PlaybackFailure.UnsupportedFormat => "El formato de video de este canal no es compatible.",
+        PlaybackFailure.HardwareDecoder => "Ajustando modo de video compatible…",
+        PlaybackFailure.Unavailable => "El motor de video no está disponible. Reinstala la aplicación.",
+        PlaybackFailure.Unknown => "No se pudo abrir este canal. Prueba otro canal o formato.",
         PlaybackFailure.Cancelled => "Reproducción cancelada.",
         _ => State switch
         {
-            PlaybackState.Loading => "Abriendo canal…",
-            PlaybackState.Playing => "Reproduciendo.",
-            PlaybackState.Buffering => "Almacenando video en búfer…",
-            PlaybackState.Stopped => "Reproducción detenida y recursos del medio liberados.",
-            _ => "Selecciona un canal para reproducir."
+            PlaybackState.Loading => "Conectando con el canal…",
+            PlaybackState.Playing => "Reproduciendo en vivo",
+            PlaybackState.Buffering => BufferPercent > 0 ? $"Cargando señal ({BufferPercent:0}%)…" : "Cargando señal…",
+            PlaybackState.Stopped => "Reproducción detenida.",
+            _ => "Haz clic en un canal para empezar a ver."
         }
     };
 }

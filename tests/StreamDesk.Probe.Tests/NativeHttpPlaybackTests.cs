@@ -7,6 +7,7 @@ using StreamDesk.Probe.Playback;
 
 namespace StreamDesk.Probe.Tests;
 
+[Collection("NativePlayback")]
 public sealed class NativeHttpPlaybackTests
 {
     [Theory]

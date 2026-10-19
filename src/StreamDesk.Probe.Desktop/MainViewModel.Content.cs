@@ -9,7 +9,7 @@ public sealed partial class MainViewModel
     private MediaCatalog? _movies, _series, _episodes;
     private MediaItem? _selectedMedia, _selectedEpisode, _selectedDetails;
     private XtreamCategory? _mediaCategory, _season;
-    private string _mediaSearch = "", _contentStatus = "Consulta el contenido disponible de tu cuenta.", _epgStatus = "Selecciona un canal para consultar su guía.";
+    private string _mediaSearch = "", _contentStatus = "Explora películas y series de tu cuenta.", _epgStatus = "Elige un canal para ver su programación.";
     private bool _contentBusy;
     private CancellationTokenSource? _mediaFilter, _detailRequest, _epgRequest;
     private Task _progressWrites = Task.CompletedTask;
@@ -23,7 +23,7 @@ public sealed partial class MainViewModel
     public bool ShowEpisodePicker => SelectedMedia?.Kind == ContentKind.Series;
     public string VersionLabel => typeof(MainViewModel).Assembly.GetCustomAttributes(typeof(System.Reflection.AssemblyInformationalVersionAttribute), false)
         .OfType<System.Reflection.AssemblyInformationalVersionAttribute>().FirstOrDefault()?.InformationalVersion.Split('+')[0] ?? "Candidato";
-    public string HeaderSummary => ShowLiveCatalog ? CatalogSummary : ShowContinueWatching ? $"{ContinueWatching.Count} contenidos en curso" : $"{MediaItems.Count} títulos disponibles";
+    public string HeaderSummary => ShowLiveCatalog ? CatalogSummary : ShowContinueWatching ? $"{ContinueWatching.Count} en curso" : $"{MediaItems.Count} títulos";
     public bool HasMovies => _movies?.Items.Count > 0;
     public bool HasSeries => _series?.Items.Count > 0;
     public bool ContentBusy { get => _contentBusy; private set { if (SetProperty(ref _contentBusy, value)) OnPropertyChanged(nameof(IsWorking)); } }
@@ -44,9 +44,32 @@ public sealed partial class MainViewModel
     }
     public MediaItem? SelectedEpisode { get => _selectedEpisode; set => SetProperty(ref _selectedEpisode, value); }
     public XtreamCategory? MediaCategory { get => _mediaCategory ?? MediaCategories.FirstOrDefault(); set { if (SetProperty(ref _mediaCategory, value)) _ = FilterMediaAsync(); } }
-    public XtreamCategory? Season { get => _season; set { if (SetProperty(ref _season, value)) { SelectedEpisode = null; OnPropertyChanged(nameof(Episodes)); } } }
-    public string MediaSearch { get => _mediaSearch; set { if (SetProperty(ref _mediaSearch, value)) _ = FilterMediaAsync(true); } }
-    public string MediaDescription => (_selectedDetails ?? SelectedMedia)?.Description ?? "Selecciona una película o serie para ver su ficha.";
+    public XtreamCategory? Season
+    {
+        get => _season;
+        set
+        {
+            if (SetProperty(ref _season, value))
+            {
+                OnPropertyChanged(nameof(Episodes));
+                SelectedEpisode = Episodes.FirstOrDefault();
+            }
+        }
+    }
+    public string MediaSearch
+    {
+        get => _mediaSearch;
+        set
+        {
+            if (SetProperty(ref _mediaSearch, value))
+            {
+                OnPropertyChanged(nameof(HasMediaSearch));
+                _ = FilterMediaAsync(true);
+            }
+        }
+    }
+    public bool HasMediaSearch => !string.IsNullOrEmpty(MediaSearch);
+    public string MediaDescription => (_selectedDetails ?? SelectedMedia)?.Description ?? "Elige un título para ver su sinopsis.";
     public IReadOnlyList<MediaTrack> AudioTracks => _mediaDetails.AudioTracks;
     public IReadOnlyList<MediaTrack> SubtitleTracks => _mediaDetails.SubtitleTracks;
     public MediaTrack? SelectedAudioTrack { get; set; }
@@ -67,14 +90,14 @@ public sealed partial class MainViewModel
         {
             if (_client is null) await ConnectProfileAsync();
             if (version != _sessionVersion || _disposed) return;
-            if (_client is not IContentProvider provider) { ContentStatus = "Este adaptador no ofrece películas o series."; return; }
+            if (_client is not IContentProvider provider) { ContentStatus = "Tu cuenta no incluye películas ni series."; return; }
             operation = CancellationTokenSource.CreateLinkedTokenSource(_shutdown.Token, _session.Token);
             _operation = operation;
             foreach (var kind in new[] { ContentKind.Movie, ContentKind.Series })
             {
                 try
                 {
-                    ContentStatus = kind == ContentKind.Movie ? "Consultando películas…" : "Consultando series…";
+                    ContentStatus = kind == ContentKind.Movie ? "Cargando películas…" : "Cargando series…";
                     var catalog = await provider.GetMediaCatalogAsync(kind, operation.Token);
                     operation.Token.ThrowIfCancellationRequested(); if (version != _sessionVersion) return;
                     if (_connectedProfileId is { } id && _contentStore is not null) await _contentStore.SaveCatalogAsync(id, kind, "", catalog, operation.Token);
@@ -85,11 +108,11 @@ public sealed partial class MainViewModel
                 catch (Exception error) { failed = true; _logger.LogError("content_catalog", error); }
             }
             if (version != _sessionVersion || _disposed) return;
-            ContentStatus = $"Películas: {_movies?.Items.Count ?? 0} · Series: {_series?.Items.Count ?? 0}. " + (failed ? "Algunas consultas fallaron; se conserva la caché conocida. Puedes reintentar." : "La disponibilidad depende de la cuenta.");
+            ContentStatus = $"Películas: {_movies?.Items.Count ?? 0} · Series: {_series?.Items.Count ?? 0}" + (failed ? " · Se conserva la lista guardada." : "");
             NotifyContent(); await FilterMediaAsync();
         }
-        catch (OperationCanceledException) { if (version == _sessionVersion) ContentStatus = "Consulta de contenido cancelada."; }
-        catch (Exception error) { _logger.LogError("content_probe", error); if (version == _sessionVersion) ContentStatus = "No se pudo consultar el contenido. Reintenta cuando haya conexión."; }
+        catch (OperationCanceledException) { if (version == _sessionVersion) ContentStatus = "Carga cancelada."; }
+        catch (Exception error) { _logger.LogError("content_probe", error); if (version == _sessionVersion) ContentStatus = "No se pudo actualizar el catálogo."; }
         finally { if (ReferenceEquals(_operation, operation)) _operation = null; operation?.Dispose(); ContentBusy = false; }
     }
 
@@ -148,18 +171,19 @@ public sealed partial class MainViewModel
                 if (cached is null && _contentStore is not null && _connectedProfileId is { } id) await _contentStore.SaveCatalogAsync(id, ContentKind.Episode, item.Id, episodes, request.Token);
                 if (version != _sessionVersion) return;
                 _episodes = episodes; Season = Seasons.FirstOrDefault(); OnPropertyChanged(nameof(Seasons)); OnPropertyChanged(nameof(Episodes));
-                ContentStatus = episodes.Items.Count == 0 ? "La serie no contiene episodios disponibles." : $"{episodes.Items.Count} episodios disponibles. Elige temporada y episodio.";
+                SelectedEpisode ??= Episodes.FirstOrDefault();
+                ContentStatus = episodes.Items.Count == 0 ? "Sin episodios disponibles." : $"{episodes.Items.Count} episodios disponibles.";
             }
         }
         catch (OperationCanceledException) { }
-        catch (Exception error) { _logger.LogError("content_details", error); if (version == _sessionVersion) ContentStatus = "Ficha no disponible. Puedes reintentar seleccionando el contenido."; }
+        catch (Exception error) { _logger.LogError("content_details", error); if (version == _sessionVersion) ContentStatus = "No se pudo cargar la ficha."; }
         finally { if (ReferenceEquals(_detailRequest, request)) _detailRequest = null; }
     }
 
     public Task PlayMediaAsync(bool restart = false) => PlayMediaItemAsync(ShowContinueWatching ? SelectedProgress?.Item : SelectedMedia?.Kind == ContentKind.Series ? SelectedEpisode : _selectedDetails ?? SelectedMedia, restart);
     private async Task PlayMediaItemAsync(MediaItem? item, bool restart = false)
     {
-        if (item is null || _disposed || IsBusy || IsCatalogLoading) { if (item is null) ContentStatus = "Selecciona una película o episodio."; return; }
+        if (item is null || _disposed || IsBusy || IsCatalogLoading) { if (item is null) ContentStatus = "Elige una película o episodio."; return; }
         var version = _sessionVersion;
         try
         {
@@ -182,7 +206,7 @@ public sealed partial class MainViewModel
             OnPropertyChanged(nameof(PlayerHandle));
         }
         catch (OperationCanceledException) { }
-        catch (Exception error) { _logger.LogError("content_play", error); ContentStatus = error is PlaybackException playback ? playback.Message : "No se pudo iniciar el contenido. Revisa permisos y formato."; }
+        catch (Exception error) { _logger.LogError("content_play", error); ContentStatus = error is PlaybackException playback ? playback.Message : "No se pudo reproducir este título."; }
     }
 
     public async Task NavigateEpisodeAsync(int direction)
@@ -241,16 +265,16 @@ public sealed partial class MainViewModel
     }
     public async Task SeekToAsync(double seconds)
     {
-        try { if (!CanSeek || !await _playbackService.SeekAsync((long)(Math.Clamp(seconds, 0, DurationSeconds) * 1000), _session.Token)) ContentStatus = "Este medio no permite cambiar de posición."; }
+        try { if (!CanSeek || !await _playbackService.SeekAsync((long)(Math.Clamp(seconds, 0, DurationSeconds) * 1000), _session.Token)) ContentStatus = "Este vídeo no permite adelantar ni retroceder."; }
         catch (OperationCanceledException) { }
         catch (Exception error) { _logger.LogError("content_seek", error); ContentStatus = "No se pudo cambiar la posición."; }
     }
     public async Task SelectTrackAsync(bool subtitles)
     {
         var track = subtitles ? SelectedSubtitleTrack : SelectedAudioTrack;
-        try { if (track is null || !await _playbackService.SelectTrackAsync(subtitles, track.Id, _session.Token)) ContentStatus = "La pista ya no está disponible en este medio."; }
+        try { if (track is null || !await _playbackService.SelectTrackAsync(subtitles, track.Id, _session.Token)) ContentStatus = " esa pista no está disponible."; }
         catch (OperationCanceledException) { }
-        catch (Exception error) { _logger.LogError("media_track", error); ContentStatus = "No se pudo seleccionar la pista."; }
+        catch (Exception error) { _logger.LogError("media_track", error); ContentStatus = "No se pudo cambiar el idioma o subtítulo."; }
     }
     private void NotifyMediaDetails()
     {
@@ -259,13 +283,16 @@ public sealed partial class MainViewModel
         foreach (var name in new[] { nameof(AudioTracks), nameof(SubtitleTracks), nameof(SelectedAudioTrack), nameof(SelectedSubtitleTrack), nameof(CanSeek), nameof(DurationSeconds), nameof(PositionSeconds), nameof(PositionLabel) }) OnPropertyChanged(name);
     }
     private void NotifyContent()
-    { foreach (var name in new[] { nameof(HasMovies), nameof(HasSeries), nameof(MediaCategories), nameof(ContinueWatching) }) OnPropertyChanged(name); }
+    {
+        SelectedProgress ??= ContinueWatching.FirstOrDefault();
+        foreach (var name in new[] { nameof(HasMovies), nameof(HasSeries), nameof(MediaCategories), nameof(ContinueWatching), nameof(SelectedProgress) }) OnPropertyChanged(name);
+    }
     private void ResetContent()
     {
         _detailRequest?.Cancel(); _mediaFilter?.Cancel(); _epgRequest?.Cancel();
         _movies = _series = _episodes = null; _progress = []; _selectedMedia = _selectedEpisode = _selectedDetails = null; _season = _mediaCategory = null;
         MediaItems = []; _mediaDetails = MediaPlaybackDetails.Empty;
-        ContentStatus = "Consulta el contenido disponible de tu cuenta."; EpgStatus = "Selecciona un canal para consultar su guía.";
+        ContentStatus = "Explora películas y series de tu cuenta."; EpgStatus = "Elige un canal para ver su programación.";
         NotifyContent(); NotifyMediaDetails(); OnPropertyChanged(nameof(MediaItems)); OnPropertyChanged(nameof(SelectedMedia)); OnPropertyChanged(nameof(MediaDescription)); OnPropertyChanged(nameof(Seasons)); OnPropertyChanged(nameof(Episodes));
         _epgPrograms = []; UpdateEpgLabels();
     }

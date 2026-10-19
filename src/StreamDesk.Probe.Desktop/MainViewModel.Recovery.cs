@@ -12,10 +12,10 @@ public sealed partial class MainViewModel
         try
         {
             var location = diagnostics ? await _recovery.ExportDiagnosticsAsync(_shutdown.Token) : await _recovery.CreateBackupAsync(_shutdown.Token);
-            ProfileStatus = diagnostics ? $"Diagnóstico sin datos de cuenta: {location}" : $"Copia protegida para este usuario de Windows: {location}";
+            ProfileStatus = diagnostics ? $"Informe guardado en: {location}" : $"Copia guardada en: {location}";
         }
         catch (OperationCanceledException) { }
-        catch (Exception error) { _logger.LogError("local_recovery", error); ProfileStatus = "No se pudo completar la copia local. No se ha reemplazado tu configuración."; }
+        catch (Exception error) { _logger.LogError("local_recovery", error); ProfileStatus = "No se pudo crear la copia."; }
         finally { SetProfileBusy(false); }
     }
 }

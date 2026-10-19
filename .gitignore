@@ -8,4 +8,10 @@
 .env.*
 !*.example
 *.log
+*.db
+*.db-wal
+*.db-shm
+*.dpapi
+secrets/
+Error/
 artifacts/

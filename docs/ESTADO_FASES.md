@@ -15,6 +15,20 @@ Este archivo registra trabajo y evidencias reales. La confirmación del usuario 
 
 ## Bitácora de evidencias
 
+### 2026-10-19 — Auditoría integral F0–F7-T01 y mejora UX/UI
+
+- Solicitud: auditar todas las fases trabajadas, verificar funcionamiento, posibles errores y problemas de uso, mejorar UX/UI (eliminar textos innecesarios, usar iconos y ejemplos, reducir clics para usuarios no técnicos) y resolver cualquier error o riesgo sin esperar autorización. Detalle completo en [`AUDITORIA_INTEGRAL_2026-10-19.md`](AUDITORIA_INTEGRAL_2026-10-19.md).
+- Defectos y riesgos resueltos:
+  1. `Error/error.txt` estaba en el índice de Git (`staged`); se retiró con `git rm --cached` conservando el archivo en disco y se reforzó `.gitignore` (`Error/`, `*.db*`, `*.dpapi`, `secrets/`).
+  2. Condición de carrera en `PlaybackService.FailAsync` durante el fallback inmediato HW→SW (`delay == 0`) y `WatchTimeoutAsync`, que bajo carga del ThreadPool podía disparar una tercera apertura tras 3 s; ahora el fallback inmediato reabre dentro de `_serial` y el watchdog verifica cancelación antes de reportar timeout.
+  3. Fuga de tarea en `MainViewModel.ActiveProfile` al cambiar rápido de perfil antes de `DisposeAsync()`, que dejaba una lectura concurrente sobre `streamdesk.db`; se encadenó `_profileLoad = Task.WhenAll(_profileLoad, LoadProfileCacheAsync(value))` y se espera en `ShutdownCoreAsync`.
+  4. Inicialización nativa `Core.Initialize` protegida con candado estático en `LibVlcBackend` y adición de `:file-caching=` junto a `:network-caching=` y `:live-caching=`.
+  5. Agrupación de pruebas con motor nativo LibVLC en `[Collection("NativePlayback")]` y espera determinista de `TakeSnapshot` tras redimensionar a PiP.
+- Mejoras UX/UI implementadas en `MainWindow.xaml`, `MainWindow.xaml.cs` y `MainViewModel`:
+  - Reproducción en 1 clic al pulsar sobre un canal, episodio o elemento de «Continuar viendo»; doble clic en el área de video para pantalla completa; aplicación inmediata de pistas de audio y subtítulos al elegirlas del desplegable; botón `✕` para limpiar búsquedas en 1 clic; acción «💾 Guardar y ver TV» en Ajustes.
+  - Placeholders con iconos y ejemplos (`🔍 Ej: Deportes, HBO, Noticias...`, `Ej: https://tuservidor.com:8080`, `Ej: usuario123`) y eliminación de textos explicativos largos o técnicos.
+- Verificación: `dotnet test StreamDesk.sln -c Release` pasa con 0 errores, 0 advertencias y **131/131 tests correctos** (incluida nueva regresión en `AuditRegressionTests`). Se mantienen sin cambios artificiales los pendientes físicos/IPTV real de los gates.
+
 ### 2026-10-19 — F7-T01: ventana flotante
 
 - Solicitud: «trabaja la siguiente fase». Se revisaron Git, ROADMAP, estado, prompt F7 y ADRs pertinentes. F6 no está aprobada; se comunica el riesgo y se adelanta únicamente F7-T01 sin declarar 1.0. El prompt exige entregar una mejora y detenerse antes de otra opcional.

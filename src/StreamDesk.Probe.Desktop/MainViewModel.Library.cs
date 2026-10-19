@@ -16,19 +16,19 @@ public sealed partial class MainViewModel
     public bool ShowSettings => CurrentTabIndex == 4;
     public string SectionTitle => CurrentTabIndex switch { 2 => "Favoritos", 3 => "Recientes", 5 => "Películas", 6 => "Series", 7 => "Continuar viendo", _ => "TV en vivo" };
     public string ResultSummary => $"{Channels.Count} canales";
-    public string EmptyMessage => _snapshot is null ? "Tu catálogo aparecerá aquí. Selecciona un perfil y pulsa Actualizar."
-        : SearchText.Length > 0 ? "Sin resultados. Prueba otro nombre o limpia los filtros."
-        : _recentsOnly ? "Aún no has visto canales de este perfil. Explora TV en vivo."
-        : FavoritesOnly ? "Marca una estrella en TV en vivo para guardar tu primer favorito."
-        : "Esta categoría no contiene canales. Prueba otra categoría.";
+    public string EmptyMessage => _snapshot is null ? "Pulsa Actualizar canales para cargar tu lista."
+        : SearchText.Length > 0 ? "No encontramos ese canal. Prueba otro nombre."
+        : _recentsOnly ? "Aún no has visto canales en este perfil."
+        : FavoritesOnly ? "Pulsa ⭐ en cualquier canal para guardarlo aquí."
+        : "No hay canales en esta categoría.";
     public IReadOnlySet<string> FavoriteChannelIds => _snapshot?.FavoriteChannelIds ?? _library.Favorites;
     public bool CanFavorite => !_disposed && !_libraryBusy && _viewer is not null && ActiveProfile is not null && _catalogOwnerId == ActiveProfile.Id && _snapshot is not null;
     public bool SelectedIsFavorite => SelectedChannel is not null && FavoriteChannelIds.Contains(SelectedChannel.Id);
-    public string FavoriteAction => SelectedIsFavorite ? "Quitar favorito" : "Añadir favorito";
+    public string FavoriteAction => SelectedIsFavorite ? "★ Quitar favorito" : "☆ Favorito";
     public bool AutoPlayLast => _library.AutoPlayLast;
     public XtreamChannel? LastChannel => _snapshot?.Channels.FirstOrDefault(item => item.Id == _library.Recents.FirstOrDefault()?.ChannelId);
     public bool HasLastChannel => LastChannel is not null;
-    public string LastChannelLabel => LastChannel?.Name ?? "Todavía no has reproducido ningún canal";
+    public string LastChannelLabel => LastChannel?.Name ?? "Elige tu primer canal en TV en vivo";
     public IReadOnlyList<XtreamCategory> FrequentCategories { get; private set; } = [];
 
     public async Task ToggleFavoriteAsync(XtreamChannel? channel = null)

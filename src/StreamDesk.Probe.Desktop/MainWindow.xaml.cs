@@ -73,6 +73,23 @@ public partial class MainWindow : FluentWindow
         await _viewModel.CreateProfileAsync(password);
     }
 
+    private async void SaveAndWatch_Click(object sender, RoutedEventArgs e)
+    {
+        var password = ProfilePasswordBox.Password;
+        ProfilePasswordBox.Clear();
+        if (!await _viewModel.CreateProfileAsync(password)) return;
+        _viewModel.CurrentTabIndex = 1;
+        await _viewModel.LoadCatalogAsync();
+    }
+
+    private async void UseSelectedProfile_Click(object sender, RoutedEventArgs e)
+    {
+        if (_viewModel.SelectedProfile is null) return;
+        _viewModel.ActiveProfile = _viewModel.SelectedProfile;
+        _viewModel.CurrentTabIndex = 1;
+        if (_viewModel.Channels.Count == 0 && _viewModel.CanConnect) await _viewModel.LoadCatalogAsync();
+    }
+
     private async void PlaySelected_Click(object sender, RoutedEventArgs e) => await _viewModel.PlaySelectedAsync();
     private async void Retry_Click(object sender, RoutedEventArgs e) => await _viewModel.RetryPlaybackAsync();
     private async void Stop_Click(object sender, RoutedEventArgs e) => await _viewModel.StopPlaybackAsync();
@@ -89,24 +106,59 @@ public partial class MainWindow : FluentWindow
     private async void Backup_Click(object sender, RoutedEventArgs e) => await _viewModel.CreateBackupAsync();
     private async void Diagnostics_Click(object sender, RoutedEventArgs e) => await _viewModel.CreateBackupAsync(true);
     private async void ApplySubtitle_Click(object sender, RoutedEventArgs e) => await _viewModel.SelectTrackAsync(true);
+    private async void AudioTrack_Changed(object sender, EventArgs e) => await _viewModel.SelectTrackAsync(false);
+    private async void SubtitleTrack_Changed(object sender, EventArgs e) => await _viewModel.SelectTrackAsync(true);
     private async void Seek_Completed(object sender, MouseButtonEventArgs e) => await _viewModel.SeekToAsync(SeekSlider.Value);
     private async void Seek_KeyUp(object sender, KeyEventArgs e) { if (e.Key is Key.Left or Key.Right or Key.Home or Key.End) await _viewModel.SeekToAsync(SeekSlider.Value); }
     private async void ImportEpg_Click(object sender, RoutedEventArgs e)
     {
-        var dialog = new OpenFileDialog { Filter = "XMLTV (*.xml)|*.xml", Title = "Importar guía XMLTV autorizada" };
+        var dialog = new OpenFileDialog { Filter = "XMLTV (*.xml)|*.xml", Title = "Cargar archivo de guía (.xml)" };
         if (dialog.ShowDialog(this) != true) return;
         try { await using var stream = File.OpenRead(dialog.FileName); await _viewModel.ImportEpgAsync(stream); }
         catch (Exception exception) { _viewModel.ReportWindowError(exception); }
     }
     private void Navigate_Click(object sender, RoutedEventArgs e) => _viewModel.CurrentTabIndex = int.Parse((string)((FrameworkElement)sender).Tag);
     private void ClearFilters_Click(object sender, RoutedEventArgs e) => _viewModel.ClearFilters();
+    private void ClearSearch_Click(object sender, RoutedEventArgs e) => _viewModel.SearchText = "";
+    private void ClearMediaSearch_Click(object sender, RoutedEventArgs e) => _viewModel.MediaSearch = "";
     private void Category_Click(object sender, RoutedEventArgs e) => _viewModel.SelectedCategory = (XtreamCategory)((FrameworkElement)sender).DataContext;
     private async void FavoriteRow_Click(object sender, RoutedEventArgs e)
     { e.Handled = true; await _viewModel.ToggleFavoriteAsync((XtreamChannel)((FrameworkElement)sender).DataContext); }
-    private async void Channels_DoubleClick(object sender, MouseButtonEventArgs e)
+    private async void Channels_MouseUp(object sender, MouseButtonEventArgs e)
     {
-        if (HasEditingAncestor(e.OriginalSource as DependencyObject)) return;
-        if (_viewModel.SelectedChannel is not null) await _viewModel.PlaySelectedAsync();
+        if (HasInteractiveOrScrollAncestor(e.OriginalSource as DependencyObject) || FindAncestor<ListBoxItem>(e.OriginalSource as DependencyObject) is not { DataContext: XtreamChannel channel }) return;
+        _viewModel.SelectedChannel = channel;
+        await _viewModel.PlaySelectedAsync();
+    }
+    private async void Channels_KeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.Enter && _viewModel.SelectedChannel is not null) { e.Handled = true; await _viewModel.PlaySelectedAsync(); }
+    }
+    private async void MediaList_DoubleClick(object sender, MouseButtonEventArgs e)
+    {
+        if (HasInteractiveOrScrollAncestor(e.OriginalSource as DependencyObject) || _viewModel.SelectedMedia is null) return;
+        await _viewModel.PlayMediaAsync();
+    }
+    private async void MediaList_KeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.Enter && _viewModel.SelectedMedia is not null) { e.Handled = true; await _viewModel.PlayMediaAsync(); }
+    }
+    private async void Episodes_MouseUp(object sender, MouseButtonEventArgs e)
+    {
+        if (HasInteractiveOrScrollAncestor(e.OriginalSource as DependencyObject) || FindAncestor<ListBoxItem>(e.OriginalSource as DependencyObject) is not { DataContext: MediaItem episode }) return;
+        _viewModel.SelectedEpisode = episode;
+        await _viewModel.PlayMediaAsync();
+    }
+    private async void ContinueWatching_MouseUp(object sender, MouseButtonEventArgs e)
+    {
+        if (HasInteractiveOrScrollAncestor(e.OriginalSource as DependencyObject) || FindAncestor<ListBoxItem>(e.OriginalSource as DependencyObject) is not { DataContext: MediaProgress progress }) return;
+        _viewModel.SelectedProgress = progress;
+        await _viewModel.PlayMediaAsync();
+    }
+    private void VideoSurface_MouseDown(object sender, MouseButtonEventArgs e)
+    {
+        RevealControls();
+        if (e.ClickCount == 2) ToggleFullscreen_Click(sender, e);
     }
     private void CancelCatalog_Click(object sender, RoutedEventArgs e) => _viewModel.CancelCatalog();
 
@@ -167,6 +219,24 @@ public partial class MainWindow : FluentWindow
             source = source is Visual ? VisualTreeHelper.GetParent(source) : LogicalTreeHelper.GetParent(source);
         }
         return false;
+    }
+    private static bool HasInteractiveOrScrollAncestor(DependencyObject? source)
+    {
+        while (source is not null)
+        {
+            if (source is ButtonBase or ScrollBar or Thumb) return true;
+            source = source is Visual ? VisualTreeHelper.GetParent(source) : LogicalTreeHelper.GetParent(source);
+        }
+        return false;
+    }
+    private static T? FindAncestor<T>(DependencyObject? source) where T : DependencyObject
+    {
+        while (source is not null)
+        {
+            if (source is T match) return match;
+            source = source is Visual ? VisualTreeHelper.GetParent(source) : LogicalTreeHelper.GetParent(source);
+        }
+        return null;
     }
     private static bool HasListAncestor(DependencyObject? source)
     {

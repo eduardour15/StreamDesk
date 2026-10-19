@@ -23,8 +23,8 @@ public sealed partial class MainViewModel : INotifyPropertyChanged, IDisposable,
     private string _profileName = string.Empty;
     private string _profileBaseUrl = string.Empty;
     private string _profileUsername = string.Empty;
-    private string _profileStatus = "Los perfiles guardan sus credenciales cifradas para tu usuario de Windows.";
-    private string _statusMessage = "StreamDesk puede iniciarse y navegar sin conexión.";
+    private string _profileStatus = "Tus cuentas se guardan cifradas en este equipo.";
+    private string _statusMessage = "Listo · Puedes explorar tu lista guardada incluso sin internet.";
     private string? _httpWarning;
     private string? _connectionSummary;
     private string? _selectedFormat;
@@ -100,7 +100,7 @@ public sealed partial class MainViewModel : INotifyPropertyChanged, IDisposable,
             {
                 _favoritesOnly = value == 2; _recentsOnly = value == 3;
                 _searchText = ""; _selectedCategory = Categories.FirstOrDefault();
-                OnPropertyChanged(nameof(FavoritesOnly)); OnPropertyChanged(nameof(SearchText)); OnPropertyChanged(nameof(SelectedCategory));
+                OnPropertyChanged(nameof(FavoritesOnly)); OnPropertyChanged(nameof(SearchText)); OnPropertyChanged(nameof(HasSearchText)); OnPropertyChanged(nameof(SelectedCategory));
                 _ = ApplyFilterAsync(false);
             }
             OnPropertyChanged(nameof(ShowHome)); OnPropertyChanged(nameof(ShowTv)); OnPropertyChanged(nameof(ShowSettings)); OnPropertyChanged(nameof(SectionTitle));
@@ -108,7 +108,12 @@ public sealed partial class MainViewModel : INotifyPropertyChanged, IDisposable,
             if (ShowMediaCatalog)
             {
                 _mediaSearch = ""; _mediaCategory = null; SelectedMedia = null; MediaItems = [];
-                OnPropertyChanged(nameof(MediaSearch)); OnPropertyChanged(nameof(MediaCategory)); OnPropertyChanged(nameof(MediaItems));
+                OnPropertyChanged(nameof(MediaSearch)); OnPropertyChanged(nameof(HasMediaSearch)); OnPropertyChanged(nameof(MediaCategory)); OnPropertyChanged(nameof(MediaItems));
+            }
+            if (ShowContinueWatching && SelectedProgress is null)
+            {
+                SelectedProgress = ContinueWatching.FirstOrDefault();
+                OnPropertyChanged(nameof(SelectedProgress));
             }
             OnPropertyChanged(nameof(MediaCategories));
             OnPropertyChanged(nameof(HeaderSummary));
@@ -126,12 +131,12 @@ public sealed partial class MainViewModel : INotifyPropertyChanged, IDisposable,
         try
         {
             restored = await ReloadProfilesCoreAsync(_shutdown.Token);
-            ProfileStatus = Profiles.Count == 0 ? "Todavía no hay perfiles guardados." : $"{Profiles.Count} perfil(es) disponibles.";
+            ProfileStatus = Profiles.Count == 0 ? "Agrega tu primera cuenta para empezar." : $"{Profiles.Count} cuenta(s) guardada(s).";
         }
         catch (Exception exception)
         {
             _logger.LogError("profile_load", exception);
-            ProfileStatus = "No se pudieron cargar los perfiles locales.";
+            ProfileStatus = "No se pudieron leer las cuentas locales.";
         }
         finally { SetProfileBusy(false); }
         var startupVersion = _sessionVersion;
@@ -142,9 +147,9 @@ public sealed partial class MainViewModel : INotifyPropertyChanged, IDisposable,
         }
     }
 
-    public async Task CreateProfileAsync(string password)
+    public async Task<bool> CreateProfileAsync(string password)
     {
-        if (_disposed || IsBusy) return;
+        if (_disposed || IsBusy) return false;
         SetProfileBusy(true);
         try
         {
@@ -152,14 +157,16 @@ public sealed partial class MainViewModel : INotifyPropertyChanged, IDisposable,
             ProfileName = string.Empty;
             ProfileBaseUrl = string.Empty;
             ProfileUsername = string.Empty;
-            ProfileStatus = "Perfil guardado. La contraseña se protegió con DPAPI CurrentUser.";
+            ProfileStatus = "✓ Cuenta guardada de forma segura en este equipo.";
             await ReloadProfilesCoreAsync(_shutdown.Token);
+            return true;
         }
-        catch (ArgumentException exception) { ProfileStatus = exception.Message; }
+        catch (ArgumentException exception) { ProfileStatus = exception.Message; return false; }
         catch (Exception exception)
         {
             _logger.LogError("profile_create", exception);
-            ProfileStatus = "No se pudo guardar el perfil. Revisa la ruta de datos y vuelve a intentarlo.";
+            ProfileStatus = "No se pudo guardar la cuenta. Revisa tus datos e inténtalo de nuevo.";
+            return false;
         }
         finally { SetProfileBusy(false); }
     }
@@ -172,13 +179,13 @@ public sealed partial class MainViewModel : INotifyPropertyChanged, IDisposable,
         {
             await _profilesService.DeleteAsync(SelectedProfile.Id, _shutdown.Token);
             SelectedProfile = null;
-            ProfileStatus = "Perfil y credenciales eliminados.";
+            ProfileStatus = "Cuenta eliminada de este equipo.";
             await ReloadProfilesCoreAsync(_shutdown.Token);
         }
         catch (Exception exception)
         {
             _logger.LogError("profile_delete", exception);
-            ProfileStatus = "No se pudo eliminar el perfil y sus credenciales.";
+            ProfileStatus = "No se pudo eliminar la cuenta.";
         }
         finally { SetProfileBusy(false); }
     }
@@ -189,15 +196,15 @@ public sealed partial class MainViewModel : INotifyPropertyChanged, IDisposable,
     private async Task PlayChannelAsync(XtreamChannel? channel)
     {
         if (IsBusy || IsCatalogLoading || _disposed) return;
-        if (channel is null) { StatusMessage = "Selecciona un canal para reproducir."; return; }
+        if (channel is null) { StatusMessage = "Haz clic en un canal para reproducir."; return; }
         var version = _sessionVersion;
         if (_client is null && ActiveProfile is not null) await ConnectProfileAsync();
         if (_disposed || version != _sessionVersion) return;
-        if (_client is null || _account is null) { StatusMessage = "Primero conecta una cuenta válida."; return; }
+        if (_client is null || _account is null) { StatusMessage = "Configura o selecciona una cuenta antes de reproducir."; return; }
         if (_account.ExpiresAt <= DateTimeOffset.UtcNow) { StatusMessage = new PlaybackException(PlaybackFailure.Expired).Message; return; }
-        if (string.IsNullOrWhiteSpace(SelectedFormat)) { StatusMessage = "El proveedor no declaró un formato compatible."; return; }
+        if (string.IsNullOrWhiteSpace(SelectedFormat)) { StatusMessage = "El servidor no indicó un formato de video compatible."; return; }
         if (!_playbackService.HasActiveMedia && _account.HasReachedConnectionLimit)
-        { StatusMessage = "La cuenta ya alcanzó el límite de conexiones que informó el proveedor."; return; }
+        { StatusMessage = "Tu cuenta alcanzó el límite de pantallas simultáneas."; return; }
         try
         {
             await CaptureMediaAsync(true);
@@ -219,7 +226,7 @@ public sealed partial class MainViewModel : INotifyPropertyChanged, IDisposable,
         catch (Exception exception)
         {
             _logger.LogError("playback_start", exception);
-            StatusMessage = "LibVLC no pudo iniciar el canal. Comprueba autorización y formato.";
+            StatusMessage = "No se pudo abrir el canal. Comprueba tu cuenta o prueba otro formato.";
         }
     }
 
@@ -234,6 +241,7 @@ public sealed partial class MainViewModel : INotifyPropertyChanged, IDisposable,
         _client?.Dispose();
         _client = null;
         _account = null;
+        try { await _profileLoad.ConfigureAwait(false); } catch { }
         await _historyWrites.ConfigureAwait(false);
         await _progressWrites.ConfigureAwait(false);
         try { await _playbackService.DisposeAsync().ConfigureAwait(false); }
@@ -247,10 +255,10 @@ public sealed partial class MainViewModel : INotifyPropertyChanged, IDisposable,
     private static string FormatAccount(XtreamAccount account)
     {
         var connections = account.ActiveConnections.HasValue || account.MaxConnections.HasValue
-            ? $"Conexiones activas: {account.ActiveConnections?.ToString() ?? "desconocidas"} / límite {account.MaxConnections?.ToString() ?? "desconocido"}. "
-            : "Límite de conexiones: el proveedor no lo declaró. ";
-        var formats = account.AllowedOutputFormats.Count == 0 ? "Formatos: no declarados." : $"Formatos: {string.Join(", ", account.AllowedOutputFormats)}.";
-        return $"Estado: {account.Status}. {connections}{formats}";
+            ? $"Pantallas: {account.ActiveConnections?.ToString() ?? "?"}/{account.MaxConnections?.ToString() ?? "?"} · "
+            : "";
+        var formats = account.AllowedOutputFormats.Count == 0 ? "" : $"Formato: {string.Join(", ", account.AllowedOutputFormats)}";
+        return $"Cuenta activa · {connections}{formats}".TrimEnd(' ', '·');
     }
 
     private async Task<bool> ReloadProfilesCoreAsync(CancellationToken cancellationToken)
@@ -261,6 +269,7 @@ public sealed partial class MainViewModel : INotifyPropertyChanged, IDisposable,
         var remembered = activeId ?? (_viewer is null ? null : await _viewer.GetLastProfileAsync(cancellationToken));
         var next = Profiles.FirstOrDefault(profile => profile.Id == ActiveProfile?.Id)
             ?? Profiles.FirstOrDefault(profile => profile.Id == remembered) ?? Profiles.FirstOrDefault();
+        SelectedProfile = Profiles.FirstOrDefault(profile => profile.Id == (SelectedProfile?.Id ?? next?.Id)) ?? next;
         if (ActiveProfile?.Id == next?.Id) return false;
         ActiveProfile = next;
         return true;

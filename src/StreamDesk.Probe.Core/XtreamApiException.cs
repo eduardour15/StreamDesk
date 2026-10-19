@@ -12,16 +12,16 @@ public sealed class XtreamApiException : Exception
 
     private static string GetSafeMessage(XtreamFailureKind kind) => kind switch
     {
-        XtreamFailureKind.InvalidEndpoint => "Introduce una URL base HTTP o HTTPS válida, sin usuario, contraseña ni parámetros.",
-        XtreamFailureKind.InvalidCredentials => "El servidor no aceptó las credenciales.",
-        XtreamFailureKind.AccountExpired => "El servidor indica que la cuenta está vencida.",
-        XtreamFailureKind.ProviderUnavailable => "No se pudo conectar con el proveedor.",
-        XtreamFailureKind.RequestTimedOut => "El proveedor tardó demasiado en responder.",
-        XtreamFailureKind.AccessDenied => "El proveedor rechazó la solicitud.",
-        XtreamFailureKind.RateLimited => "El proveedor pidió esperar. Intenta actualizar más tarde.",
-        XtreamFailureKind.UnsupportedResponse => "El proveedor devolvió una respuesta que el prototipo no reconoce.",
-        XtreamFailureKind.FormatNotSupported => "El formato solicitado no aparece entre los formatos declarados por el proveedor.",
-        XtreamFailureKind.InvalidState => "Conecta una cuenta válida antes de consultar el catálogo o reproducir.",
-        _ => "Ocurrió un error al consultar el proveedor."
+        XtreamFailureKind.InvalidEndpoint => "Escribe solo la dirección del servidor (ej. https://tuservidor.com:8080).",
+        XtreamFailureKind.InvalidCredentials => "Usuario o contraseña incorrectos.",
+        XtreamFailureKind.AccountExpired => "Tu cuenta está vencida.",
+        XtreamFailureKind.ProviderUnavailable => "No se pudo conectar con el servidor.",
+        XtreamFailureKind.RequestTimedOut => "El servidor tardó demasiado en responder.",
+        XtreamFailureKind.AccessDenied => "El servidor rechazó el acceso.",
+        XtreamFailureKind.RateLimited => "Demasiadas consultas seguidas. Espera unos segundos.",
+        XtreamFailureKind.UnsupportedResponse => "El servidor devolvió datos con un formato no válido.",
+        XtreamFailureKind.FormatNotSupported => "Formato de video no admitido por el servidor.",
+        XtreamFailureKind.InvalidState => "Conecta tu cuenta antes de continuar.",
+        _ => "No se pudo comunicar con el servidor."
     };
 }
