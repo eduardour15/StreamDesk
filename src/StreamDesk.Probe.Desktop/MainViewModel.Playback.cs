@@ -14,6 +14,8 @@ public sealed partial class MainViewModel
     public bool ShowPlaybackCaption => !ShowPlaybackPlaceholder || _playback.State == PlaybackState.Failed || _playback.WillRetry;
     public bool CanRetryPlayback => _playback.State == PlaybackState.Failed && !_playback.WillRetry;
     public bool IsPlaying => _playback.State == PlaybackState.Playing;
+    public bool IsPaused => _playback.State == PlaybackState.Paused;
+    public bool CanStopPlayback => _playback.IsActive;
     public bool CanHideControls => IsPlaying && !IsWorking;
     public string NowPlaying => _playback.IsActive
         ? _mediaWatch?.Item.Name ?? _watch?.Channel.Name ?? CurrentPlaybackPrompt
@@ -21,9 +23,20 @@ public sealed partial class MainViewModel
     private string CurrentPlaybackPrompt => ShowSeriesDetails
         ? SelectedEpisode?.Name ?? SelectedMedia?.Name ?? "Elige un episodio"
         : SelectedMedia?.Name ?? "Elige un título";
+    public string PlayPauseIcon => IsPlaying ? "⏸" : "▶";
+    public string PlayPauseAction => IsPlaying ? "Pausar" : IsPaused ? "Reanudar" : "Reproducir";
+    public string PlayPauseToolTip => IsPlaying ? "Pausar (Espacio)" : IsPaused ? "Reanudar (Espacio)" : "Reproducir (Espacio)";
     public string PlayActionIcon => _playback.IsActive ? "⏹" : "▶";
     public string PlayAction => _playback.IsActive ? "Detener" : "Reproducir";
-    public async Task TogglePlaybackAsync() { if (_playback.IsActive) await StopPlaybackAsync(); else await PlaySelectedAsync(); }
+
+    public async Task TogglePlayPauseAsync()
+    {
+        if (IsPlaying) await _playbackService.PauseAsync();
+        else if (IsPaused) await _playbackService.ResumeAsync();
+        else if (ShowMediaBrowse || ShowMovieDetails || ShowSeriesDetails) await PlayMediaAsync();
+        else await PlaySelectedAsync();
+    }
+    public async Task TogglePlaybackAsync() => await TogglePlayPauseAsync();
     public int Volume { get => _playbackService.Volume; set { _playbackService.Volume = value; OnPropertyChanged(); } }
     public bool IsMuted
     {
@@ -103,7 +116,9 @@ public sealed partial class MainViewModel
             _playback = snapshot;
             StatusMessage = PlaybackStatus;
             OnPropertyChanged(nameof(PlaybackStatus)); OnPropertyChanged(nameof(ShowPlaybackPlaceholder)); OnPropertyChanged(nameof(ShowPlaybackCaption)); OnPropertyChanged(nameof(CanRetryPlayback));
-            OnPropertyChanged(nameof(IsPlaying)); OnPropertyChanged(nameof(CanHideControls)); OnPropertyChanged(nameof(PlayAction)); OnPropertyChanged(nameof(PlayActionIcon));
+            OnPropertyChanged(nameof(IsPlaying)); OnPropertyChanged(nameof(IsPaused)); OnPropertyChanged(nameof(CanStopPlayback)); OnPropertyChanged(nameof(CanHideControls));
+            OnPropertyChanged(nameof(PlayPauseIcon)); OnPropertyChanged(nameof(PlayPauseAction)); OnPropertyChanged(nameof(PlayPauseToolTip));
+            OnPropertyChanged(nameof(PlayAction)); OnPropertyChanged(nameof(PlayActionIcon));
             if (media is not null && ReferenceEquals(media, _mediaWatch) && snapshot.Sequence > media.AfterSequence)
             {
                 if (snapshot.State == PlaybackState.Playing) media.Played = true;

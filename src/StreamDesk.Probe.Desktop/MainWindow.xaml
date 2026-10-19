@@ -60,9 +60,74 @@
                 </ControlTemplate.Triggers>
             </ControlTemplate></Setter.Value></Setter>
         </Style>
+        <ControlTemplate x:Key="SearchableCategoryComboTemplate" TargetType="ComboBox">
+            <Grid>
+                <ToggleButton x:Name="DropDownToggle" ClickMode="Press" Focusable="False"
+                              IsChecked="{Binding IsDropDownOpen, Mode=TwoWay, RelativeSource={RelativeSource TemplatedParent}}">
+                    <ToggleButton.Template>
+                        <ControlTemplate TargetType="ToggleButton">
+                            <Border x:Name="ToggleBorder" Background="#FF15171D" BorderBrush="#FF626B78" BorderThickness="1" CornerRadius="6" Padding="10,8">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="{Binding DataContext.SelectedCategory.Name, RelativeSource={RelativeSource AncestorType=ComboBox}, FallbackValue='Todas las categorías'}"
+                                               Foreground="{StaticResource TextPrimaryBrush}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                                    <TextBlock Grid.Column="1" Text="▾" FontSize="14" Foreground="{StaticResource TextMutedBrush}" VerticalAlignment="Center" Margin="6,0,0,0"/>
+                                </Grid>
+                            </Border>
+                            <ControlTemplate.Triggers>
+                                <Trigger Property="IsMouseOver" Value="True">
+                                    <Setter TargetName="ToggleBorder" Property="BorderBrush" Value="{StaticResource AccentBrush}"/>
+                                </Trigger>
+                                <Trigger Property="IsChecked" Value="True">
+                                    <Setter TargetName="ToggleBorder" Property="BorderBrush" Value="{StaticResource AccentBrush}"/>
+                                    <Setter TargetName="ToggleBorder" Property="BorderThickness" Value="2"/>
+                                </Trigger>
+                            </ControlTemplate.Triggers>
+                        </ControlTemplate>
+                    </ToggleButton.Template>
+                </ToggleButton>
+                <Popup x:Name="PART_Popup" AllowsTransparency="True" Focusable="False"
+                       IsOpen="{TemplateBinding IsDropDownOpen}" Placement="Bottom"
+                       PopupAnimation="Slide" StaysOpen="False">
+                    <Border Width="{Binding ActualWidth, RelativeSource={RelativeSource TemplatedParent}}"
+                            MaxHeight="320" Background="#FF1A1D24" BorderBrush="#FF626B78" BorderThickness="1" CornerRadius="8" Padding="6" Margin="0,4,0,0">
+                        <Border.Effect>
+                            <DropShadowEffect BlurRadius="12" ShadowDepth="4" Opacity="0.5"/>
+                        </Border.Effect>
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="*"/>
+                            </Grid.RowDefinitions>
+                            <Grid Margin="0,0,0,6">
+                                <TextBox x:Name="CategoryFilterSearchBox"
+                                         Text="{Binding DataContext.CategorySearch, RelativeSource={RelativeSource AncestorType=ComboBox}, UpdateSourceTrigger=PropertyChanged}"
+                                         Tag="🔍 Buscar categoría..." Padding="8,4,24,4" MinHeight="30" FontSize="12"
+                                         AutomationProperties.Name="Buscar categoría"/>
+                                <Button Content="✕" Click="ClearCategorySearch_Click"
+                                        Visibility="{Binding DataContext.HasCategorySearch, RelativeSource={RelativeSource AncestorType=ComboBox}, Converter={StaticResource BooleanToVisibilityConverter}}"
+                                        HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,4,0" Padding="4,1" MinHeight="20" Background="Transparent" BorderThickness="0" ToolTip="Borrar búsqueda"/>
+                            </Grid>
+                            <ScrollViewer Grid.Row="1" MaxHeight="240" CanContentScroll="True">
+                                <ItemsPresenter KeyboardNavigation.DirectionalNavigation="Contained"/>
+                            </ScrollViewer>
+                        </Grid>
+                    </Border>
+                </Popup>
+            </Grid>
+        </ControlTemplate>
     </ui:FluentWindow.Resources>
-    <Grid x:Name="Shell" Margin="16" Background="{StaticResource CanvasBrush}">
-        <Grid.ColumnDefinitions><ColumnDefinition x:Name="SidebarColumn" Width="158"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+    <Grid Background="{StaticResource CanvasBrush}">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+        <ui:TitleBar x:Name="AppTitleBar" Title="StreamDesk" Grid.Row="0"/>
+        <Grid x:Name="Shell" Grid.Row="1" Margin="16" Background="{StaticResource CanvasBrush}">
+            <Grid.ColumnDefinitions><ColumnDefinition x:Name="SidebarColumn" Width="158"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
         <Border x:Name="Sidebar" Background="{StaticResource SurfaceBrush}" CornerRadius="12" Padding="10">
             <DockPanel>
                 <StackPanel DockPanel.Dock="Top" Margin="10,12,0,20">
@@ -158,27 +223,22 @@
                     <Grid x:Name="CatalogPane">
                     <Border Padding="12" CornerRadius="10" Background="{StaticResource SurfaceBrush}" Margin="0,0,14,0" Visibility="{Binding ShowLiveCatalog, Converter={StaticResource BooleanToVisibilityConverter}}">
                         <Grid>
-                            <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+                            <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
                             <Grid Margin="0,0,0,8">
                                 <TextBox x:Name="SearchBox" Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}" Tag="🔍 Ej: Deportes, HBO, Noticias..." Padding="10,6,32,6" AutomationProperties.Name="Buscar canal"/>
                                 <Button Content="✕" Click="ClearSearch_Click" Visibility="{Binding HasSearchText, Converter={StaticResource BooleanToVisibilityConverter}}"
                                         HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,4,0" Padding="6,2" MinHeight="24" Background="Transparent" BorderThickness="0" ToolTip="Borrar búsqueda"/>
                             </Grid>
-                            <Grid Grid.Row="1" Margin="0,0,0,8">
-                                <TextBox Text="{Binding CategorySearch, UpdateSourceTrigger=PropertyChanged}" Tag="🔍 Buscar categoría..." Padding="10,6,32,6" AutomationProperties.Name="Buscar categoría"/>
-                                <Button Content="✕" Click="ClearCategorySearch_Click" Visibility="{Binding HasCategorySearch, Converter={StaticResource BooleanToVisibilityConverter}}"
-                                        HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,4,0" Padding="6,2" MinHeight="24" Background="Transparent" BorderThickness="0" ToolTip="Borrar búsqueda de categoría"/>
-                            </Grid>
-                            <ComboBox x:Name="CategoryFilter" Grid.Row="2" ItemsSource="{Binding VisibleCategories}" DisplayMemberPath="Name" SelectedItem="{Binding SelectedCategory, Mode=TwoWay}" AutomationProperties.Name="Categoría" Margin="0,0,0,8"/>
-                            <ItemsControl Grid.Row="3" ItemsSource="{Binding FrequentCategories}" Margin="0,0,0,6">
-                                <ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel/></ItemsPanelTemplate></ItemsControl.ItemsPanel>
-                                <ItemsControl.ItemTemplate><DataTemplate><Button Content="{Binding Name}" Click="Category_Click" Padding="8,3" Margin="0,0,6,6" MaxWidth="180" FontSize="12" ToolTip="{Binding Name}"/></DataTemplate></ItemsControl.ItemTemplate>
-                            </ItemsControl>
-                            <DockPanel Grid.Row="4" Margin="0,0,0,6">
+                            <ComboBox x:Name="CategoryFilter" Grid.Row="1" ItemsSource="{Binding VisibleCategories}" DisplayMemberPath="Name"
+                                      SelectedItem="{Binding SelectedCategory, Mode=TwoWay}"
+                                      Template="{StaticResource SearchableCategoryComboTemplate}"
+                                      DropDownOpened="CategoryFilter_DropDownOpened"
+                                      AutomationProperties.Name="Categoría" Margin="0,0,0,8"/>
+                            <DockPanel Grid.Row="2" Margin="0,0,0,6">
                                 <TextBlock Text="{Binding ResultSummary}" FontSize="12" Foreground="{StaticResource TextMutedBrush}" VerticalAlignment="Center"/>
                                 <Button Content="Ver todos" Click="ClearFilters_Click" DockPanel.Dock="Right" Padding="6,2" MinHeight="24" HorizontalAlignment="Right" FontSize="11"/>
                             </DockPanel>
-                            <Grid Grid.Row="5">
+                            <Grid Grid.Row="3">
                                 <ListBox x:Name="ChannelsList" ItemsSource="{Binding Channels}" SelectedItem="{Binding SelectedChannel, Mode=TwoWay}" BorderThickness="0" Background="Transparent"
                                          ScrollViewer.CanContentScroll="True" VirtualizingPanel.IsVirtualizing="True" VirtualizingPanel.VirtualizationMode="Recycling"
                                          AutomationProperties.Name="Canales" PreviewMouseLeftButtonUp="Channels_MouseUp" KeyDown="Channels_KeyDown">
@@ -353,7 +413,8 @@
                             <Grid><StackPanel x:Name="StandardControls">
                                 <WrapPanel VerticalAlignment="Center">
                                     <ui:Button Content="⏮" Click="Previous_Click" ToolTip="Canal o episodio anterior (←)" AutomationProperties.Name="Anterior" Margin="0,0,6,4"/>
-                                    <ui:Button Content="{Binding PlayActionIcon}" Click="TogglePlay_Click" ToolTip="Reproducir o detener (Espacio)" AutomationProperties.Name="{Binding PlayAction}" Margin="0,0,6,4"/>
+                                    <ui:Button Content="{Binding PlayPauseIcon}" Click="TogglePlayPause_Click" ToolTip="{Binding PlayPauseToolTip}" AutomationProperties.Name="{Binding PlayPauseAction}" Margin="0,0,6,4"/>
+                                    <ui:Button Content="⏹" Click="Stop_Click" ToolTip="Detener reproducción" AutomationProperties.Name="Detener" IsEnabled="{Binding CanStopPlayback}" Margin="0,0,6,4"/>
                                     <ui:Button Content="⏭" Click="Next_Click" ToolTip="Canal o episodio siguiente (→)" AutomationProperties.Name="Siguiente" Margin="0,0,6,4"/>
                                     <ui:Button Content="🔄" Click="Retry_Click" ToolTip="Reintentar" AutomationProperties.Name="Reintentar" IsEnabled="{Binding CanRetryPlayback}" Margin="0,0,6,4"/>
                                     <ui:Button Content="⛶" Click="ToggleFullscreen_Click" ToolTip="Pantalla completa (F o doble clic)" AutomationProperties.Name="Pantalla completa" Margin="0,0,10,4"/>
@@ -377,7 +438,8 @@
                                 </Expander>
                             </StackPanel>
                                 <WrapPanel x:Name="PipControls" Visibility="Collapsed">
-                                    <ui:Button Content="{Binding PlayActionIcon}" Click="TogglePlay_Click" ToolTip="Reproducir o detener (Espacio)" AutomationProperties.Name="{Binding PlayAction}" Margin="0,0,10,0"/>
+                                    <ui:Button Content="{Binding PlayPauseIcon}" Click="TogglePlayPause_Click" ToolTip="{Binding PlayPauseToolTip}" AutomationProperties.Name="{Binding PlayPauseAction}" Margin="0,0,6,0"/>
+                                    <ui:Button Content="⏹" Click="Stop_Click" ToolTip="Detener reproducción" AutomationProperties.Name="Detener" IsEnabled="{Binding CanStopPlayback}" Margin="0,0,10,0"/>
                                     <CheckBox Content="{Binding MuteIcon}" IsChecked="{Binding IsMuted}" ToolTip="Silenciar o activar sonido" AutomationProperties.Name="Silenciar" VerticalAlignment="Center" Margin="0,0,12,0"/>
                                     <ui:Button Content="🔄" Click="Retry_Click" ToolTip="Reintentar" AutomationProperties.Name="Reintentar" IsEnabled="{Binding CanRetryPlayback}"/>
                                 </WrapPanel>
@@ -546,5 +608,6 @@
                 <TextBlock Text="{Binding FooterStatus}" TextWrapping="Wrap" FontSize="12" AutomationProperties.LiveSetting="Polite"/>
             </Border>
         </Grid>
+    </Grid>
     </Grid>
 </ui:FluentWindow>

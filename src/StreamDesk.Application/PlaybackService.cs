@@ -76,6 +76,30 @@ public sealed partial class PlaybackService : IPlaybackService
         finally { _serial.Release(); }
     }
 
+    public async Task PauseAsync()
+    {
+        await _serial.WaitAsync().ConfigureAwait(false);
+        try
+        {
+            if (_disposed || Snapshot.State != PlaybackState.Playing) return;
+            await _backend.PauseAsync().ConfigureAwait(false);
+            Publish(PlaybackState.Paused);
+        }
+        finally { _serial.Release(); }
+    }
+
+    public async Task ResumeAsync()
+    {
+        await _serial.WaitAsync().ConfigureAwait(false);
+        try
+        {
+            if (_disposed || Snapshot.State != PlaybackState.Paused) return;
+            await _backend.ResumeAsync().ConfigureAwait(false);
+            Publish(PlaybackState.Playing);
+        }
+        finally { _serial.Release(); }
+    }
+
     private async Task InitializeCoreAsync(CancellationToken token)
     {
         if (_backend.IsReady) return;
@@ -108,6 +132,8 @@ public sealed partial class PlaybackService : IPlaybackService
             {
                 case PlaybackSignalKind.Playing:
                     session.HasPlayed = true; session.CancelTimeout(); Publish(PlaybackState.Playing, session: session); break;
+                case PlaybackSignalKind.Paused:
+                    session.CancelTimeout(); Publish(PlaybackState.Paused, session: session); break;
                 case PlaybackSignalKind.Buffering:
                     if (signal.BufferPercent >= 100 && session.HasPlayed) { session.CancelTimeout(); Publish(PlaybackState.Playing, session: session); }
                     else { if (Snapshot.State == PlaybackState.Playing) ArmTimeout(session); Publish(PlaybackState.Buffering, session: session, percent: signal.BufferPercent); }

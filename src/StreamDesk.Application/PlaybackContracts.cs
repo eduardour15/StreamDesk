@@ -15,12 +15,14 @@ public interface IPlaybackService : IDisposable, IAsyncDisposable
     Task InitializeAsync(CancellationToken cancellationToken = default);
     Task PlayAsync(Uri source, CancellationToken cancellationToken = default);
     Task StopAsync();
+    Task PauseAsync() => Task.CompletedTask;
+    Task ResumeAsync() => Task.CompletedTask;
     Task<MediaPlaybackDetails> ReadDetailsAsync(CancellationToken cancellationToken = default) => Task.FromResult(MediaPlaybackDetails.Empty);
     Task<bool> SeekAsync(long milliseconds, CancellationToken cancellationToken = default) => Task.FromResult(false);
     Task<bool> SelectTrackAsync(bool subtitles, int id, CancellationToken cancellationToken = default) => Task.FromResult(false);
 }
 
-public enum PlaybackSignalKind { Playing, Buffering, Failed, Ended }
+public enum PlaybackSignalKind { Playing, Buffering, Paused, Failed, Ended }
 public sealed record PlaybackSignal(long AttemptId, PlaybackSignalKind Kind, PlaybackFailure Failure = PlaybackFailure.None, float BufferPercent = 0);
 
 public interface IPlaybackBackend : IAsyncDisposable
@@ -31,6 +33,8 @@ public interface IPlaybackBackend : IAsyncDisposable
     Task InitializeAsync(CancellationToken cancellationToken);
     Task OpenAsync(Uri source, PlaybackOptions options, long attemptId, CancellationToken cancellationToken);
     Task StopAsync();
+    Task PauseAsync() => Task.CompletedTask;
+    Task ResumeAsync() => Task.CompletedTask;
     Task SetAudioAsync(int volume, bool muted);
     Task<MediaPlaybackDetails> ReadDetailsAsync(CancellationToken cancellationToken) => Task.FromResult(MediaPlaybackDetails.Empty);
     Task<bool> SeekAsync(long milliseconds, CancellationToken cancellationToken) => Task.FromResult(false);

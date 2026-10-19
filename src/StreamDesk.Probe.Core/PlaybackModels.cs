@@ -1,6 +1,6 @@
 namespace StreamDesk.Probe.Core;
 
-public enum PlaybackState { Idle, Loading, Playing, Buffering, Failed, Stopped }
+public enum PlaybackState { Idle, Loading, Playing, Buffering, Paused, Failed, Stopped }
 public enum PlaybackFailure { None, Cancelled, InvalidSource, Unauthorized, Forbidden, NotFound, Expired, ConnectionLimit, Network, Timeout, HardwareDecoder, UnsupportedFormat, Unavailable, Unknown }
 public enum HardwareDecoding { Automatic, Software }
 
@@ -17,7 +17,7 @@ public sealed record PlaybackOptions(int BufferMilliseconds = 1000, HardwareDeco
 public sealed record PlaybackSnapshot(long Sequence, PlaybackState State, PlaybackFailure Failure = PlaybackFailure.None,
     int RetryCount = 0, float BufferPercent = 0, bool UsingSoftware = false, bool WillRetry = false, bool EndOfMedia = false)
 {
-    public bool IsActive => State is PlaybackState.Loading or PlaybackState.Playing or PlaybackState.Buffering;
+    public bool IsActive => State is PlaybackState.Loading or PlaybackState.Playing or PlaybackState.Buffering or PlaybackState.Paused;
     public string Message => Failure switch
     {
         PlaybackFailure.Unauthorized or PlaybackFailure.Forbidden => "El proveedor rechazó el acceso. Revisa tu cuenta.",
@@ -37,6 +37,7 @@ public sealed record PlaybackSnapshot(long Sequence, PlaybackState State, Playba
             PlaybackState.Loading => "Conectando con el canal…",
             PlaybackState.Playing => "Reproduciendo en vivo",
             PlaybackState.Buffering => BufferPercent > 0 ? $"Cargando señal ({BufferPercent:0}%)…" : "Cargando señal…",
+            PlaybackState.Paused => "En pausa.",
             PlaybackState.Stopped => "Reproducción detenida.",
             _ => "Haz clic en un canal para empezar a ver."
         }

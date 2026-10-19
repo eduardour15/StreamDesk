@@ -37,6 +37,7 @@ public sealed class LibVlcBackend : IPlaybackBackend
             lib.Log += NativeLog;
             var player = new MediaPlayer(lib) { Scale = 0, EnableKeyInput = false, EnableMouseInput = false };
             player.Playing += Playing; player.Buffering += Buffering;
+            player.Paused += Paused;
             player.EncounteredError += Failed; player.EndReached += Ended;
             _libVlc = lib; _player = player;
         }
@@ -65,6 +66,8 @@ public sealed class LibVlcBackend : IPlaybackBackend
     }, token);
 
     public Task StopAsync() => Task.Run(StopCore);
+    public Task PauseAsync() => Task.Run(() => { if (_player is not null && !_disposed) _player.SetPause(true); });
+    public Task ResumeAsync() => Task.Run(() => { if (_player is not null && !_disposed) _player.SetPause(false); });
     private void StopCore()
     {
         Interlocked.Exchange(ref _attempt, 0);
@@ -76,6 +79,7 @@ public sealed class LibVlcBackend : IPlaybackBackend
 
     private void Playing(object? sender, EventArgs args)
     { Volatile.Write(ref _failure, (int)PlaybackFailure.None); Emit(PlaybackSignalKind.Playing); }
+    private void Paused(object? sender, EventArgs args) => Emit(PlaybackSignalKind.Paused);
     private void Buffering(object? sender, MediaPlayerBufferingEventArgs args) => Emit(PlaybackSignalKind.Buffering, percent: args.Cache);
     private void Failed(object? sender, EventArgs args) => Emit(PlaybackSignalKind.Failed, (PlaybackFailure)Volatile.Read(ref _failure));
     private void Ended(object? sender, EventArgs args) => Emit(PlaybackSignalKind.Ended);

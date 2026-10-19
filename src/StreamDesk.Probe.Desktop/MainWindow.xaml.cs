@@ -123,6 +123,7 @@ public partial class MainWindow : FluentWindow
     private async void Previous_Click(object sender, RoutedEventArgs e) => await _viewModel.NavigateChannelAsync(-1);
     private async void Next_Click(object sender, RoutedEventArgs e) => await _viewModel.NavigateChannelAsync(1);
     private async void TogglePlay_Click(object sender, RoutedEventArgs e) => await _viewModel.TogglePlaybackAsync();
+    private async void TogglePlayPause_Click(object sender, RoutedEventArgs e) => await _viewModel.TogglePlayPauseAsync();
     private async void PlayLast_Click(object sender, RoutedEventArgs e) => await _viewModel.PlayLastAsync();
     private async void AutoPlay_Click(object sender, RoutedEventArgs e) => await _viewModel.SetAutoPlayAsync(AutoPlayCheckBox.IsChecked == true);
     private async void ProbeContent_Click(object sender, RoutedEventArgs e) => await _viewModel.ProbeContentAsync();
@@ -236,6 +237,14 @@ public partial class MainWindow : FluentWindow
         _viewModel.SelectedMedia = null;
     }
     private void Category_Click(object sender, RoutedEventArgs e) => _viewModel.SelectedCategory = (XtreamCategory)((FrameworkElement)sender).DataContext;
+    private void CategoryFilter_DropDownOpened(object sender, EventArgs e)
+    {
+        if (CategoryFilter.Template?.FindName("CategoryFilterSearchBox", CategoryFilter) is System.Windows.Controls.TextBox searchBox)
+        {
+            searchBox.Focus();
+            searchBox.SelectAll();
+        }
+    }
     private async void FavoriteRow_Click(object sender, RoutedEventArgs e)
     { e.Handled = true; await _viewModel.ToggleFavoriteAsync((XtreamChannel)((FrameworkElement)sender).DataContext); }
     private async void Channels_MouseUp(object sender, MouseButtonEventArgs e)
@@ -365,6 +374,7 @@ public partial class MainWindow : FluentWindow
         var picture = _displays.IsPictureInPicture;
         if (!fullscreen) EnsureNativeCaptionButtons();
         var compact = fullscreen || picture;
+        if (AppTitleBar is not null) AppTitleBar.Visibility = compact ? Visibility.Collapsed : Visibility.Visible;
         Shell.Margin = new Thickness(fullscreen ? 0 : picture ? 6 : 16);
         Sidebar.Visibility = TvHeader.Visibility = ConnectionNotices.Visibility = CatalogPane.Visibility = StatusBar.Visibility = NowPlayingTitle.Visibility = compact ? Visibility.Collapsed : Visibility.Visible;
         SidebarColumn.Width = new GridLength(compact ? 0 : ActualWidth < 1050 ? 132 : 158);

@@ -85,6 +85,10 @@ internal sealed class FixturePlayback : IPlaybackService
     { HasActiveMedia = true; Snapshot = new(Snapshot.Sequence + 1, PlaybackState.Playing); StateChanged?.Invoke(this, Snapshot); return Task.CompletedTask; }
     public Task StopAsync()
     { HasActiveMedia = false; Snapshot = new(Snapshot.Sequence + 1, PlaybackState.Stopped); StateChanged?.Invoke(this, Snapshot); return Task.CompletedTask; }
+    public Task PauseAsync()
+    { Snapshot = new(Snapshot.Sequence + 1, PlaybackState.Paused); StateChanged?.Invoke(this, Snapshot); return Task.CompletedTask; }
+    public Task ResumeAsync()
+    { Snapshot = new(Snapshot.Sequence + 1, PlaybackState.Playing); StateChanged?.Invoke(this, Snapshot); return Task.CompletedTask; }
     public ValueTask DisposeAsync() { HasActiveMedia = false; return ValueTask.CompletedTask; }
     public void Dispose() => HasActiveMedia = false;
 }
