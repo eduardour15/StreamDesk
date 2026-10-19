@@ -21,7 +21,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <UseWPF>true</UseWPF>
     <ApplicationManifest>app.manifest</ApplicationManifest>
-    <Version>0.5.0-rc.1</Version>
+    <Version>0.5.0-rc.2</Version>
   </PropertyGroup>
 
 </Project>

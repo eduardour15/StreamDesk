@@ -13,6 +13,7 @@ public sealed class ShortcutTests
     [InlineData(Key.Down, PlaybackShortcut.VolumeDown)]
     [InlineData(Key.F, PlaybackShortcut.Fullscreen)]
     [InlineData(Key.M, PlaybackShortcut.Mute)]
+    [InlineData(Key.P, PlaybackShortcut.PictureInPicture)]
     public void ShortcutsRespectEditingModifiersAndOtherPages(Key key, PlaybackShortcut expected)
     {
         Assert.Equal(expected, PlaybackShortcuts.Resolve(key, ModifierKeys.None, false, false, true));
@@ -25,5 +26,10 @@ public sealed class ShortcutTests
     {
         Assert.Equal(PlaybackShortcut.ExitFullscreen, PlaybackShortcuts.Resolve(Key.Escape, ModifierKeys.None, true, true, true));
         Assert.Equal(PlaybackShortcut.None, PlaybackShortcuts.Resolve(Key.Escape, ModifierKeys.None, true, false, true));
+    }
+    [Fact]
+    public void EscapeRestoresPictureInPictureEvenWithControlFocused()
+    {
+        Assert.Equal(PlaybackShortcut.ExitPictureInPicture, PlaybackShortcuts.Resolve(Key.Escape, ModifierKeys.None, true, false, true, pictureInPicture: true));
     }
 }

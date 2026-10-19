@@ -1,5 +1,5 @@
 [CmdletBinding()]
-param([ValidatePattern('^\d+\.\d+\.\d+-[0-9A-Za-z.-]+$')][string]$Version = '0.5.0-rc.1')
+param([ValidatePattern('^\d+\.\d+\.\d+-[0-9A-Za-z.-]+$')][string]$Version = '0.5.0-rc.2')
 $ErrorActionPreference = 'Stop'
 $repository = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
 $candidate = Join-Path $repository ('artifacts\candidates\StreamDesk-' + $Version + '-' + (Get-Date -Format 'yyyyMMdd-HHmmss'))

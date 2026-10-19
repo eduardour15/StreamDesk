@@ -118,13 +118,25 @@ public partial class MainWindow : FluentWindow
     private void ToggleFullscreen_Click(object sender, RoutedEventArgs e)
     {
         try { _displays.Toggle(this, SelectedDisplay); UpdateLayoutMode(); RevealControls(); }
-        catch (Exception exception) { _viewModel.ReportWindowError(exception); }
+        catch (Exception exception) { UpdateLayoutMode(); _viewModel.ReportWindowError(exception); }
+    }
+
+    private void TogglePictureInPicture_Click(object sender, RoutedEventArgs e)
+    {
+        if (_closing || !_viewModel.ShowTv) return;
+        try { _displays.TogglePictureInPicture(this); UpdateLayoutMode(); RevealControls(); }
+        catch (Exception exception) { UpdateLayoutMode(); _viewModel.ReportWindowError(exception); }
     }
 
     private void ViewModelChanged(object? sender, PropertyChangedEventArgs args)
     {
         if (_closing) return;
         if (args.PropertyName == nameof(MainViewModel.PlayerHandle)) VideoView_Loaded(this, new RoutedEventArgs());
+        if (args.PropertyName == nameof(MainViewModel.CurrentTabIndex) && _displays.IsPictureInPicture && !_viewModel.ShowTv)
+        {
+            try { _displays.TogglePictureInPicture(this); UpdateLayoutMode(); }
+            catch (Exception exception) { _viewModel.ReportWindowError(exception); }
+        }
         if (args.PropertyName is nameof(MainViewModel.CanHideControls) or nameof(MainViewModel.CurrentTabIndex)) RevealControls();
     }
 
@@ -132,7 +144,7 @@ public partial class MainWindow : FluentWindow
     {
         RevealControls();
         if (args.Key is Key.Up or Key.Down && HasListAncestor(args.OriginalSource as DependencyObject)) return;
-        var action = PlaybackShortcuts.Resolve(args.Key, Keyboard.Modifiers, HasEditingAncestor(args.OriginalSource as DependencyObject ?? Keyboard.FocusedElement as DependencyObject), _displays.IsFullscreen, _viewModel.ShowTv);
+        var action = PlaybackShortcuts.Resolve(args.Key, Keyboard.Modifiers, HasEditingAncestor(args.OriginalSource as DependencyObject ?? Keyboard.FocusedElement as DependencyObject), _displays.IsFullscreen, _viewModel.ShowTv, _displays.IsPictureInPicture);
         if (action == PlaybackShortcut.None || args.IsRepeat) return;
         args.Handled = true;
         switch (action)
@@ -144,6 +156,7 @@ public partial class MainWindow : FluentWindow
             case PlaybackShortcut.VolumeDown: _viewModel.Volume -= 5; break;
             case PlaybackShortcut.Mute: _viewModel.IsMuted = !_viewModel.IsMuted; break;
             case PlaybackShortcut.Fullscreen: case PlaybackShortcut.ExitFullscreen: ToggleFullscreen_Click(this, new RoutedEventArgs()); break;
+            case PlaybackShortcut.PictureInPicture: case PlaybackShortcut.ExitPictureInPicture: TogglePictureInPicture_Click(this, new RoutedEventArgs()); break;
         }
     }
     private static bool HasEditingAncestor(DependencyObject? source)
@@ -168,11 +181,17 @@ public partial class MainWindow : FluentWindow
     {
         if (Shell is null) return;
         var fullscreen = _displays.IsFullscreen;
-        Shell.Margin = new Thickness(fullscreen ? 0 : 16);
-        Sidebar.Visibility = TvHeader.Visibility = ConnectionNotices.Visibility = CatalogPane.Visibility = StatusBar.Visibility = NowPlayingTitle.Visibility = fullscreen ? Visibility.Collapsed : Visibility.Visible;
-        SidebarColumn.Width = new GridLength(fullscreen ? 0 : ActualWidth < 1050 ? 132 : 158);
-        CatalogColumn.Width = new GridLength(fullscreen ? 0 : ActualWidth < 1050 ? 234 : 284);
-        Workspace.Margin = new Thickness(fullscreen ? 0 : 20, 0, 0, 0);
+        var picture = _displays.IsPictureInPicture;
+        var compact = fullscreen || picture;
+        Shell.Margin = new Thickness(fullscreen ? 0 : picture ? 6 : 16);
+        Sidebar.Visibility = TvHeader.Visibility = ConnectionNotices.Visibility = CatalogPane.Visibility = StatusBar.Visibility = NowPlayingTitle.Visibility = compact ? Visibility.Collapsed : Visibility.Visible;
+        SidebarColumn.Width = new GridLength(compact ? 0 : ActualWidth < 1050 ? 132 : 158);
+        CatalogColumn.Width = new GridLength(compact ? 0 : ActualWidth < 1050 ? 234 : 284);
+        Workspace.Margin = new Thickness(compact ? 0 : 20, 0, 0, 0);
+        PipHeader.Visibility = PipControls.Visibility = picture ? Visibility.Visible : Visibility.Collapsed;
+        StandardControls.Visibility = EpgPanel.Visibility = picture ? Visibility.Collapsed : Visibility.Visible;
+        PlaybackCaption.MaxHeight = picture ? 36 : double.PositiveInfinity;
+        PlayerControls.Padding = new Thickness(picture ? 6 : 10);
     }
     private void RevealControls() { _lastInteraction = DateTime.UtcNow; PlayerControls.Visibility = Visibility.Visible; }
     private void Player_MouseMove(object sender, MouseEventArgs e) => RevealControls();
@@ -191,7 +210,7 @@ public partial class MainWindow : FluentWindow
             }
             _lastCursor = cursor;
         }
-        if (!_viewModel.CanHideControls || _controlsHovered || PlayerControls.IsKeyboardFocusWithin) { PlayerControls.Visibility = Visibility.Visible; return; }
+        if (_displays.IsPictureInPicture || !_viewModel.CanHideControls || _controlsHovered || PlayerControls.IsKeyboardFocusWithin) { PlayerControls.Visibility = Visibility.Visible; return; }
         if (DateTime.UtcNow - _lastInteraction > TimeSpan.FromSeconds(3)) PlayerControls.Visibility = Visibility.Collapsed;
     }
     [StructLayout(LayoutKind.Sequential)] private struct ScreenPoint { public int X, Y; }

@@ -198,7 +198,7 @@ La separación puede simplificarse si el MVP se vuelve innecesariamente complejo
 ### Fase 7 — Mejoras opcionales posteriores
 **No bloquean 1.0.**
 
-- [ ] **F7-T01** Ventana flotante/Picture-in-Picture siempre visible.
+- [x] **F7-T01** Ventana flotante/Picture-in-Picture siempre visible. Código/WPF y fixture nativo verificados; DPI/monitores/proveedor físicos pendientes de validación.
 - [ ] **F7-T02** Adaptador M3U/M3U8 de importación local y remota si no entró en MVP.
 - [ ] **F7-T03** Perfiles de proveedor múltiples y administración de conexiones.
 - [ ] **F7-T04** Sincronización cifrada de favoritos e historial entre casa y trabajo (sin sincronizar secretos innecesariamente).

@@ -1,6 +1,6 @@
 # StreamDesk
 
-Reproductor IPTV para Windows con .NET 10, WPF/WPF UI y LibVLCSharp. Incluye TV, favoritos, recientes y, cuando la cuenta ofrece datos, EPG/películas/series con progreso y pistas. F5/F6 entregan un candidato **0.5.0-rc.1 autocontenido win-x64**; 1.0 sigue pendiente de pruebas reales y revisión completa de licencias nativas.
+Reproductor IPTV para Windows con .NET 10, WPF/WPF UI y LibVLCSharp. Incluye TV, favoritos, recientes y, cuando la cuenta ofrece datos, EPG/películas/series con progreso y pistas. El candidato **0.5.0-rc.2 autocontenido win-x64** agrega ventana flotante/PiP; 1.0 sigue pendiente de pruebas reales y revisión completa de licencias nativas.
 
 ## Requisitos
 
@@ -48,6 +48,8 @@ En reproducción puedes ajustar volumen/mute, cambiar al canal anterior/siguient
 Las reconexiones automáticas se limitan a dos intentos para fallos reconocidos de red/timeout. Una denegación, formato no soportado o fallo desconocido requiere intervención. El motor puede intentar software una vez ante un fallo identificado de hardware. `docs/CIERRE_F3.md` contiene evidencia y pendientes; `docs/PRUEBA_MANUAL_F3.md` explica la validación física y el recolector `scripts/Measure-Playback.ps1`.
 
 Los controles están junto al video y se ocultan a los 3 segundos de reproducción sin interacción; movimiento/teclado los recupera. Espacio reproduce/detiene, ←/→ cambia canal, ↑/↓ ajusta volumen fuera de listas/inputs, F pantalla completa, M mute y Esc restaura ventana. Se respetan los campos de edición y controles con función propia.
+
+«Ventana flotante» en el encabezado o P activa PiP con el mismo reproductor. «Fijar» permite mantenerlo encima de otras ventanas; Volver/Esc restaura la ventana anterior sin reiniciar el medio. PiP mantiene sus controles visibles; cerrar con X termina la aplicación. [Prueba física PiP](docs/PRUEBA_MANUAL_F7_T01.md).
 
 Para generar el candidato: `powershell -NoProfile -ExecutionPolicy Bypass -File scripts/Build-Candidate.ps1`. Imprime una carpeta de `artifacts/candidates`. Ejecutar su `Manage-StreamDesk.ps1 -Action Install`; admite Install/Rollback/Uninstall y conserva los datos personales. Incluye .NET Desktop y VLC, sin SDK requerido. Para reproducir el test aislado: `scripts/Test-Candidate.ps1 -Candidate <carpeta>`; usa carpetas del proyecto y omite registro/acceso directo.
 

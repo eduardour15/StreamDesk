@@ -18,7 +18,7 @@ using StreamDesk.Probe.Desktop;
 
 namespace StreamDesk.Probe.Tests;
 
-public sealed class CatalogUiTests
+public sealed partial class CatalogUiTests
 {
     [Fact]
     public async Task WpfCatalogVirtualizesFiveThousandRowsFiltersAndSurvivesFailedRefresh()
@@ -129,6 +129,7 @@ public sealed class CatalogUiTests
             await VerifyMvpUxAsync(directory, logos);
             await VerifyNativeControlPlacementAsync(logos);
             await VerifyContentUiAsync(directory, logos);
+            await VerifyPictureInPictureAsync(directory, logos);
         }
         finally { window.Close(); await WaitAsync(() => !window.IsVisible); }
     }
@@ -226,11 +227,15 @@ public sealed class CatalogUiTests
             var controlsBounds = controls.TransformToAncestor(window).TransformBounds(new Rect(controls.RenderSize));
             Assert.False(videoBounds.IntersectsWith(controlsBounds));
             Assert.NotNull(window.InputHitTest(controlsBounds.TopLeft + new Vector(12, 12)));
-            var stop = Descendants<ButtonBase>(controls).Single(button => button.Content as string == "Detener");
+            await VerifyNativePictureInPictureAsync(window, vm, player, db.Root);
+            var stop = Descendants<ButtonBase>(controls).Single(button => button.IsVisible && button.Content as string == "Detener");
             stop.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
             await WaitAsync(() => !playback.HasActiveMedia);
+            await vm.PlaySelectedAsync(); await WaitAsync(() => vm.IsPlaying);
+            Click(window, "PipButton"); await SettleAsync(window); AssertCompactControls(window);
         }
         finally { window.Close(); await WaitAsync(() => !window.IsVisible); }
+        Assert.False(playback.HasActiveMedia);
     }
 
     private sealed class LocalFixtureProvider(Uri source) : IIptvProvider
@@ -305,7 +310,7 @@ public sealed class CatalogUiTests
                 var player = (FrameworkElement)window.FindName("PlayerPane");
                 Assert.True(player.ActualWidth > 180); Assert.True(player.ActualHeight > 100);
                 var bounds = controls.TransformToAncestor(shell).TransformBounds(new Rect(controls.RenderSize));
-                Assert.True(bounds.Right <= shell.ActualWidth + 2 && bounds.Bottom <= shell.ActualHeight + 2, "Controls exceed available layout space.");
+                Assert.True(bounds.Right <= shell.ActualWidth + 2 && bounds.Bottom <= shell.ActualHeight + 2, $"Controls exceed available layout space: scale={scale}, bounds={bounds}, shell={shell.RenderSize}.");
             }
             shell.LayoutTransform = Transform.Identity; window.Width = 1360; window.Height = 850;
             await Dispatcher.Yield(DispatcherPriority.ApplicationIdle); window.UpdateLayout();

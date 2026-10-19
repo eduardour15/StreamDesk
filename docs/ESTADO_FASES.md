@@ -11,9 +11,19 @@ Este archivo registra trabajo y evidencias reales. La confirmación del usuario 
 | F4 | PENDIENTE_DE_VALIDACION | 9/11 | 2026-10-18 | MVP implementado, 113 tests y candidato win-x64 local. T09/T10 PARCIAL: DPI físicos/dos monitores y evaluación humana/IPTV pendientes. |
 | F5 | PENDIENTE_DE_VALIDACION | 8/9 | 2026-10-18 | Código/fixtures y UI implementados; capacidades y calidad EPG/VOD reales pendientes. Avance conjunto F5/F6 solicitado; F4 no se aprueba por anticipado. |
 | F6 | PENDIENTE_DE_VALIDACION | 6/12 | 2026-10-18 | Candidato autocontenido e instalación verificados localmente; 4 parciales, T08 pendiente y T12 bloqueada hasta pruebas físicas/licencias. Sin release 1.0. |
-| F7 | NO_INICIADA | 0/6 | — | Opcional después de 1.0 |
+| F7 | PENDIENTE_DE_VALIDACION | 1/6 | 2026-10-19 | F7-T01 implementada y verificada con WPF/motor nativo local. PiP físico/IPTV pendiente; F6 conserva sus gates. T02–T06 no iniciadas por el alcance de una mejora por entrega. |
 
 ## Bitácora de evidencias
+
+### 2026-10-19 — F7-T01: ventana flotante
+
+- Solicitud: «trabaja la siguiente fase». Se revisaron Git, ROADMAP, estado, prompt F7 y ADRs pertinentes. F6 no está aprobada; se comunica el riesgo y se adelanta únicamente F7-T01 sin declarar 1.0. El prompt exige entregar una mejora y detenerse antes de otra opcional.
+- Base revalidada: build Release sin errores/advertencias y 128 tests correctos. Rama local `feature/F7-T01-ventana-flotante`; se conserva el cambio ajeno `Error/error.txt`.
+- Decisión en ADR-007: ventana principal compacta/topmost opcional, mismo VideoView/MediaPlayer/sesión, sin nuevos streams; controles adyacentes y retorno a normal/maximizada. Atajos P/Esc/F y cierre con liberación, sin alterar reproducción ni datos.
+- Incremento: build Release sin errores/advertencias y 130 tests correctos, 0 fallidos/omitidos. WPF prueba ciclos PiP/normal, fijación opcional, mínimo 360x260 DIP, transiciones fullscreen, retorno de posición/estado y cierre activo. Backend ficticio registra una apertura/pico activo 1; caso nativo conserva HWND y comprueba píxeles de snapshot BMP, luego cierra PiP con motor activo. Captura `artifacts/f7-pip.png` inspeccionada; no muestra IPTV real. JSON en `artifacts/f7-pip-evidence.json`.
+- Se corrigió desbordamiento del botón nuevo en layout pequeño, ubicándolo en el encabezado. Se ajustó el fixture de posición: Windows recupera automáticamente ventanas totalmente fuera de pantalla, por lo que la restauración exacta se mide desde posición visible. Las cuatro escalas de layout anteriores siguen pasando; no son DPI físicos.
+- Candidato autocontenido local `artifacts/candidates/StreamDesk-0.5.0-rc.2-20261019-083350`, sin publicación/etiqueta. Builder y decodificación nativa final pasan. NuGet inicial produjo NU1900 por consulta restringida/caché; restore forzado con acceso autorizado renovó datos y el builder final pasó sin esa advertencia. Sin dependencias nuevas.
+- F7 `PENDIENTE_DE_VALIDACION`, F7-T01 `COMPLETADA` en código y comprobación local; protocolo físico en `PRUEBA_MANUAL_F7_T01.md`, checklist y límites en `CIERRE_F7_T01.md`. F7-T02–T06 `PENDIENTE`; se detiene tras esta mejora, sin aprobar F6/1.0.
 
 ### 2026-10-18 — F6: estabilización e instalación autocontenida
 

@@ -12,7 +12,13 @@ public sealed class WindowDisplays
     private Placement _restore;
     private WindowStyle _style;
     private ResizeMode _resize;
+    private Placement _pictureRestore;
+    private WindowStyle _pictureStyle;
+    private ResizeMode _pictureResize;
+    private double _minimumWidth, _minimumHeight;
+    private bool _previousTopmost;
     public bool IsFullscreen { get; private set; }
+    public bool IsPictureInPicture { get; private set; }
     public static IReadOnlyList<DisplayChoice> Enumerate()
     {
         var choices = new List<DisplayChoice>();
@@ -27,6 +33,7 @@ public sealed class WindowDisplays
     }
     public void Toggle(Window window, DisplayChoice? display)
     {
+        if (IsPictureInPicture) TogglePictureInPicture(window);
         var handle = new WindowInteropHelper(window).EnsureHandle();
         if (IsFullscreen)
         {
@@ -45,6 +52,49 @@ public sealed class WindowDisplays
         if (!SetWindowPos(handle, 0, rect.Left, rect.Top, rect.Right - rect.Left, rect.Bottom - rect.Top, 0x0020 | 0x0004))
         { window.WindowStyle = _style; window.ResizeMode = _resize; SetWindowPlacement(handle, ref _restore); throw new Win32Exception(); }
         IsFullscreen = true;
+    }
+
+    public void TogglePictureInPicture(Window window)
+    {
+        if (IsFullscreen) Toggle(window, null);
+        var handle = new WindowInteropHelper(window).EnsureHandle();
+        if (IsPictureInPicture)
+        {
+            RestorePicturePlacement(window, handle);
+            IsPictureInPicture = false;
+            return;
+        }
+        var info = new MonitorInfo { Size = Marshal.SizeOf<MonitorInfo>() };
+        if (!GetMonitorInfo(MonitorFromWindow(handle, 2), ref info)) throw new Win32Exception();
+        _pictureRestore = new Placement { Length = Marshal.SizeOf<Placement>() };
+        if (!GetWindowPlacement(handle, ref _pictureRestore)) throw new Win32Exception();
+        _pictureStyle = window.WindowStyle; _pictureResize = window.ResizeMode;
+        _minimumWidth = window.MinWidth; _minimumHeight = window.MinHeight; _previousTopmost = window.Topmost;
+        var scale = System.Windows.Media.VisualTreeHelper.GetDpi(window).DpiScaleX;
+        var gap = (int)Math.Round(12 * scale);
+        var width = Math.Min((int)Math.Round(480 * scale), info.Work.Right - info.Work.Left - 2 * gap);
+        var height = Math.Min((int)Math.Round(340 * scale), info.Work.Bottom - info.Work.Top - 2 * gap);
+        try
+        {
+            IsPictureInPicture = true;
+            window.MinWidth = 360; window.MinHeight = 260;
+            window.WindowState = WindowState.Normal; window.WindowStyle = WindowStyle.SingleBorderWindow;
+            window.ResizeMode = ResizeMode.CanResize; window.Topmost = true;
+            if (!SetWindowPos(handle, 0, info.Work.Right - width - gap, info.Work.Bottom - height - gap, width, height, 0x0020 | 0x0004)) throw new Win32Exception();
+        }
+        catch
+        {
+            IsPictureInPicture = false;
+            RestorePicturePlacement(window, handle);
+            throw;
+        }
+    }
+
+    private void RestorePicturePlacement(Window window, nint handle)
+    {
+        window.WindowStyle = _pictureStyle; window.ResizeMode = _pictureResize;
+        window.MinWidth = _minimumWidth; window.MinHeight = _minimumHeight; window.Topmost = _previousTopmost;
+        if (!SetWindowPlacement(handle, ref _pictureRestore)) throw new Win32Exception();
     }
     [StructLayout(LayoutKind.Sequential)] private struct NativeRect { public int Left, Top, Right, Bottom; }
     [StructLayout(LayoutKind.Sequential)] private struct NativePoint { public int X, Y; }

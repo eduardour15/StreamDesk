@@ -83,6 +83,7 @@
                     <WrapPanel Grid.Column="1" VerticalAlignment="Center">
                         <ComboBox Width="132" ItemsSource="{Binding Profiles}" DisplayMemberPath="Name" SelectedItem="{Binding ActiveProfile, Mode=TwoWay}" AutomationProperties.Name="Perfil activo" Margin="0,0,8,0"/>
                         <ui:Button Content="Actualizar" Command="{Binding LoadCatalogCommand}" ToolTip="Conectar y actualizar catálogo"/>
+                        <ui:Button x:Name="PipButton" Content="Ventana flotante" Click="TogglePictureInPicture_Click" ToolTip="P · Esc para volver" Margin="8,0,0,0"/>
                     </WrapPanel>
                 </Grid>
                 <StackPanel x:Name="ConnectionNotices" Grid.Row="1">
@@ -168,6 +169,13 @@
                     <Grid Grid.Column="1" x:Name="PlayerPane" MouseMove="Player_MouseMove" MouseLeave="Player_MouseLeave">
                         <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
                         <TextBlock x:Name="NowPlayingTitle" Text="{Binding NowPlaying}" FontSize="20" FontWeight="SemiBold" Margin="4,0,4,12" TextTrimming="CharacterEllipsis"/>
+                        <Grid x:Name="PipHeader" Visibility="Collapsed" Margin="4,0,4,6">
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                            <TextBlock Text="{Binding NowPlaying}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                            <CheckBox x:Name="PipTopmost" Grid.Column="1" Content="Fijar" ToolTip="Siempre visible sobre otras ventanas" AutomationProperties.Name="Siempre visible"
+                                      IsChecked="{Binding Topmost, RelativeSource={RelativeSource AncestorType=Window}, Mode=TwoWay}" VerticalAlignment="Center" Margin="0,0,10,0"/>
+                            <ui:Button x:Name="PipReturn" Grid.Column="2" Content="Volver" Click="TogglePictureInPicture_Click" ToolTip="Volver a la ventana normal (Esc)" AutomationProperties.Name="Volver a la ventana normal"/>
+                        </Grid>
                         <Border Grid.Row="1" Background="#FF050608" MinHeight="100" ClipToBounds="True">
                             <Grid>
                                 <lvs:VideoView x:Name="VideoView" Loaded="VideoView_Loaded">
@@ -182,15 +190,15 @@
                             </Grid>
                         </Border>
                         <StackPanel Grid.Row="2"><TextBlock x:Name="PlaybackCaption" Text="{Binding PlaybackStatus}" TextWrapping="Wrap" Foreground="{StaticResource TextMutedBrush}" Margin="4,10,4,8" AutomationProperties.LiveSetting="Polite"/>
-                            <Expander Header="Guía · ahora y después" Visibility="{Binding ShowLiveCatalog, Converter={StaticResource BooleanToVisibilityConverter}}" Margin="4,0,4,8">
+                            <Grid x:Name="EpgPanel"><Expander Header="Guía · ahora y después" Visibility="{Binding ShowLiveCatalog, Converter={StaticResource BooleanToVisibilityConverter}}" Margin="4,0,4,8">
                                 <StackPanel Margin="8"><TextBlock Text="{Binding EpgNow}" TextWrapping="Wrap"/><TextBlock Text="{Binding EpgNext}" TextWrapping="Wrap" Margin="0,6,0,6"/>
                                     <TextBlock Text="{Binding EpgStatus}" Foreground="{StaticResource TextMutedBrush}" FontSize="12" TextWrapping="Wrap"/>
                                     <WrapPanel Margin="0,8,0,0"><Button Content="Actualizar guía" Click="RefreshEpg_Click" Margin="0,0,8,0"/><Button Content="Importar XMLTV" Click="ImportEpg_Click"/></WrapPanel>
                                 </StackPanel>
-                            </Expander>
+                            </Expander></Grid>
                         </StackPanel>
                         <Border Grid.Row="3" x:Name="PlayerControls" Background="{StaticResource SurfaceBrush}" CornerRadius="10" Padding="10" MouseEnter="Controls_MouseEnter" MouseLeave="Controls_MouseLeave">
-                            <StackPanel>
+                            <Grid><StackPanel x:Name="StandardControls">
                                 <WrapPanel>
                                     <ui:Button Content="Anterior" Click="Previous_Click" ToolTip="Canal anterior (←)" Margin="0,0,6,6"/>
                                     <ui:Button Content="{Binding PlayAction}" Click="TogglePlay_Click" ToolTip="Reproducir o detener (Espacio)" Margin="0,0,6,6"/>
@@ -216,6 +224,12 @@
                                     <TextBlock Text="Solo aparecen las pistas que declara el medio. Sin pistas adicionales, no hay selección disponible." FontSize="11" Foreground="{StaticResource TextMutedBrush}" TextWrapping="Wrap"/>
                                 </StackPanel></Expander>
                             </StackPanel>
+                                <WrapPanel x:Name="PipControls" Visibility="Collapsed">
+                                    <ui:Button Content="{Binding PlayAction}" Click="TogglePlay_Click" ToolTip="Reproducir o detener (Espacio)" Margin="0,0,10,0"/>
+                                    <CheckBox Content="Silenciar" IsChecked="{Binding IsMuted}" VerticalAlignment="Center" Margin="0,0,12,0"/>
+                                    <ui:Button Content="Reintentar" Click="Retry_Click" IsEnabled="{Binding CanRetryPlayback}"/>
+                                </WrapPanel>
+                            </Grid>
                         </Border>
                     </Grid>
                 </Grid>

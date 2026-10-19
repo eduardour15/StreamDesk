@@ -23,6 +23,12 @@ Para actualizar, cierra StreamDesk y ejecuta el mismo comando desde el candidato
 5. Posición y pistas: seek solo cuando lo permite el motor. Elegir pista declarada y Aplicar. No todos los streams ofrecen subtítulos/audio alternativo. Anterior/siguiente avanza manualmente episodios en Series; en TV sigue el orden visible.
 6. Espacio reproduce/detiene, F pantalla completa, Esc restaura, M mute, ←/→ anterior/siguiente y ↑/↓ volumen fuera de listas/controles de edición. Se respetan inputs y navegación de listas. Mouse/teclado recupera controles ocultos. La reproducción al iniciar está apagada de fábrica; requiere activar explícitamente la preferencia del perfil. Suspender o cambiar perfil no inicia video automáticamente.
 
+## Ventana flotante (PiP)
+
+En una vista de TV, película o serie, pulsa «Ventana flotante» o P fuera de campos de edición. La misma ventana se vuelve compacta y conserva el medio activo. Arrástrala desde su título y cambia su tamaño desde los bordes. «Fijar» activa/desactiva que permanezca sobre otras ventanas.
+
+«Volver» o Esc restaura tamaño, posición y estado previos sin reiniciar la reproducción. F pasa a pantalla completa; P desde pantalla completa entra en PiP. Esc siempre vuelve al modo normal. PiP conserva detener/reproducir, silenciar, reintentar y los atajos de reproducción; los controles permanecen visibles. Para elegir otro título o ajustar pistas, vuelve a la vista normal. Cerrar con la X termina StreamDesk y libera el reproductor; no deja reproducción en segundo plano. Minimizar conserva el comportamiento habitual de Windows.
+
 ## Copias, diagnóstico y recuperación
 
 En Configuración, «Crear copia protegida» genera una instantánea SQLite consistente y copia solo los secretos DPAPI referenciados en `%LocalAppData%\StreamDesk\backups\backup-*`. Si falta un secreto o falla la copia, no se presenta una copia parcial como válida. Solo funciona bajo el mismo usuario de Windows; no es una exportación portable de credenciales. Las copias contienen datos personales del catálogo/perfiles: mantenlas locales y elimina las antiguas cuando ya no las necesites.
