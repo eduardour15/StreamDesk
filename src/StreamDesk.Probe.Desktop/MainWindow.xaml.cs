@@ -16,6 +16,9 @@ namespace StreamDesk.Probe.Desktop;
 
 public partial class MainWindow : FluentWindow
 {
+    private const int WindowStyleIndex = -16;
+    private const int SystemMenuStyle = 0x00080000;
+    private const uint FrameChanged = 0x0020, NoMove = 0x0002, NoSize = 0x0001, NoZOrder = 0x0004;
     private readonly MainViewModel _viewModel;
     private readonly WindowDisplays _displays = new();
     private bool _closing, _closeComplete;
@@ -40,6 +43,7 @@ public partial class MainWindow : FluentWindow
         SelectedDisplay = Displays.FirstOrDefault();
         InitializeComponent();
         DataContext = _viewModel;
+        SourceInitialized += (_, _) => EnsureNativeCaptionButtons();
         Loaded += async (_, _) => { await _viewModel.InitializePlaybackAsync(); if (!_closing) await _viewModel.LoadProfilesAsync(); };
         _viewModel.PropertyChanged += ViewModelChanged;
         SystemEvents.PowerModeChanged += PowerModeChanged;
@@ -56,6 +60,7 @@ public partial class MainWindow : FluentWindow
             finally { _readingMedia = false; }
         };
         _mediaTimer.Start();
+        UpdateLayoutMode();
     }
 
     private async void Connect_Click(object sender, RoutedEventArgs e)
@@ -138,6 +143,13 @@ public partial class MainWindow : FluentWindow
     private void ClearFilters_Click(object sender, RoutedEventArgs e) => _viewModel.ClearFilters();
     private void ClearSearch_Click(object sender, RoutedEventArgs e) => _viewModel.SearchText = "";
     private void ClearMediaSearch_Click(object sender, RoutedEventArgs e) => _viewModel.MediaSearch = "";
+    private void ClearCategorySearch_Click(object sender, RoutedEventArgs e) => _viewModel.CategorySearch = "";
+    private void ClearMediaCategorySearch_Click(object sender, RoutedEventArgs e) => _viewModel.MediaCategorySearch = "";
+    private async void BackToMediaBrowse_Click(object sender, RoutedEventArgs e)
+    {
+        await _viewModel.StopPlaybackAsync();
+        _viewModel.SelectedMedia = null;
+    }
     private void Category_Click(object sender, RoutedEventArgs e) => _viewModel.SelectedCategory = (XtreamCategory)((FrameworkElement)sender).DataContext;
     private async void FavoriteRow_Click(object sender, RoutedEventArgs e)
     { e.Handled = true; await _viewModel.ToggleFavoriteAsync((XtreamChannel)((FrameworkElement)sender).DataContext); }
@@ -151,20 +163,15 @@ public partial class MainWindow : FluentWindow
     {
         if (e.Key == Key.Enter && _viewModel.SelectedChannel is not null) { e.Handled = true; await _viewModel.PlaySelectedAsync(); }
     }
-    private async void MediaList_DoubleClick(object sender, MouseButtonEventArgs e)
-    {
-        if (HasInteractiveOrScrollAncestor(e.OriginalSource as DependencyObject) || _viewModel.SelectedMedia is null) return;
-        await _viewModel.PlayMediaAsync();
-    }
-    private async void MediaList_KeyDown(object sender, KeyEventArgs e)
-    {
-        if (e.Key == Key.Enter && _viewModel.SelectedMedia is not null) { e.Handled = true; await _viewModel.PlayMediaAsync(); }
-    }
     private async void Episodes_MouseUp(object sender, MouseButtonEventArgs e)
     {
         if (HasInteractiveOrScrollAncestor(e.OriginalSource as DependencyObject) || FindAncestor<ListBoxItem>(e.OriginalSource as DependencyObject) is not { DataContext: MediaItem episode }) return;
         _viewModel.SelectedEpisode = episode;
         await _viewModel.PlayMediaAsync();
+    }
+    private async void Episodes_KeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.Enter && _viewModel.SelectedEpisode is not null) { e.Handled = true; await _viewModel.PlayMediaAsync(); }
     }
     private async void ContinueWatching_MouseUp(object sender, MouseButtonEventArgs e)
     {
@@ -186,13 +193,14 @@ public partial class MainWindow : FluentWindow
 
     private void ToggleFullscreen_Click(object sender, RoutedEventArgs e)
     {
+        if (!_viewModel.ShowPlayerPane) return;
         try { _displays.Toggle(this, SelectedDisplay); UpdateLayoutMode(); RevealControls(); }
         catch (Exception exception) { UpdateLayoutMode(); _viewModel.ReportWindowError(exception); }
     }
 
     private void TogglePictureInPicture_Click(object sender, RoutedEventArgs e)
     {
-        if (_closing || !_viewModel.ShowTv) return;
+        if (_closing || !_viewModel.ShowTv || !_viewModel.ShowPlayerPane) return;
         try { _displays.TogglePictureInPicture(this); UpdateLayoutMode(); RevealControls(); }
         catch (Exception exception) { UpdateLayoutMode(); _viewModel.ReportWindowError(exception); }
     }
@@ -206,6 +214,7 @@ public partial class MainWindow : FluentWindow
             try { _displays.TogglePictureInPicture(this); UpdateLayoutMode(); }
             catch (Exception exception) { _viewModel.ReportWindowError(exception); }
         }
+        if (args.PropertyName is nameof(MainViewModel.CurrentTabIndex) or nameof(MainViewModel.ShowMediaBrowse) or nameof(MainViewModel.ShowMovieDetails) or nameof(MainViewModel.ShowSeriesDetails) or nameof(MainViewModel.ShowPlayerPane)) UpdateLayoutMode();
         if (args.PropertyName is nameof(MainViewModel.CanHideControls) or nameof(MainViewModel.CurrentTabIndex)) RevealControls();
     }
 
@@ -269,17 +278,37 @@ public partial class MainWindow : FluentWindow
         if (Shell is null) return;
         var fullscreen = _displays.IsFullscreen;
         var picture = _displays.IsPictureInPicture;
+        if (!fullscreen) EnsureNativeCaptionButtons();
         var compact = fullscreen || picture;
         Shell.Margin = new Thickness(fullscreen ? 0 : picture ? 6 : 16);
         Sidebar.Visibility = TvHeader.Visibility = ConnectionNotices.Visibility = CatalogPane.Visibility = StatusBar.Visibility = NowPlayingTitle.Visibility = compact ? Visibility.Collapsed : Visibility.Visible;
         SidebarColumn.Width = new GridLength(compact ? 0 : ActualWidth < 1050 ? 132 : 158);
-        CatalogColumn.Width = new GridLength(compact ? 0 : ActualWidth < 1050 ? 234 : 284);
+        var mediaDetails = _viewModel.ShowMovieDetails || _viewModel.ShowSeriesDetails;
+        CatalogColumn.Width = new GridLength(compact ? 0 : mediaDetails ? ActualWidth < 1050 ? 260 : 360 : ActualWidth < 1050 ? 234 : 284);
         Workspace.Margin = new Thickness(compact ? 0 : 20, 0, 0, 0);
         PipHeader.Visibility = PipControls.Visibility = picture ? Visibility.Visible : Visibility.Collapsed;
         StandardControls.Visibility = EpgPanel.Visibility = picture ? Visibility.Collapsed : Visibility.Visible;
+        MediaBrowsePane.Visibility = !compact && _viewModel.ShowMediaBrowse ? Visibility.Visible : Visibility.Collapsed;
+        MovieDetailsPane.Visibility = !compact && _viewModel.ShowMovieDetails ? Visibility.Visible : Visibility.Collapsed;
+        SeriesDetailsPane.Visibility = !compact && _viewModel.ShowSeriesDetails ? Visibility.Visible : Visibility.Collapsed;
+        PlayerPane.Visibility = _viewModel.ShowPlayerPane ? Visibility.Visible : Visibility.Collapsed;
         PlaybackCaption.MaxHeight = picture ? 36 : double.PositiveInfinity;
         PlayerControls.Padding = new Thickness(picture ? 6 : 10);
     }
+    private void EnsureNativeCaptionButtons()
+    {
+        if (_displays.IsFullscreen) return;
+        var handle = new System.Windows.Interop.WindowInteropHelper(this).Handle;
+        if (handle == 0) return;
+        var style = GetWindowLong(handle, WindowStyleIndex);
+        if ((style & SystemMenuStyle) != 0) return;
+        SetWindowLong(handle, WindowStyleIndex, style | SystemMenuStyle);
+        if (!SetWindowPos(handle, 0, 0, 0, 0, 0, FrameChanged | NoMove | NoSize | NoZOrder))
+            throw new Win32Exception(Marshal.GetLastWin32Error());
+    }
+    [DllImport("user32.dll", EntryPoint = "GetWindowLongW", SetLastError = true)] private static extern int GetWindowLong(nint handle, int index);
+    [DllImport("user32.dll", EntryPoint = "SetWindowLongW", SetLastError = true)] private static extern int SetWindowLong(nint handle, int index, int value);
+    [DllImport("user32.dll", SetLastError = true)] [return: MarshalAs(UnmanagedType.Bool)] private static extern bool SetWindowPos(nint handle, nint insertAfter, int x, int y, int width, int height, uint flags);
     private void RevealControls() { _lastInteraction = DateTime.UtcNow; PlayerControls.Visibility = Visibility.Visible; }
     private void Player_MouseMove(object sender, MouseEventArgs e) => RevealControls();
     private void Player_MouseLeave(object sender, MouseEventArgs e) { _controlsHovered = false; }

@@ -11,14 +11,26 @@ public sealed partial class MainViewModel
         (_playback.WillRetry && _playback.RetryCount is > 0 and <= 2 && _playback.Failure is PlaybackFailure.Network or PlaybackFailure.Timeout
             ? $" · Reintento {_playback.RetryCount}/2" : "");
     public bool ShowPlaybackPlaceholder => !_playback.IsActive;
+    public bool ShowPlaybackCaption => !ShowPlaybackPlaceholder || _playback.State == PlaybackState.Failed || _playback.WillRetry;
     public bool CanRetryPlayback => _playback.State == PlaybackState.Failed && !_playback.WillRetry;
     public bool IsPlaying => _playback.State == PlaybackState.Playing;
     public bool CanHideControls => IsPlaying && !IsWorking;
-    public string NowPlaying => _mediaWatch?.Item.Name ?? _watch?.Channel.Name ?? "Elige un canal";
+    public string NowPlaying => _playback.IsActive
+        ? _mediaWatch?.Item.Name ?? _watch?.Channel.Name ?? CurrentPlaybackPrompt
+        : ShowMediaCatalog ? CurrentPlaybackPrompt : _watch?.Channel.Name ?? "Elige un canal";
+    private string CurrentPlaybackPrompt => ShowSeriesDetails
+        ? SelectedEpisode?.Name ?? SelectedMedia?.Name ?? "Elige un episodio"
+        : SelectedMedia?.Name ?? "Elige un título";
+    public string PlayActionIcon => _playback.IsActive ? "⏹" : "▶";
     public string PlayAction => _playback.IsActive ? "Detener" : "Reproducir";
     public async Task TogglePlaybackAsync() { if (_playback.IsActive) await StopPlaybackAsync(); else await PlaySelectedAsync(); }
     public int Volume { get => _playbackService.Volume; set { _playbackService.Volume = value; OnPropertyChanged(); } }
-    public bool IsMuted { get => _playbackService.IsMuted; set { _playbackService.IsMuted = value; OnPropertyChanged(); } }
+    public bool IsMuted
+    {
+        get => _playbackService.IsMuted;
+        set { _playbackService.IsMuted = value; OnPropertyChanged(); OnPropertyChanged(nameof(MuteIcon)); }
+    }
+    public string MuteIcon => IsMuted ? "🔇" : "🔊";
     public int BufferMilliseconds
     {
         get => _playbackService.Options.BufferMilliseconds;
@@ -90,8 +102,8 @@ public sealed partial class MainViewModel
             if (_disposed || snapshot.Sequence <= _playback.Sequence) return;
             _playback = snapshot;
             StatusMessage = PlaybackStatus;
-            OnPropertyChanged(nameof(PlaybackStatus)); OnPropertyChanged(nameof(ShowPlaybackPlaceholder)); OnPropertyChanged(nameof(CanRetryPlayback));
-            OnPropertyChanged(nameof(IsPlaying)); OnPropertyChanged(nameof(CanHideControls)); OnPropertyChanged(nameof(PlayAction));
+            OnPropertyChanged(nameof(PlaybackStatus)); OnPropertyChanged(nameof(ShowPlaybackPlaceholder)); OnPropertyChanged(nameof(ShowPlaybackCaption)); OnPropertyChanged(nameof(CanRetryPlayback));
+            OnPropertyChanged(nameof(IsPlaying)); OnPropertyChanged(nameof(CanHideControls)); OnPropertyChanged(nameof(PlayAction)); OnPropertyChanged(nameof(PlayActionIcon));
             if (media is not null && ReferenceEquals(media, _mediaWatch) && snapshot.Sequence > media.AfterSequence)
             {
                 if (snapshot.State == PlaybackState.Playing) media.Played = true;

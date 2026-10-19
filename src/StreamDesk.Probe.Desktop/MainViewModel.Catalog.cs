@@ -17,6 +17,7 @@ public sealed partial class MainViewModel
     private Profile? _activeProfile;
     private string? _connectedProfileId;
     private string _searchText = string.Empty;
+    private string _categorySearch = string.Empty;
     private XtreamCategory? _selectedCategory;
     private bool _favoritesOnly;
     private bool _isCatalogLoading;
@@ -41,7 +42,29 @@ public sealed partial class MainViewModel
         }
     }
     public bool HasSearchText => !string.IsNullOrEmpty(SearchText);
-    public XtreamCategory? SelectedCategory { get => _selectedCategory; set { if (SetProperty(ref _selectedCategory, value)) _ = ApplyFilterAsync(false); } }
+    public string CategorySearch
+    {
+        get => _categorySearch;
+        set
+        {
+            if (!SetProperty(ref _categorySearch, value)) return;
+            OnPropertyChanged(nameof(HasCategorySearch));
+            OnPropertyChanged(nameof(VisibleCategories));
+        }
+    }
+    public bool HasCategorySearch => !string.IsNullOrWhiteSpace(CategorySearch);
+    public IReadOnlyList<XtreamCategory> VisibleCategories
+    {
+        get
+        {
+            var query = CatalogSearch.Normalize(CategorySearch);
+            if (query.Length == 0 || Categories.Count == 0) return Categories;
+            var all = Categories[0];
+            return new[] { all }.Concat(Categories.Skip(1).Where(category =>
+                category.Id == SelectedCategory?.Id || CatalogSearch.Normalize(category.Name).Contains(query, StringComparison.Ordinal))).ToArray();
+        }
+    }
+    public XtreamCategory? SelectedCategory { get => _selectedCategory; set { if (SetProperty(ref _selectedCategory, value)) { OnPropertyChanged(nameof(VisibleCategories)); _ = ApplyFilterAsync(false); } } }
     public bool FavoritesOnly { get => _favoritesOnly; set { if (SetProperty(ref _favoritesOnly, value)) _ = ApplyFilterAsync(false); } }
     public string CatalogSummary { get => _catalogSummary; private set { if (SetProperty(ref _catalogSummary, value)) OnPropertyChanged(nameof(HeaderSummary)); } }
     public bool HasNoChannels => Channels.Count == 0 && !IsCatalogLoading;
@@ -201,6 +224,7 @@ public sealed partial class MainViewModel
         _snapshot = snapshot; _search = index;
         Categories = new[] { new XtreamCategory("", "Todas las categorías") }.Concat(snapshot.Categories).ToArray();
         OnPropertyChanged(nameof(Categories));
+        OnPropertyChanged(nameof(VisibleCategories));
         _selectedCategory = Categories.FirstOrDefault(item => item.Id == _selectedCategory?.Id) ?? Categories[0];
         OnPropertyChanged(nameof(SelectedCategory));
         await ApplyFilterAsync(false);

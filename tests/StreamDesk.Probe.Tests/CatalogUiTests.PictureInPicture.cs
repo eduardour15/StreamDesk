@@ -42,6 +42,7 @@ public sealed partial class CatalogUiTests
                 Click(window, "PipReturn"); await SettleAsync(window);
                 Assert.False(window.Topmost); AssertBounds(before, window.RestoreBounds);
                 Assert.Equal(minimum, (window.MinWidth, window.MinHeight));
+                AssertNativeCaptionButtons(window);
             }
             Click(window, "PipButton"); await SettleAsync(window);
             var pin = (CheckBox)window.FindName("PipTopmost"); pin.IsChecked = false;
@@ -55,9 +56,10 @@ public sealed partial class CatalogUiTests
             // Both mode transitions must return to the original normal window.
             Click(window, "PipButton"); Press(window, Key.F); await SettleAsync(window);
             Assert.Equal(Visibility.Collapsed, ((UIElement)window.FindName("PipHeader")).Visibility);
-            Press(window, Key.Escape); await SettleAsync(window); AssertBounds(before, window.RestoreBounds);
+            Press(window, Key.Escape); await SettleAsync(window); AssertBounds(before, window.RestoreBounds); AssertNativeCaptionButtons(window);
             Press(window, Key.F); Press(window, Key.P); await SettleAsync(window); AssertCompactControls(window);
             Press(window, Key.Escape); await SettleAsync(window); AssertBounds(before, window.RestoreBounds);
+            AssertNativeCaptionButtons(window);
 
             window.Topmost = true; window.WindowState = WindowState.Maximized; await SettleAsync(window);
             Click(window, "PipButton"); await SettleAsync(window); pin.IsChecked = false;

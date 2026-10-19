@@ -9,7 +9,7 @@ public sealed partial class MainViewModel
     private MediaCatalog? _movies, _series, _episodes;
     private MediaItem? _selectedMedia, _selectedEpisode, _selectedDetails;
     private XtreamCategory? _mediaCategory, _season;
-    private string _mediaSearch = "", _contentStatus = "Explora películas y series de tu cuenta.", _epgStatus = "Elige un canal para ver su programación.";
+    private string _mediaSearch = "", _mediaCategorySearch = "", _contentStatus = "Explora películas y series de tu cuenta.", _epgStatus = "Elige un canal para ver su programación.";
     private bool _contentBusy;
     private CancellationTokenSource? _mediaFilter, _detailRequest, _epgRequest;
     private Task _progressWrites = Task.CompletedTask;
@@ -19,20 +19,44 @@ public sealed partial class MainViewModel
     private MediaPlaybackDetails _mediaDetails = MediaPlaybackDetails.Empty;
     public bool ShowLiveCatalog => CurrentTabIndex is >= 1 and <= 3;
     public bool ShowMediaCatalog => CurrentTabIndex is 5 or 6;
+    public bool ShowMovieBrowse => CurrentTabIndex == 5 && SelectedMedia is null;
+    public bool ShowMovieDetails => CurrentTabIndex == 5 && SelectedMedia?.Kind == ContentKind.Movie;
+    public bool ShowSeriesBrowse => CurrentTabIndex == 6 && SelectedMedia is null;
+    public bool ShowSeriesDetails => CurrentTabIndex == 6 && SelectedMedia?.Kind == ContentKind.Series;
+    public bool ShowMediaBrowse => ShowMovieBrowse || ShowSeriesBrowse;
+    public bool ShowPlayerPane => !ShowMediaBrowse;
     public bool ShowContinueWatching => CurrentTabIndex == 7;
-    public bool ShowEpisodePicker => SelectedMedia?.Kind == ContentKind.Series;
     public string VersionLabel => typeof(MainViewModel).Assembly.GetCustomAttributes(typeof(System.Reflection.AssemblyInformationalVersionAttribute), false)
         .OfType<System.Reflection.AssemblyInformationalVersionAttribute>().FirstOrDefault()?.InformationalVersion.Split('+')[0] ?? "Candidato";
     public string HeaderSummary => ShowLiveCatalog ? CatalogSummary : ShowContinueWatching ? $"{ContinueWatching.Count} en curso" : $"{MediaItems.Count} títulos";
     public bool HasMovies => _movies?.Items.Count > 0;
     public bool HasSeries => _series?.Items.Count > 0;
     public bool ContentBusy { get => _contentBusy; private set { if (SetProperty(ref _contentBusy, value)) OnPropertyChanged(nameof(IsWorking)); } }
-    public string ContentStatus { get => _contentStatus; private set => SetProperty(ref _contentStatus, value); }
+    public string ContentStatus
+    {
+        get => _contentStatus;
+        private set { if (SetProperty(ref _contentStatus, value)) OnPropertyChanged(nameof(FooterStatus)); }
+    }
     public string EpgStatus { get => _epgStatus; private set => SetProperty(ref _epgStatus, value); }
     public string EpgNow { get; private set; } = "Sin programación actual.";
     public string EpgNext { get; private set; } = "Sin programación siguiente.";
     public IReadOnlyList<MediaItem> MediaItems { get; private set; } = [];
+    public string MediaDescription => (_selectedDetails ?? SelectedMedia)?.Description ?? "Elige un título para ver su sinopsis.";
+    public string MediaPosterUrl => (_selectedDetails ?? SelectedMedia)?.PosterUrl ?? "";
+    public string MediaCategoryLabel => SelectedMedia is null ? "" : MediaCategories.FirstOrDefault(category => category.Id == SelectedMedia.CategoryId)?.Name ?? "";
+    public string SeriesSummary => $"{Seasons.Count} temporadas · {_episodes?.Items.Count ?? 0} episodios";
     public IReadOnlyList<XtreamCategory> MediaCategories => new[] { new XtreamCategory("", "Todas las categorías") }.Concat((CurrentTabIndex == 6 ? _series : _movies)?.Categories ?? []).ToArray();
+    public IReadOnlyList<XtreamCategory> VisibleMediaCategories
+    {
+        get
+        {
+            var categories = MediaCategories;
+            var query = CatalogSearch.Normalize(MediaCategorySearch);
+            if (query.Length == 0 || categories.Count == 0) return categories;
+            return new[] { categories[0] }.Concat(categories.Skip(1).Where(category =>
+                category.Id == MediaCategory?.Id || CatalogSearch.Normalize(category.Name).Contains(query, StringComparison.Ordinal))).ToArray();
+        }
+    }
     public IReadOnlyList<XtreamCategory> Seasons => _episodes?.Categories ?? [];
     public IReadOnlyList<MediaItem> Episodes => (_episodes?.Items ?? []).Where(item => Season is null || item.CategoryId == Season.Id).ToArray();
     public IReadOnlyList<MediaProgress> ContinueWatching => _progress.Where(item => !item.Completed && item.PositionMilliseconds > 0).ToArray();
@@ -40,10 +64,21 @@ public sealed partial class MainViewModel
     public MediaItem? SelectedMedia
     {
         get => _selectedMedia;
-        set { if (SetProperty(ref _selectedMedia, value)) { _selectedDetails = null; OnPropertyChanged(nameof(MediaDescription)); OnPropertyChanged(nameof(ShowEpisodePicker)); _ = LoadMediaDetailsAsync(value); } }
+        set
+        {
+            if (!SetProperty(ref _selectedMedia, value)) return;
+            _selectedDetails = null;
+            if (value is null && ShowMediaCatalog) ContentStatus = $"Películas: {_movies?.Items.Count ?? 0} · Series: {_series?.Items.Count ?? 0}";
+            foreach (var name in new[] { nameof(MediaDescription), nameof(MediaPosterUrl), nameof(MediaCategoryLabel), nameof(SeriesSummary), nameof(ShowMovieBrowse), nameof(ShowMovieDetails), nameof(ShowSeriesBrowse), nameof(ShowSeriesDetails), nameof(ShowMediaBrowse), nameof(ShowPlayerPane), nameof(NowPlaying) }) OnPropertyChanged(name);
+            _ = LoadMediaDetailsAsync(value);
+        }
     }
-    public MediaItem? SelectedEpisode { get => _selectedEpisode; set => SetProperty(ref _selectedEpisode, value); }
-    public XtreamCategory? MediaCategory { get => _mediaCategory ?? MediaCategories.FirstOrDefault(); set { if (SetProperty(ref _mediaCategory, value)) _ = FilterMediaAsync(); } }
+    public MediaItem? SelectedEpisode
+    {
+        get => _selectedEpisode;
+        set { if (SetProperty(ref _selectedEpisode, value)) OnPropertyChanged(nameof(NowPlaying)); }
+    }
+    public XtreamCategory? MediaCategory { get => _mediaCategory ?? MediaCategories.FirstOrDefault(); set { if (SetProperty(ref _mediaCategory, value)) { OnPropertyChanged(nameof(VisibleMediaCategories)); _ = FilterMediaAsync(); } } }
     public XtreamCategory? Season
     {
         get => _season;
@@ -69,7 +104,17 @@ public sealed partial class MainViewModel
         }
     }
     public bool HasMediaSearch => !string.IsNullOrEmpty(MediaSearch);
-    public string MediaDescription => (_selectedDetails ?? SelectedMedia)?.Description ?? "Elige un título para ver su sinopsis.";
+    public string MediaCategorySearch
+    {
+        get => _mediaCategorySearch;
+        set
+        {
+            if (!SetProperty(ref _mediaCategorySearch, value)) return;
+            OnPropertyChanged(nameof(HasMediaCategorySearch));
+            OnPropertyChanged(nameof(VisibleMediaCategories));
+        }
+    }
+    public bool HasMediaCategorySearch => !string.IsNullOrWhiteSpace(MediaCategorySearch);
     public IReadOnlyList<MediaTrack> AudioTracks => _mediaDetails.AudioTracks;
     public IReadOnlyList<MediaTrack> SubtitleTracks => _mediaDetails.SubtitleTracks;
     public MediaTrack? SelectedAudioTrack { get; set; }
@@ -123,6 +168,7 @@ public sealed partial class MainViewModel
         var series = await _contentStore.LoadCatalogAsync(profile, ContentKind.Series, cancellationToken: token);
         var progress = await _contentStore.LoadProgressAsync(profile, token);
         if (version != _sessionVersion || _disposed) return;
+        ContentStatus = $"Películas: {movies?.Items.Count ?? 0} · Series: {series?.Items.Count ?? 0}";
         _movies = movies; _series = series; _progress = progress; NotifyContent(); await FilterMediaAsync();
     }
 
@@ -150,6 +196,7 @@ public sealed partial class MainViewModel
     {
         _detailRequest?.Cancel(); _episodes = null; Season = null; SelectedEpisode = null; OnPropertyChanged(nameof(Seasons)); OnPropertyChanged(nameof(Episodes));
         if (item is null || _disposed) return;
+        ContentStatus = item.Kind == ContentKind.Series ? "Cargando temporadas y episodios…" : "Cargando información de la película…";
         using var request = CancellationTokenSource.CreateLinkedTokenSource(_shutdown.Token, _session.Token); _detailRequest = request;
         var version = _sessionVersion;
         try
@@ -161,7 +208,7 @@ public sealed partial class MainViewModel
             {
                 var details = await provider.GetMovieInfoAsync(item, request.Token);
                 if (!ReferenceEquals(_selectedMedia, item) || version != _sessionVersion) return;
-                _selectedDetails = details; OnPropertyChanged(nameof(MediaDescription));
+                _selectedDetails = details; OnPropertyChanged(nameof(MediaDescription)); OnPropertyChanged(nameof(MediaPosterUrl));
             }
             else
             {
@@ -170,7 +217,7 @@ public sealed partial class MainViewModel
                 request.Token.ThrowIfCancellationRequested(); if (!ReferenceEquals(_selectedMedia, item) || version != _sessionVersion) return;
                 if (cached is null && _contentStore is not null && _connectedProfileId is { } id) await _contentStore.SaveCatalogAsync(id, ContentKind.Episode, item.Id, episodes, request.Token);
                 if (version != _sessionVersion) return;
-                _episodes = episodes; Season = Seasons.FirstOrDefault(); OnPropertyChanged(nameof(Seasons)); OnPropertyChanged(nameof(Episodes));
+                _episodes = episodes; Season = Seasons.FirstOrDefault(); OnPropertyChanged(nameof(Seasons)); OnPropertyChanged(nameof(Episodes)); OnPropertyChanged(nameof(SeriesSummary));
                 SelectedEpisode ??= Episodes.FirstOrDefault();
                 ContentStatus = episodes.Items.Count == 0 ? "Sin episodios disponibles." : $"{episodes.Items.Count} episodios disponibles.";
             }
@@ -285,7 +332,7 @@ public sealed partial class MainViewModel
     private void NotifyContent()
     {
         SelectedProgress ??= ContinueWatching.FirstOrDefault();
-        foreach (var name in new[] { nameof(HasMovies), nameof(HasSeries), nameof(MediaCategories), nameof(ContinueWatching), nameof(SelectedProgress) }) OnPropertyChanged(name);
+        foreach (var name in new[] { nameof(HasMovies), nameof(HasSeries), nameof(MediaCategories), nameof(VisibleMediaCategories), nameof(MediaCategoryLabel), nameof(ContinueWatching), nameof(SelectedProgress) }) OnPropertyChanged(name);
     }
     private void ResetContent()
     {
@@ -293,7 +340,8 @@ public sealed partial class MainViewModel
         _movies = _series = _episodes = null; _progress = []; _selectedMedia = _selectedEpisode = _selectedDetails = null; _season = _mediaCategory = null;
         MediaItems = []; _mediaDetails = MediaPlaybackDetails.Empty;
         ContentStatus = "Explora películas y series de tu cuenta."; EpgStatus = "Elige un canal para ver su programación.";
-        NotifyContent(); NotifyMediaDetails(); OnPropertyChanged(nameof(MediaItems)); OnPropertyChanged(nameof(SelectedMedia)); OnPropertyChanged(nameof(MediaDescription)); OnPropertyChanged(nameof(Seasons)); OnPropertyChanged(nameof(Episodes));
+        NotifyContent(); NotifyMediaDetails(); OnPropertyChanged(nameof(MediaItems)); OnPropertyChanged(nameof(SelectedMedia)); OnPropertyChanged(nameof(MediaDescription)); OnPropertyChanged(nameof(MediaPosterUrl)); OnPropertyChanged(nameof(MediaCategoryLabel)); OnPropertyChanged(nameof(SeriesSummary)); OnPropertyChanged(nameof(Seasons)); OnPropertyChanged(nameof(Episodes));
+        OnPropertyChanged(nameof(ShowMovieBrowse)); OnPropertyChanged(nameof(ShowMovieDetails)); OnPropertyChanged(nameof(ShowSeriesBrowse)); OnPropertyChanged(nameof(ShowSeriesDetails)); OnPropertyChanged(nameof(ShowMediaBrowse)); OnPropertyChanged(nameof(ShowPlayerPane)); OnPropertyChanged(nameof(NowPlaying));
         _epgPrograms = []; UpdateEpgLabels();
     }
     private sealed class MediaWatch(MediaItem item, string? profileId, int version, long afterSequence)

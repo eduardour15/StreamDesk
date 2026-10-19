@@ -2,9 +2,11 @@ using System.Diagnostics;
 using System.IO;
 using System.Net;
 using System.Net.Http;
+using System.Runtime.InteropServices;
 using System.Text;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
@@ -21,6 +23,26 @@ namespace StreamDesk.Probe.Tests;
 [Collection("NativePlayback")]
 public sealed partial class CatalogUiTests
 {
+    private const int WindowStyleIndex = -16;
+    private const int SystemMenuStyle = 0x00080000;
+    private const int MinimizeBoxStyle = 0x00020000;
+    private const int MaximizeBoxStyle = 0x00010000;
+    private const int ResizeFrameStyle = 0x00040000;
+    private const int CaptionStyle = 0x00C00000;
+
+    [DllImport("user32.dll", EntryPoint = "GetWindowLongW")]
+    private static extern int GetNativeWindowStyle(nint handle, int index);
+
+    private static void AssertNativeCaptionButtons(Window window)
+    {
+        var style = GetNativeWindowStyle(new WindowInteropHelper(window).Handle, WindowStyleIndex);
+        Assert.Equal(CaptionStyle, style & CaptionStyle);
+        Assert.True((style & SystemMenuStyle) == SystemMenuStyle, $"Expected WS_SYSMENU; HWND style is 0x{style:X8}.");
+        Assert.Equal(MinimizeBoxStyle, style & MinimizeBoxStyle);
+        Assert.Equal(MaximizeBoxStyle, style & MaximizeBoxStyle);
+        Assert.Equal(ResizeFrameStyle, style & ResizeFrameStyle);
+    }
+
     [Fact]
     public async Task WpfCatalogVirtualizesFiveThousandRowsFiltersAndSurvivesFailedRefresh()
     {
@@ -91,6 +113,8 @@ public sealed partial class CatalogUiTests
             var scrolledContainers = Realized(); Assert.InRange(scrolledContainers, 1, 100);
 
             var watch = Stopwatch.StartNew();
+            vm.CategorySearch = "musica"; Assert.Contains(vm.VisibleCategories, category => category.Id == "music");
+            vm.CategorySearch = "";
             vm.SearchText = "musica AGUILA";
             await WaitAsync(() => vm.Channels.Count == 1 && vm.Channels[0].Id == "004999");
             watch.Stop();
@@ -147,17 +171,27 @@ public sealed partial class CatalogUiTests
         var window = new MainWindow(vm, logos) { Left = -20000, Top = -20000, WindowStartupLocation = WindowStartupLocation.Manual, ShowActivated = false, ShowInTaskbar = false };
         try
         {
+            Assert.Equal(WindowStyle.SingleBorderWindow, window.WindowStyle);
+            Assert.Equal(ResizeMode.CanResize, window.ResizeMode);
+            Assert.False(window.ExtendsContentIntoTitleBar);
             window.Show(); await WaitAsync(() => !vm.IsWorking && vm.ActiveProfile is not null);
+            AssertNativeCaptionButtons(window);
             Assert.False(vm.HasMovies); Assert.False(vm.HasSeries);
             await vm.ProbeContentAsync(); Assert.True(vm.HasMovies); Assert.True(vm.HasSeries);
             var originalVideo = window.FindName("VideoView");
-            vm.CurrentTabIndex = 5; await WaitAsync(() => vm.MediaItems.Count == 5000);
+            vm.CurrentTabIndex = 5; Assert.True(vm.ShowMovieBrowse); Assert.False(vm.ShowPlayerPane); await WaitAsync(() => vm.MediaItems.Count == 5000);
+            Assert.Equal(Visibility.Visible, ((FrameworkElement)window.FindName("MediaBrowsePane")).Visibility);
+            Assert.Equal(Visibility.Collapsed, ((FrameworkElement)window.FindName("PlayerPane")).Visibility);
+            vm.MediaCategorySearch = "ficcion"; Assert.Contains(vm.VisibleMediaCategories, category => category.Id == "fiction");
+            vm.MediaCategory = vm.VisibleMediaCategories.Single(category => category.Id == "fiction");
             await Dispatcher.Yield(DispatcherPriority.ApplicationIdle); window.UpdateLayout();
             var list = (ListBox)window.FindName("MediaList");
             var realized = Enumerable.Range(0, 5000).Count(index => list.ItemContainerGenerator.ContainerFromIndex(index) is not null);
             Assert.InRange(realized, 1, 100);
             vm.MediaSearch = "pelicula aguila"; await WaitAsync(() => vm.MediaItems.Count == 1);
-            vm.SelectedMedia = vm.MediaItems[0]; await WaitAsync(() => vm.MediaDescription.Contains("Sin sinopsis", StringComparison.Ordinal));
+            vm.SelectedMedia = vm.MediaItems[0]; Assert.True(vm.ShowMovieDetails); Assert.True(vm.ShowPlayerPane); await WaitAsync(() => vm.MediaDescription.Contains("Sin sinopsis", StringComparison.Ordinal));
+            Assert.Equal(Visibility.Visible, ((FrameworkElement)window.FindName("MovieDetailsPane")).Visibility);
+            Assert.Equal(Visibility.Visible, ((FrameworkElement)window.FindName("PlayerPane")).Visibility);
             await vm.PlayMediaAsync(); backend.Emit(new(backend.Opens.Last().Id, PlaybackSignalKind.Playing)); await WaitAsync(() => vm.IsPlaying);
             await vm.RefreshPlaybackDetailsAsync(); Assert.True(vm.CanSeek);
             await vm.SeekToAsync(70); Assert.Equal(70000, backend.Sought);
@@ -167,9 +201,15 @@ public sealed partial class CatalogUiTests
             Assert.Equal(60000, backend.Opens.Last().Options.StartPositionMilliseconds);
             backend.Emit(new(backend.Opens.Last().Id, PlaybackSignalKind.Playing)); await WaitAsync(() => vm.IsPlaying);
             backend.Emit(new(backend.Opens.Last().Id, PlaybackSignalKind.Ended)); await WaitAsync(() => vm.ContinueWatching.Count == 0);
-            vm.CurrentTabIndex = 6; vm.MediaSearch = ""; vm.MediaCategory = null; await WaitAsync(() => vm.MediaItems.Count == 1 && vm.MediaItems[0].Kind == ContentKind.Series);
-            vm.SelectedMedia = vm.MediaItems[0]; await WaitAsync(() => vm.Seasons.Count == 2);
+            vm.CurrentTabIndex = 6; Assert.True(vm.ShowSeriesBrowse); vm.MediaSearch = ""; vm.MediaCategory = null; vm.MediaCategorySearch = ""; await WaitAsync(() => vm.MediaItems.Count == 1 && vm.MediaItems[0].Kind == ContentKind.Series);
+            vm.SelectedMedia = vm.MediaItems[0]; Assert.True(vm.ShowSeriesDetails); await WaitAsync(() => vm.Seasons.Count == 2);
+            Assert.Equal("Episodio 1", vm.NowPlaying);
+            Assert.Equal(Visibility.Visible, ((FrameworkElement)window.FindName("SeriesDetailsPane")).Visibility);
+            await Dispatcher.Yield(DispatcherPriority.ApplicationIdle); window.UpdateLayout();
+            var seriesBitmap = new RenderTargetBitmap(1360, 850, 96, 96, PixelFormats.Pbgra32); seriesBitmap.Render((Visual)window.Content);
+            var seriesPng = new PngBitmapEncoder(); seriesPng.Frames.Add(BitmapFrame.Create(seriesBitmap)); using (var file = File.Create(Path.Combine(artifacts, "f5-series-details.png"))) seriesPng.Save(file);
             vm.Season = vm.Seasons[1]; Assert.Empty(vm.Episodes); vm.Season = vm.Seasons[0]; Assert.Equal(2, vm.Episodes.Count);
+            Assert.Equal("2 temporadas · 2 episodios", vm.SeriesSummary);
             vm.SelectedEpisode = vm.Episodes[0]; await vm.PlayMediaAsync(); await vm.NavigateEpisodeAsync(1); Assert.Equal("episode-2", vm.SelectedEpisode?.Id);
             Assert.Equal(1, backend.Peak); Assert.Same(originalVideo, window.FindName("VideoView"));
             await vm.StopPlaybackAsync();
@@ -230,7 +270,8 @@ public sealed partial class CatalogUiTests
             Assert.False(videoBounds.IntersectsWith(controlsBounds));
             Assert.NotNull(window.InputHitTest(controlsBounds.TopLeft + new Vector(12, 12)));
             await VerifyNativePictureInPictureAsync(window, vm, player, db.Root);
-            var stop = Descendants<ButtonBase>(controls).Single(button => button.IsVisible && button.Content as string == "Detener");
+            var stop = Descendants<ButtonBase>(controls).Single(button => button.IsVisible && button.Content as string == "⏹");
+            Assert.Equal("Detener", System.Windows.Automation.AutomationProperties.GetName(stop));
             stop.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
             await WaitAsync(() => !playback.HasActiveMedia);
             await vm.PlaySelectedAsync(); await WaitAsync(() => vm.IsPlaying);

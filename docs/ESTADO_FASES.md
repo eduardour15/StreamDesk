@@ -4,16 +4,31 @@ Este archivo registra trabajo y evidencias reales. La confirmación del usuario 
 
 | Fase | Gate | Tareas completas | Última revisión | Bloqueos o dependencias |
 |---|---|---:|---|---|
-| F0 | PENDIENTE_DE_VALIDACION | 5/11 | 2026-10-18 | Reanudada F0-T05: build y 67 tests correctos; sigue pendiente confirmar video real después de corregir LibVLC. F0-T05/T06/T07 PARCIAL. Métricas, condiciones del proveedor y avisos nativos pendientes. |
-| F1 | PENDIENTE_DE_VALIDACION | 10/10 | 2026-10-17 | Código y regresiones corregidos; falta confirmar preservación del playback real actual. |
-| F2 | PENDIENTE_DE_VALIDACION | 10/10 | 2026-10-17 | 67 tests en salida Release aislada, incluida WPF con 5.000 canales. Verificación técnica PASA; cierre condicionado a revalidación previa F0/F1. |
-| F3 | APROBADA | 7/11 verificadas; cierre solicitado | 2026-10-18 | COMPLETADA por decisión expresa del usuario. Se conservan las verificaciones físicas/IPTV/mediciones pendientes de T04/T05/T10/T11; esta decisión no constituye evidencia de esas pruebas. |
-| F4 | PENDIENTE_DE_VALIDACION | 9/11 | 2026-10-18 | MVP implementado, 113 tests y candidato win-x64 local. T09/T10 PARCIAL: DPI físicos/dos monitores y evaluación humana/IPTV pendientes. |
-| F5 | PENDIENTE_DE_VALIDACION | 8/9 | 2026-10-18 | Código/fixtures y UI implementados; capacidades y calidad EPG/VOD reales pendientes. Avance conjunto F5/F6 solicitado; F4 no se aprueba por anticipado. |
-| F6 | PENDIENTE_DE_VALIDACION | 6/12 | 2026-10-18 | Candidato autocontenido e instalación verificados localmente; 4 parciales, T08 pendiente y T12 bloqueada hasta pruebas físicas/licencias. Sin release 1.0. |
-| F7 | PENDIENTE_DE_VALIDACION | 2/6 | 2026-10-19 | F7-T01/T02 implementadas y verificadas automáticamente. Falta prueba manual con una lista autorizada; F6 conserva los pendientes específicos de sus gates. T03–T06 no iniciadas. |
+| F0 | APROBADA | 5/11 | 2026-10-19 | Fase marcada completada por confirmación expresa del usuario. Los criterios no acreditados siguen identificados por tarea: F0-T05/T06/T07 PARCIAL; métricas, condiciones del proveedor y avisos nativos pendientes. |
+| F1 | APROBADA | 10/10 | 2026-10-19 | Fase marcada completada por confirmación expresa del usuario; la prueba real de reproducción posterior a las correcciones no se registra como evidencia independiente. |
+| F2 | APROBADA | 10/10 | 2026-10-19 | Fase marcada completada por confirmación expresa del usuario. Se conservan los resultados automatizados registrados y la dependencia de validación real F0/F1 como nota histórica, sin atribuir pruebas no ejecutadas. |
+| F3 | APROBADA | 7/11 verificadas; cierre solicitado | 2026-10-19 | COMPLETADA por decisión expresa del usuario. Se conservan las verificaciones físicas/IPTV/mediciones pendientes de T04/T05/T10/T11; esta decisión no constituye evidencia de esas pruebas. |
+| F4 | APROBADA | 9/11 | 2026-10-19 | Fase marcada completada por confirmación expresa del usuario. T09/T10 PARCIAL: DPI físicos/dos monitores y evaluación humana/IPTV pendientes. |
+| F5 | APROBADA | 8/9 | 2026-10-19 | Fase marcada completada por confirmación expresa del usuario; capacidades y calidad EPG/VOD reales siguen pendientes de evidencia. |
+| F6 | APROBADA | 6/12 | 2026-10-19 | Fase marcada completada por confirmación expresa del usuario. T08 sigue pendiente y T12 bloqueada hasta pruebas físicas/licencias; esta marca no constituye publicación ni aprobación de release 1.0. |
+| F7 | APROBADA | 2/6 | 2026-10-19 | Alcance trabajado F7-T01/T02 marcado completado por confirmación del usuario. La prueba manual con lista autorizada sigue PENDIENTE_DE_VALIDACION; T03–T06 no se han trabajado y no se marcan completadas. |
 
 ## Bitácora de evidencias
+
+### 2026-10-19 — cierre administrativo de fases trabajadas
+
+- **Solicitud:** el usuario pide marcar como completadas todas las fases trabajadas y confirma que las fases anteriores están validadas.
+- **Registro:** F0–F7 quedan `APROBADA` a nivel de fase por esa confirmación expresa. Los conteos e IDs de tarea se mantienen basados en la evidencia registrada; no se convierten tareas PARCIAL/PENDIENTE/BLOQUEADA en COMPLETADA sin evidencia específica.
+- **Límite:** esta decisión de estado no acredita pruebas físicas, proveedor real, mediciones ni licencias que siguen pendientes. F7-T03–T06 no fueron trabajadas. F6 no representa una autorización o publicación de la versión 1.0; F6-T12 conserva su bloqueo.
+
+### 2026-10-19 — ajuste UX de películas y series
+
+- **Solicitud:** distinguir películas/series de TV en vivo, mostrar una ficha propia con temporadas y episodios para series, buscar categorías, dejar controles de reproducción solo con iconos y verificar los controles de ventana.
+- **Implementación:** películas y series tienen exploración de catálogo y fichas propias. La ficha de película muestra póster, categoría, sinopsis y acciones; la ficha de serie muestra esos datos, cantidad de temporadas/episodios, selector de temporada y episodios reproducibles. Se añadió búsqueda de categorías en TV y contenido. La barra de reproducción usa iconos con tooltip y nombres accesibles. El encabezado del reproductor refleja el episodio seleccionado si no hay una sesión activa.
+- **Ventana:** `MainWindow` usa `SingleBorderWindow`, `CanResize` y `ExtendsContentIntoTitleBar="False"`; añade `WS_SYSMENU` al HWND porque `FluentWindow` no lo incluía. La prueba verifica los estilos nativos de marco, menú del sistema, minimizar, maximizar y redimensionar; pantalla completa oculta el marco intencionalmente y PiP conserva marco redimensionable.
+- **Archivos:** `src/StreamDesk.Probe.Desktop/MainViewModel.Catalog.cs`, `MainViewModel.Content.cs`, `MainViewModel.Playback.cs`, `MainViewModel.cs`, `MainWindow.xaml`, `MainWindow.xaml.cs` y `tests/StreamDesk.Probe.Tests/CatalogUiTests.cs`.
+- **Verificación ejecutada:** `dotnet build StreamDesk.sln --no-restore -m:1 --verbosity:minimal` correcto (0 advertencias/errores); `dotnet test StreamDesk.sln --no-restore -m:1 --verbosity:minimal` correcto (151/151, 0 fallidos/omitidos); `git diff --check` sin errores. Capturas WPF locales: `artifacts/f5-content.png` y `artifacts/f5-series-details.png`.
+- **Límites y gate:** las capturas/pruebas usan datos y proveedor ficticios; no verifican catálogo, metadatos ni reproducción de proveedor IPTV real. No cambia la decisión del gate F5 ya registrada ni convierte validación manual pendiente en evidencia.
 
 ### 2026-10-19 — F7-T02: importación M3U/M3U8
 

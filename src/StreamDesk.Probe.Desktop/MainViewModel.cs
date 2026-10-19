@@ -84,7 +84,12 @@ public sealed partial class MainViewModel : INotifyPropertyChanged, IDisposable,
     public Profile? SelectedProfile { get => _selectedProfile; set { if (SetProperty(ref _selectedProfile, value)) ((AsyncRelayCommand)DeleteProfileCommand).NotifyCanExecuteChanged(); } }
     public XtreamChannel? SelectedChannel { get => _selectedChannel; set { if (SetProperty(ref _selectedChannel, value)) NotifySelection(); } }
     public string? SelectedFormat { get => _selectedFormat; set => SetProperty(ref _selectedFormat, value); }
-    public string StatusMessage { get => _statusMessage; private set => SetProperty(ref _statusMessage, value); }
+    public string StatusMessage
+    {
+        get => _statusMessage;
+        private set { if (SetProperty(ref _statusMessage, value)) OnPropertyChanged(nameof(FooterStatus)); }
+    }
+    public string FooterStatus => ShowMediaCatalog ? ContentStatus : StatusMessage;
     public string? HttpWarning { get => _httpWarning; private set { if (SetProperty(ref _httpWarning, value)) OnPropertyChanged(nameof(HasHttpWarning)); } }
     public bool HasHttpWarning => !string.IsNullOrWhiteSpace(HttpWarning);
     public string? ConnectionSummary { get => _connectionSummary; private set { if (SetProperty(ref _connectionSummary, value)) OnPropertyChanged(nameof(HasConnectionSummary)); } }
@@ -102,24 +107,26 @@ public sealed partial class MainViewModel : INotifyPropertyChanged, IDisposable,
             if (value is >= 1 and <= 3)
             {
                 _favoritesOnly = value == 2; _recentsOnly = value == 3;
-                _searchText = ""; _selectedCategory = Categories.FirstOrDefault();
-                OnPropertyChanged(nameof(FavoritesOnly)); OnPropertyChanged(nameof(SearchText)); OnPropertyChanged(nameof(HasSearchText)); OnPropertyChanged(nameof(SelectedCategory));
+                _searchText = ""; _categorySearch = ""; _selectedCategory = Categories.FirstOrDefault();
+                OnPropertyChanged(nameof(FavoritesOnly)); OnPropertyChanged(nameof(SearchText)); OnPropertyChanged(nameof(HasSearchText)); OnPropertyChanged(nameof(CategorySearch)); OnPropertyChanged(nameof(HasCategorySearch)); OnPropertyChanged(nameof(VisibleCategories)); OnPropertyChanged(nameof(SelectedCategory));
                 _ = ApplyFilterAsync(false);
             }
             OnPropertyChanged(nameof(ShowHome)); OnPropertyChanged(nameof(ShowTv)); OnPropertyChanged(nameof(ShowSettings)); OnPropertyChanged(nameof(SectionTitle));
             OnPropertyChanged(nameof(ShowLiveCatalog)); OnPropertyChanged(nameof(ShowMediaCatalog)); OnPropertyChanged(nameof(ShowContinueWatching));
             if (ShowMediaCatalog)
             {
-                _mediaSearch = ""; _mediaCategory = null; SelectedMedia = null; MediaItems = [];
-                OnPropertyChanged(nameof(MediaSearch)); OnPropertyChanged(nameof(HasMediaSearch)); OnPropertyChanged(nameof(MediaCategory)); OnPropertyChanged(nameof(MediaItems));
+                _mediaSearch = ""; _mediaCategorySearch = ""; _mediaCategory = null; SelectedMedia = null; MediaItems = [];
+                ContentStatus = $"Películas: {_movies?.Items.Count ?? 0} · Series: {_series?.Items.Count ?? 0}";
+                OnPropertyChanged(nameof(MediaSearch)); OnPropertyChanged(nameof(HasMediaSearch)); OnPropertyChanged(nameof(MediaCategorySearch)); OnPropertyChanged(nameof(HasMediaCategorySearch)); OnPropertyChanged(nameof(MediaCategory)); OnPropertyChanged(nameof(MediaItems));
             }
             if (ShowContinueWatching && SelectedProgress is null)
             {
                 SelectedProgress = ContinueWatching.FirstOrDefault();
                 OnPropertyChanged(nameof(SelectedProgress));
             }
-            OnPropertyChanged(nameof(MediaCategories));
-            OnPropertyChanged(nameof(HeaderSummary));
+            OnPropertyChanged(nameof(MediaCategories)); OnPropertyChanged(nameof(VisibleMediaCategories));
+            OnPropertyChanged(nameof(ShowMovieBrowse)); OnPropertyChanged(nameof(ShowMovieDetails)); OnPropertyChanged(nameof(ShowSeriesBrowse)); OnPropertyChanged(nameof(ShowSeriesDetails)); OnPropertyChanged(nameof(ShowMediaBrowse)); OnPropertyChanged(nameof(ShowPlayerPane));
+            OnPropertyChanged(nameof(HeaderSummary)); OnPropertyChanged(nameof(NowPlaying)); OnPropertyChanged(nameof(FooterStatus));
             _ = FilterMediaAsync();
         }
     }
@@ -298,6 +305,7 @@ public sealed partial class MainViewModel : INotifyPropertyChanged, IDisposable,
         Categories = [];
         Channels = [];
         OnPropertyChanged(nameof(Categories));
+        OnPropertyChanged(nameof(VisibleCategories));
         OnPropertyChanged(nameof(Channels));
         OnPropertyChanged(nameof(HasNoChannels));
         AvailableFormats.Clear(); SelectedChannel = null; SelectedFormat = null;
