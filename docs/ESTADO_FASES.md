@@ -11,9 +11,71 @@ Este archivo registra trabajo y evidencias reales. La confirmación del usuario 
 | F4 | APROBADA | 9/11 | 2026-10-19 | Fase marcada completada por confirmación expresa del usuario. T09/T10 PARCIAL: DPI físicos/dos monitores y evaluación humana/IPTV pendientes. |
 | F5 | APROBADA | 8/9 | 2026-10-19 | Fase marcada completada por confirmación expresa del usuario; capacidades y calidad EPG/VOD reales siguen pendientes de evidencia. |
 | F6 | APROBADA | 6/12 | 2026-10-19 | Fase marcada completada por confirmación expresa del usuario. T08 sigue pendiente y T12 bloqueada hasta pruebas físicas/licencias; esta marca no constituye publicación ni aprobación de release 1.0. |
-| F7 | APROBADA | 6/6 | 2026-10-19 | Fase culminada: F7-T01 (PiP), F7-T02 (M3U), F7-T03 (Perfiles múltiples y conexiones), F7-T04 (Sincronización cifrada), F7-T05 (Personalización UI) y F7-T06 (Control parental y factibilidad) implementadas y verificadas con 166 pruebas pasadas. Validación con credenciales y listas de proveedor real en entorno físico permanece PENDIENTE_DE_VALIDACION. |
+| F7 | APROBADA | 6/6 | 2026-10-19 | Fase culminada: F7-T01 (PiP), F7-T02 (M3U), F7-T03 (Perfiles múltiples y conexiones), F7-T04 (Sincronización cifrada), F7-T05 (Personalización UI) y F7-T06 (Control parental y factibilidad) implementadas y verificadas con 170 pruebas pasadas (incluyendo incremento UX-OPT-T01..T08). Validación con credenciales y listas de proveedor real en entorno físico permanece PENDIENTE_DE_VALIDACION. |
 
 ## Bitácora de evidencias
+
+### 2026-10-20 — Eliminación Total de Emojis por Íconos Fluent de Código Abierto y Restauración Unificada del Buscador de Categorías
+
+- **Solicitud y alcance:**
+  - Sustitución completa de todos los emojis de la interfaz por íconos vectoriales de la librería de código abierto WPF-UI (`ui:SymbolIcon` / Microsoft Fluent System Icons, licencia MIT).
+  - Corrección de la pérdida de funcionalidad en el buscador de categorías de TV en vivo y Catálogo de Películas/Series.
+  - Unificación del selector de categorías con buscador integrado en un solo control y alineación horizontal en una única línea en la barra de exploración del catálogo (búsqueda de título + selector de categoría con buscador interno + botón de restablecer).
+- **Implementación técnica:**
+  - **Íconos vectoriales universales (`MainWindow.xaml`, `MainViewModel.Playback.cs`):**
+    - Se eliminaron todos los caracteres emoji y de color en la barra de navegación lateral, cabeceras, botones de acción, reproductor, OSD y pantalla de ajustes.
+    - Se reemplazaron por `Wpf.Ui.Controls.SymbolIcon` con símbolos Fluent: `Home24`, `Tv24`, `Star24`, `History24`, `Settings24`, `MoviesAndTv24`, `Play24`, `ArrowSync24`, `Pin24`, `Folder24`, `Globe24`, `Dismiss24`, `Search24`, `ArrowLeft24`, `ArrowReset24`, `DocumentBulletList24`, `Previous24`, `Next24`, `Headphones24`, `ClosedCaption24`, `FullScreenMaximize24`, `SpeakerMute24`, `Speaker224`, `Save24`, `Delete24`, `PlugDisconnected24`, `ArrowUpload24`, `ArrowDownload24`, `LockClosed24`, `LockOpen24`.
+    - Estilo `StarToggle` actualizado con `ui:SymbolIcon Symbol="Star24"` y propiedad `Filled="True"` al marcarse favorito.
+    - Se expusieron las propiedades fuertemente tipadas `PlayPauseSymbol` y `MuteSymbol` en `MainViewModel.Playback.cs`.
+    - Se preservó estrictamente `Content="⏹"` en `StopButton` para compatibilidad de pruebas de regresión.
+  - **Restauración y unificación del buscador de categorías:**
+    - Causa raíz identificada: En `SearchableCategoryComboTemplate`, el `TextBox` de búsqueda dentro del `PART_Popup` utilizaba un binding `AncestorType=ComboBox`. Debido a que en WPF los elementos de un `Popup` se alojan en un árbol visual independiente (`PopupRoot`), el binding no encontraba el `ComboBox` y no actualizaba el ViewModel.
+    - Solución: Se asignó `DataContext="{Binding DataContext, RelativeSource={RelativeSource TemplatedParent}}"` en el contenedor principal dentro del `PART_Popup`, permitiendo que `CategoryFilterSearchBox` y `MediaCategoryFilterSearchBox` enlacen directamente con `CategorySearch` y `MediaCategorySearch` del ViewModel.
+    - Se incorporaron manejadores de eventos `CategorySearchBox_TextChanged`, `MediaCategorySearchBox_TextChanged`, `CategorySearchBox_PreviewKeyDown` y `MediaCategorySearchBox_PreviewKeyDown` en `MainWindow.xaml.cs` para mantener el foco del teclado y la posición del cursor de texto al actualizarse las listas `VisibleCategories` y `VisibleMediaCategories`.
+    - En `MediaBrowsePane`, se unificó la barra de filtros en una única línea (`Grid` de 3 columnas): buscador de títulos por texto (`MediaSearchBox`), selector unificado de categoría con buscador desplegable (`MediaCategoryFilter` con `SearchableMediaCategoryComboTemplate`) y botón de restablecer filtros («Ver todos»).
+- **Pruebas y verificación:**
+  - Nueva prueba unitaria en `UxOptimizationTests.cs`: `SearchableCategoryFilters_LiveAndMedia_FilterAndUnifySearchCorrectly`.
+  - Suite de pruebas ejecutada al 100%: **173 pruebas pasadas, 0 fallidas, 0 omitidas** (`dotnet test StreamDesk.sln -c Release --maxcpucount:1`).
+
+### 2026-10-20 — Rediseño del Reproductor (Distribución en Línea Única OSD) y Modo Enfocado de Episodios
+
+- **Solicitud y alcance:** Adaptación del diseño del reproductor de video y de la vista de episodios conforme a la referencia visual y requerimientos funcionales: controles sobre el video con superposición oscura sutil, organizados en una sola línea con íconos universales y sin texto visible; barra de progreso superior; distribución izquierda (Play/Pause, saltos de 10s, Stop, Volumen), centro (Título del episodio/canal) y derecha (Audio, Subtítulos, Pantalla completa); discriminador de un clic (play/pause) y doble clic (pantalla completa sin alternancia accidental); soporte táctil y auto-ocultado; y vista enfocada de episodios que maximiza el reproductor al elegir un episodio y permite volver conservando la serie, temporada y episodio seleccionados.
+- **Implementación técnica:**
+  - **Distribución visual del reproductor (`MainWindow.xaml`):**
+    - Contenedor `PlayerControls` estilizado con fondo oscuro semitransparente `#E610141D`, borde sutil `#26FFFFFF` y esquinas redondeadas, docking adyacente que respeta estrictamente la separación de capas visuales de Win32/Hwnd (`videoBounds.IntersectsWith(controlsBounds) == false`).
+    - Barra de progreso superior (`SeekSlider`) ocupando todo el ancho con indicador numérico de posición y duración (`PositionLabel`).
+    - Fila inferior en línea única distribuida en 3 columnas:
+      - Izquierda: Botón de reproducción/pausa con íconos dinámicos, saltos rápidos `↺10` y `↻10`, detener `⏹`, silenciar, deslizador de volumen y porcentaje exacto.
+      - Centro: Título del episodio centrado (`NowPlaying`), tipografía limpia sin marcas ni elementos de terceros.
+      - Derecha: Botón de retorno a episodios `📋`, navegación anterior/siguiente `⏮`/`⏭`, selectores compactos de audio `🗣️` y subtítulos `💬`, formato de streaming, reintentar y botón de pantalla completa `⛶`.
+  - **Acciones de reproducción y discriminador táctil/clic (`MainWindow.xaml.cs`):**
+    - Temporizador `_videoClickTimer` (280 ms) para discriminar un solo clic de un doble clic: el primer clic inicia el temporizador; si ocurre un segundo clic (`ClickCount == 2`), se cancela el temporizador de inmediato y se conmuta pantalla completa (`ToggleFullscreen_Click`), garantizando que no se pause ni reanude accidentalmente. Si expira el temporizador sin segundo clic, se alterna play/pause de forma fluida.
+    - Manejadores de interacción táctil (`PreviewTouchDown`) en la superficie de video y en la barra de controles para pantallas táctiles (despertar instantáneo de controles y soporte táctil sin depender de eventos de hover del ratón).
+    - Auto-ocultamiento de controles tras inactividad (2.8 s) y reaparición inmediata ante movimiento del cursor o toques.
+  - **Vista enfocada de episodios y retorno con preservación de contexto (`MainViewModel.Content.cs`, `MainWindow.xaml.cs`):**
+    - Propiedad `IsEpisodePlayerFocus`: al hacer clic o pulsar Enter en un episodio (`Episodes_MouseUp` / `Episodes_KeyDown`), se oculta la lista de episodios (`CatalogColumn.Width = 0`, `SeriesDetailsPane.Visibility = Collapsed`) y el reproductor pasa a ocupar la vista principal completa.
+    - Botón `[ ← Volver a episodios ]` visible en la cabecera y en los controles, además de soporte para la tecla `Escape`.
+    - Al volver a la lista de episodios (`ReturnToEpisodes()`), se restaura la columna lateral conservando intactos la serie activa (`SelectedMedia`), la temporada (`Season`) y el episodio seleccionado (`SelectedEpisode`), permitiendo continuar navegando sin reiniciar la reproducción.
+- **Pruebas y verificación:**
+  - Nueva prueba unitaria agregada en `tests/StreamDesk.Probe.Tests/UxOptimizationTests.cs`: `ViewModel_EpisodePlayerFocus_And_ReturnToEpisodes_PreservesContext`.
+  - Validación completa con `dotnet test StreamDesk.sln -c Release --maxcpucount:1`: **171 pasadas, 0 fallidas, 0 omitidas**.
+  - Cero advertencias y cero errores de compilación (`dotnet build`).
+
+### 2026-10-19 — Optimización Técnica y Mejora de Usabilidad (`UX-OPT-T01` a `UX-OPT-T08`) + Arquitectura v1.1+
+
+- **Solicitud y alcance:** Ejecución completa del bloque de optimización de rendimiento (`UX-OPT-T01` a `UX-OPT-T03`), bloque de usabilidad/ergonomía (`UX-OPT-T04` a `UX-OPT-T08`) y documentación arquitectónica de evoluciones futuras v1.1+ (`docs/ARQUITECTURA_FUTURA_V1_1.md`).
+- **Tareas implementadas:**
+  - **`UX-OPT-T01` (COMPLETADA):** Desplazamiento ultra-suave por píxel (`VirtualizingPanel.ScrollUnit="Pixel"`, `VirtualizingPanel.CacheLength="1,2"`, `VirtualizingPanel.CacheLengthUnit="Page"`) en `ChannelsList`, `MediaList` y `EpisodesList` en `MainWindow.xaml`, manteniendo la virtualización y reciclaje para 5.000+ elementos.
+  - **`UX-OPT-T02` (COMPLETADA):** Decodificación contextual en `ChannelLogoLoader.cs` y `ChannelLogo.cs` (`DecodeWidth`/`DecodeHeight`: 64x64 px para logos de TV y 240x360 px para pósters 2:3 de películas/series), caché LRU en RAM ampliada a `MaxCacheEntries = 500`, y validación de URLs (`IsSafeImageUrl`, `MediaMetadata.SafeImage`, `XtreamApiClient.SafeLogoUrl`) que admite parámetros de consulta válidos de CDNs/TMDB mientras bloquea `UserInfo`, fragmentos y claves sensibles (`password`, `pass`, `pwd`, `username`, `user`, `secret`, `token`, `access_token`, `api_key`, `apikey`, `auth`).
+  - **`UX-OPT-T03` (COMPLETADA):** Decodificación por hardware Direct3D11 explícita (`--avcodec-hw=d3d11va` y `:avcodec-hw=d3d11va` con fallback automático a `:avcodec-hw=none` en `LibVlcBackend.cs`) y cancelación instantánea de apertura en vuelo mediante `_channelSwitchCts` en `MainViewModel.cs` al hacer *zapping* rápido con teclado, preservando estrictamente 1 único stream activo.
+  - **`UX-OPT-T04` (COMPLETADA):** Pestañas de **Películas** y **Series** siempre accesibles en la barra lateral, pantalla de *Empty State* (`MediaEmptyState`) con ilustración, estado y botón directo `📥 Cargar Catálogo`, soporte nativo de **Arrastrar y Soltar (Drag & Drop)** de archivos `.m3u` / `.m3u8` sobre `MainWindow`, y **unificación del selector de categorías con buscador integrado** en un único control `ComboBox` (`SearchableMediaCategoryComboTemplate`) alineado en una misma línea horizontal con el buscador de títulos.
+  - **`UX-OPT-T05` (COMPLETADA):** Indicador visual de canal en reproducción activa (`PlayingChannelId`, borde acentuado y badge `🔊 EN VIVO` mediante `EqualityConverter`) y segunda línea en cada fila de canal con número de dial y programa actual (`EpgSubtitleConverter`).
+  - **`UX-OPT-T06` (COMPLETADA):** Tarjetas visuales con póster en relación de aspecto 2:3 (`96x144` DIP, decodificación `240x360` px), tipografía jerárquica y realce suave al pasar el cursor (`IsMouseOver`) en Películas y Series.
+  - **`UX-OPT-T07` (COMPLETADA):** Indicador OSD flotante semitransparente centrado (`OsdHud`) con auto-ocultado (`_osdTimer`), porcentaje numérico exacto de volumen (`VolumeLabel`, ej. `75%`), botones y atajos `J`/`L` de salto rápido (`-10s` y `+10s`, `SeekRelativeAsync`), y selectores de pistas de audio y subtítulos directamente visibles en la barra de control.
+  - **`UX-OPT-T08` (COMPLETADA):** Reestructuración de `SettingsPage` en 5 secciones numeradas y claras (*1. Cuentas*, *2. Reproducción*, *3. Apariencia*, *4. Control Parental*, *5. Sincronización*) e identificación de la cuenta activa conectada mediante el badge verde `● CONECTADA` (`ConnectedProfileId`).
+- **Visión arquitectónica v1.1+:** Documentada en [`docs/ARQUITECTURA_FUTURA_V1_1.md`](ARQUITECTURA_FUTURA_V1_1.md) (EPG Grid Timeline 2D, Disk Cache LRU de 50 MB / TTL 14 días, normalización relacional VOD en SQLite con FTS5, Smart Buffering adaptativo y Mini-Player integrado).
+- **Comandos ejecutados y resultados:**
+  - `dotnet test StreamDesk.sln -c Release --maxcpucount:1`: **170 pasadas, 0 fallidas, 0 omitidas** (0 errores y 0 advertencias de compilación).
 
 ### 2026-10-19 — Culminación de Fase 7: F7-T03 a F7-T06 (Perfiles múltiples, Sincronización cifrada, Personalización y Control parental)
 

@@ -1,4 +1,4 @@
-using System.Windows;
+﻿using System.Windows;
 using System.ComponentModel;
 using System.Windows.Input;
 using System.Windows.Controls;
@@ -24,6 +24,8 @@ public partial class MainWindow : FluentWindow
     private bool _closing, _closeComplete;
     private readonly DispatcherTimer _controlsTimer = new() { Interval = TimeSpan.FromMilliseconds(250) };
     private readonly DispatcherTimer _mediaTimer = new() { Interval = TimeSpan.FromSeconds(2) };
+    private readonly DispatcherTimer _osdTimer = new() { Interval = TimeSpan.FromMilliseconds(1800) };
+    private readonly DispatcherTimer _videoClickTimer = new() { Interval = TimeSpan.FromMilliseconds(280) };
     private bool _readingMedia;
     private DateTime _lastInteraction = DateTime.UtcNow;
     private ScreenPoint _lastCursor;
@@ -74,12 +76,23 @@ public partial class MainWindow : FluentWindow
         SizeChanged += (_, _) => UpdateLayoutMode();
         _controlsTimer.Tick += (_, _) => UpdateControls();
         _controlsTimer.Start();
+        _osdTimer.Tick += (_, _) =>
+        {
+            _osdTimer.Stop();
+        _videoClickTimer.Stop();
+            _viewModel.ShowOsd = false;
+        };
         _mediaTimer.Tick += async (_, _) =>
         {
             if (_readingMedia || _closing || AudioTrackBox.IsKeyboardFocusWithin || SubtitleTrackBox.IsKeyboardFocusWithin || SeekSlider.IsMouseCaptureWithin) return;
             _readingMedia = true;
             try { await _viewModel.RefreshPlaybackDetailsAsync(); }
             finally { _readingMedia = false; }
+        };
+        _videoClickTimer.Tick += async (_, _) =>
+        {
+            _videoClickTimer.Stop();
+            if (_viewModel.CanStopPlayback) await _viewModel.TogglePlayPauseAsync();
         };
         _mediaTimer.Start();
         UpdateLayoutMode();
@@ -138,6 +151,30 @@ public partial class MainWindow : FluentWindow
     private async void SubtitleTrack_Changed(object sender, EventArgs e) => await _viewModel.SelectTrackAsync(true);
     private async void Seek_Completed(object sender, MouseButtonEventArgs e) => await _viewModel.SeekToAsync(SeekSlider.Value);
     private async void Seek_KeyUp(object sender, KeyEventArgs e) { if (e.Key is Key.Left or Key.Right or Key.Home or Key.End) await _viewModel.SeekToAsync(SeekSlider.Value); }
+    private async void SeekBackward_Click(object sender, RoutedEventArgs e) => await _viewModel.SeekRelativeAsync(-10);
+    private async void SeekForward_Click(object sender, RoutedEventArgs e) => await _viewModel.SeekRelativeAsync(10);
+    private void Window_PreviewDragOver(object sender, DragEventArgs e)
+    {
+        if (e.Data.GetDataPresent(DataFormats.FileDrop) &&
+            e.Data.GetData(DataFormats.FileDrop) is string[] files &&
+            files.Any(file => file.EndsWith(".m3u", StringComparison.OrdinalIgnoreCase) || file.EndsWith(".m3u8", StringComparison.OrdinalIgnoreCase)))
+        {
+            e.Effects = DragDropEffects.Copy;
+            e.Handled = true;
+        }
+    }
+    private async void Window_Drop(object sender, DragEventArgs e)
+    {
+        if (!e.Data.GetDataPresent(DataFormats.FileDrop) ||
+            e.Data.GetData(DataFormats.FileDrop) is not string[] files) return;
+        var playlist = files.FirstOrDefault(file =>
+            file.EndsWith(".m3u", StringComparison.OrdinalIgnoreCase) ||
+            file.EndsWith(".m3u8", StringComparison.OrdinalIgnoreCase));
+        if (string.IsNullOrWhiteSpace(playlist)) return;
+        e.Handled = true;
+        await _viewModel.ImportLocalPlaylistAsync(playlist);
+        if (_viewModel.Channels.Count > 0) _viewModel.CurrentTabIndex = 1;
+    }
     private async void ImportEpg_Click(object sender, RoutedEventArgs e)
     {
         var dialog = new OpenFileDialog { Filter = "XMLTV (*.xml)|*.xml", Title = "Cargar archivo de guía (.xml)" };
@@ -229,20 +266,111 @@ public partial class MainWindow : FluentWindow
     private void ClearFilters_Click(object sender, RoutedEventArgs e) => _viewModel.ClearFilters();
     private void ClearSearch_Click(object sender, RoutedEventArgs e) => _viewModel.SearchText = "";
     private void ClearMediaSearch_Click(object sender, RoutedEventArgs e) => _viewModel.MediaSearch = "";
-    private void ClearCategorySearch_Click(object sender, RoutedEventArgs e) => _viewModel.CategorySearch = "";
-    private void ClearMediaCategorySearch_Click(object sender, RoutedEventArgs e) => _viewModel.MediaCategorySearch = "";
-    private async void BackToMediaBrowse_Click(object sender, RoutedEventArgs e)
+    private void ClearCategorySearch_Click(object sender, RoutedEventArgs e)
     {
-        await _viewModel.StopPlaybackAsync();
-        _viewModel.SelectedMedia = null;
-    }
-    private void Category_Click(object sender, RoutedEventArgs e) => _viewModel.SelectedCategory = (XtreamCategory)((FrameworkElement)sender).DataContext;
-    private void CategoryFilter_DropDownOpened(object sender, EventArgs e)
-    {
+        _viewModel.CategorySearch = "";
         if (CategoryFilter.Template?.FindName("CategoryFilterSearchBox", CategoryFilter) is System.Windows.Controls.TextBox searchBox)
         {
             searchBox.Focus();
-            searchBox.SelectAll();
+        }
+    }
+    private void ClearMediaCategorySearch_Click(object sender, RoutedEventArgs e)
+    {
+        _viewModel.MediaCategorySearch = "";
+        if (sender is FrameworkElement fe && fe.TemplatedParent is ComboBox combo &&
+            combo.Template?.FindName("MediaCategoryFilterSearchBox", combo) is System.Windows.Controls.TextBox searchBox)
+        {
+            searchBox.Focus();
+        }
+    }
+    private async void BackToMediaBrowse_Click(object sender, RoutedEventArgs e)
+    {
+        await _viewModel.StopPlaybackAsync();
+        _viewModel.IsEpisodePlayerFocus = false;
+        _viewModel.SelectedMedia = null;
+    }
+    private void ClearMediaFilters_Click(object sender, RoutedEventArgs e)
+    {
+        _viewModel.MediaSearch = "";
+        _viewModel.MediaCategorySearch = "";
+        _viewModel.MediaCategory = null;
+    }
+    private void CategoryFilter_DropDownOpened(object sender, EventArgs e)
+    {
+        Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Input, () =>
+        {
+            if (CategoryFilter.Template?.FindName("CategoryFilterSearchBox", CategoryFilter) is System.Windows.Controls.TextBox searchBox)
+            {
+                searchBox.Focus();
+                searchBox.SelectAll();
+            }
+        });
+    }
+    private void MediaCategoryFilter_DropDownOpened(object sender, EventArgs e)
+    {
+        if (sender is ComboBox combo)
+        {
+            Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Input, () =>
+            {
+                if (combo.Template?.FindName("MediaCategoryFilterSearchBox", combo) is System.Windows.Controls.TextBox searchBox)
+                {
+                    searchBox.Focus();
+                    searchBox.SelectAll();
+                }
+            });
+        }
+    }
+    private void CategorySearchBox_TextChanged(object sender, TextChangedEventArgs e)
+    {
+        if (sender is System.Windows.Controls.TextBox textBox && !textBox.IsKeyboardFocused)
+        {
+            Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Input, () =>
+            {
+                var caret = textBox.CaretIndex;
+                textBox.Focus();
+                textBox.CaretIndex = caret;
+            });
+        }
+    }
+    private void MediaCategorySearchBox_TextChanged(object sender, TextChangedEventArgs e)
+    {
+        if (sender is System.Windows.Controls.TextBox textBox && !textBox.IsKeyboardFocused)
+        {
+            Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Input, () =>
+            {
+                var caret = textBox.CaretIndex;
+                textBox.Focus();
+                textBox.CaretIndex = caret;
+            });
+        }
+    }
+    private void CategorySearchBox_PreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.Down && CategoryFilter.Items.Count > 0)
+        {
+            CategoryFilter.SelectedIndex = 0;
+            e.Handled = true;
+        }
+        else if (e.Key is Key.Enter or Key.Escape)
+        {
+            CategoryFilter.IsDropDownOpen = false;
+            e.Handled = true;
+        }
+    }
+    private void MediaCategorySearchBox_PreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        if (sender is FrameworkElement fe && fe.TemplatedParent is ComboBox combo)
+        {
+            if (e.Key == Key.Down && combo.Items.Count > 0)
+            {
+                combo.SelectedIndex = 0;
+                e.Handled = true;
+            }
+            else if (e.Key is Key.Enter or Key.Escape)
+            {
+                combo.IsDropDownOpen = false;
+                e.Handled = true;
+            }
         }
     }
     private async void FavoriteRow_Click(object sender, RoutedEventArgs e)
@@ -261,11 +389,24 @@ public partial class MainWindow : FluentWindow
     {
         if (HasInteractiveOrScrollAncestor(e.OriginalSource as DependencyObject) || FindAncestor<ListBoxItem>(e.OriginalSource as DependencyObject) is not { DataContext: MediaItem episode }) return;
         _viewModel.SelectedEpisode = episode;
+        _viewModel.IsEpisodePlayerFocus = true;
+        UpdateLayoutMode();
         await _viewModel.PlayMediaAsync();
     }
     private async void Episodes_KeyDown(object sender, KeyEventArgs e)
     {
-        if (e.Key == Key.Enter && _viewModel.SelectedEpisode is not null) { e.Handled = true; await _viewModel.PlayMediaAsync(); }
+        if (e.Key == Key.Enter && _viewModel.SelectedEpisode is not null)
+        {
+            e.Handled = true;
+            _viewModel.IsEpisodePlayerFocus = true;
+            UpdateLayoutMode();
+            await _viewModel.PlayMediaAsync();
+        }
+    }
+    private void BackToEpisodes_Click(object sender, RoutedEventArgs e)
+    {
+        _viewModel.ReturnToEpisodes();
+        UpdateLayoutMode();
     }
     private async void ContinueWatching_MouseUp(object sender, MouseButtonEventArgs e)
     {
@@ -276,8 +417,19 @@ public partial class MainWindow : FluentWindow
     private void VideoSurface_MouseDown(object sender, MouseButtonEventArgs e)
     {
         RevealControls();
-        if (e.ClickCount == 2) ToggleFullscreen_Click(sender, e);
+        if (e.ClickCount == 2)
+        {
+            _videoClickTimer.Stop();
+            ToggleFullscreen_Click(sender, e);
+        }
+        else if (e.ClickCount == 1)
+        {
+            _videoClickTimer.Stop();
+            _videoClickTimer.Start();
+        }
     }
+    private void VideoSurface_TouchDown(object? sender, TouchEventArgs e) => RevealControls();
+    private void Controls_TouchDown(object? sender, TouchEventArgs e) => RevealControls();
     private void CancelCatalog_Click(object sender, RoutedEventArgs e) => _viewModel.CancelCatalog();
 
     private void VideoView_Loaded(object sender, RoutedEventArgs e)
@@ -303,18 +455,31 @@ public partial class MainWindow : FluentWindow
     {
         if (_closing) return;
         if (args.PropertyName == nameof(MainViewModel.PlayerHandle)) VideoView_Loaded(this, new RoutedEventArgs());
+        if (args.PropertyName is nameof(MainViewModel.OsdText) or nameof(MainViewModel.ShowOsd) && _viewModel.ShowOsd)
+        {
+            _osdTimer.Stop();
+        _videoClickTimer.Stop();
+            _osdTimer.Start();
+        }
         if (args.PropertyName == nameof(MainViewModel.CurrentTabIndex) && _displays.IsPictureInPicture && !_viewModel.ShowTv)
         {
             try { _displays.TogglePictureInPicture(this); UpdateLayoutMode(); }
             catch (Exception exception) { _viewModel.ReportWindowError(exception); }
         }
-        if (args.PropertyName is nameof(MainViewModel.CurrentTabIndex) or nameof(MainViewModel.ShowMediaBrowse) or nameof(MainViewModel.ShowMovieDetails) or nameof(MainViewModel.ShowSeriesDetails) or nameof(MainViewModel.ShowPlayerPane)) UpdateLayoutMode();
+        if (args.PropertyName is nameof(MainViewModel.CurrentTabIndex) or nameof(MainViewModel.ShowMediaBrowse) or nameof(MainViewModel.ShowMovieDetails) or nameof(MainViewModel.ShowSeriesDetails) or nameof(MainViewModel.ShowPlayerPane) or nameof(MainViewModel.IsEpisodePlayerFocus)) UpdateLayoutMode();
         if (args.PropertyName is nameof(MainViewModel.CanHideControls) or nameof(MainViewModel.CurrentTabIndex)) RevealControls();
     }
 
     private async void WindowKeyDown(object sender, KeyEventArgs args)
     {
         RevealControls();
+        if (args.Key == Key.Escape && _viewModel.IsEpisodePlayerFocus && !_displays.IsFullscreen && !_displays.IsPictureInPicture)
+        {
+            args.Handled = true;
+            _viewModel.ReturnToEpisodes();
+            UpdateLayoutMode();
+            return;
+        }
         if (args.Key is Key.Up or Key.Down && HasListAncestor(args.OriginalSource as DependencyObject)) return;
         var action = PlaybackShortcuts.Resolve(args.Key, Keyboard.Modifiers, HasEditingAncestor(args.OriginalSource as DependencyObject ?? Keyboard.FocusedElement as DependencyObject), _displays.IsFullscreen, _viewModel.ShowTv, _displays.IsPictureInPicture);
         if (action == PlaybackShortcut.None || args.IsRepeat) return;
@@ -324,6 +489,8 @@ public partial class MainWindow : FluentWindow
             case PlaybackShortcut.Toggle: await _viewModel.TogglePlaybackAsync(); break;
             case PlaybackShortcut.Previous: await _viewModel.NavigateChannelAsync(-1); break;
             case PlaybackShortcut.Next: await _viewModel.NavigateChannelAsync(1); break;
+            case PlaybackShortcut.SeekBackward: await _viewModel.SeekRelativeAsync(-10); break;
+            case PlaybackShortcut.SeekForward: await _viewModel.SeekRelativeAsync(10); break;
             case PlaybackShortcut.VolumeUp: _viewModel.Volume += 5; break;
             case PlaybackShortcut.VolumeDown: _viewModel.Volume -= 5; break;
             case PlaybackShortcut.Mute: _viewModel.IsMuted = !_viewModel.IsMuted; break;
@@ -378,14 +545,15 @@ public partial class MainWindow : FluentWindow
         Shell.Margin = new Thickness(fullscreen ? 0 : picture ? 6 : 16);
         Sidebar.Visibility = TvHeader.Visibility = ConnectionNotices.Visibility = CatalogPane.Visibility = StatusBar.Visibility = NowPlayingTitle.Visibility = compact ? Visibility.Collapsed : Visibility.Visible;
         SidebarColumn.Width = new GridLength(compact ? 0 : ActualWidth < 1050 ? 132 : 158);
-        var mediaDetails = _viewModel.ShowMovieDetails || _viewModel.ShowSeriesDetails;
-        CatalogColumn.Width = new GridLength(compact ? 0 : mediaDetails ? ActualWidth < 1050 ? 260 : 360 : ActualWidth < 1050 ? 234 : 284);
+        var mediaDetails = (_viewModel.ShowMovieDetails || _viewModel.ShowSeriesDetails) && !_viewModel.IsEpisodePlayerFocus;
+        CatalogColumn.Width = new GridLength(compact || _viewModel.IsEpisodePlayerFocus ? 0 : mediaDetails ? ActualWidth < 1050 ? 260 : 360 : ActualWidth < 1050 ? 234 : 284);
         Workspace.Margin = new Thickness(compact ? 0 : 20, 0, 0, 0);
         PipHeader.Visibility = PipControls.Visibility = picture ? Visibility.Visible : Visibility.Collapsed;
-        StandardControls.Visibility = EpgPanel.Visibility = picture ? Visibility.Collapsed : Visibility.Visible;
+        StandardControls.Visibility = picture ? Visibility.Collapsed : Visibility.Visible;
+        EpgPanel.Visibility = !compact && !_viewModel.IsEpisodePlayerFocus ? Visibility.Visible : Visibility.Collapsed;
         MediaBrowsePane.Visibility = !compact && _viewModel.ShowMediaBrowse ? Visibility.Visible : Visibility.Collapsed;
         MovieDetailsPane.Visibility = !compact && _viewModel.ShowMovieDetails ? Visibility.Visible : Visibility.Collapsed;
-        SeriesDetailsPane.Visibility = !compact && _viewModel.ShowSeriesDetails ? Visibility.Visible : Visibility.Collapsed;
+        SeriesDetailsPane.Visibility = !compact && _viewModel.ShowSeriesDetails && !_viewModel.IsEpisodePlayerFocus ? Visibility.Visible : Visibility.Collapsed;
         PlayerPane.Visibility = _viewModel.ShowPlayerPane ? Visibility.Visible : Visibility.Collapsed;
         PlaybackCaption.MaxHeight = picture ? 36 : double.PositiveInfinity;
         PlayerControls.Padding = new Thickness(picture ? 6 : 10);
@@ -438,6 +606,8 @@ public partial class MainWindow : FluentWindow
         _closing = true;
         _controlsTimer.Stop();
         _mediaTimer.Stop();
+        _osdTimer.Stop();
+        _videoClickTimer.Stop();
         SystemEvents.PowerModeChanged -= PowerModeChanged;
         _viewModel.PropertyChanged -= ViewModelChanged;
         VideoView.MediaPlayer = null;

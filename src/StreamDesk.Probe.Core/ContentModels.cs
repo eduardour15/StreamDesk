@@ -32,7 +32,33 @@ public static class MediaMetadata
         return Regex.Replace(text, @"https?://\S+", "[enlace omitido]", RegexOptions.IgnoreCase, TimeSpan.FromSeconds(1)).Trim();
     }
     public static bool SafeImage(string? value) => Uri.TryCreate(value, UriKind.Absolute, out var uri)
-        && uri.Scheme is "https" or "http" && uri.UserInfo.Length == 0 && uri.Query.Length == 0 && uri.Fragment.Length == 0;
+        && uri.Scheme is "https" or "http" && uri.UserInfo.Length == 0 && uri.Fragment.Length == 0
+        && (uri.Query.Length == 0 || !HasSensitiveQueryParameter(uri.Query));
+
+    private static bool HasSensitiveQueryParameter(string query)
+    {
+        var raw = query.TrimStart('?');
+        foreach (var pair in raw.Split('&', StringSplitOptions.RemoveEmptyEntries))
+        {
+            var eq = pair.IndexOf('=');
+            var key = Uri.UnescapeDataString(eq >= 0 ? pair[..eq] : pair).Trim();
+            if (key.Equals("password", StringComparison.OrdinalIgnoreCase) ||
+                key.Equals("pass", StringComparison.OrdinalIgnoreCase) ||
+                key.Equals("pwd", StringComparison.OrdinalIgnoreCase) ||
+                key.Equals("username", StringComparison.OrdinalIgnoreCase) ||
+                key.Equals("user", StringComparison.OrdinalIgnoreCase) ||
+                key.Equals("secret", StringComparison.OrdinalIgnoreCase) ||
+                key.Equals("token", StringComparison.OrdinalIgnoreCase) ||
+                key.Equals("access_token", StringComparison.OrdinalIgnoreCase) ||
+                key.Equals("api_key", StringComparison.OrdinalIgnoreCase) ||
+                key.Equals("apikey", StringComparison.OrdinalIgnoreCase) ||
+                key.Equals("auth", StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+        }
+        return false;
+    }
     public static bool SafeExtension(string? value) => value is "mp4" or "mkv" or "avi" or "mov" or "m4v" or "ts" or "m3u8" or "webm" or "mpg" or "mpeg";
     public static bool Identifier([System.Diagnostics.CodeAnalysis.NotNullWhen(true)] string? value) => !string.IsNullOrWhiteSpace(value) && value.Length <= 256 && !value.Contains("://", StringComparison.Ordinal) && !value.Any(char.IsControl);
     public static MediaItem Sanitize(MediaItem item)

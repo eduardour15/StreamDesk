@@ -415,10 +415,12 @@ public sealed partial class CatalogUiTests
         })));
         var images = await Task.WhenAll(Enumerable.Range(0, 150).Select(index => loader.GetAsync($"https://logos.invalid/{index}.png", CancellationToken.None)));
         Assert.All(images, image => { Assert.NotNull(image); Assert.True(image!.IsFrozen); });
-        Assert.InRange(peak, 1, 4); Assert.Equal(128, loader.CachedCount);
+        Assert.InRange(peak, 1, 4); Assert.Equal(150, loader.CachedCount); Assert.Equal(500, ChannelLogoLoader.MaxCacheEntries);
         var previous = requests;
         Assert.Null(await loader.GetAsync("https://logos.invalid/a.png?token=fixture", CancellationToken.None));
         Assert.Equal(previous, requests);
+        var cdnLogo = await loader.GetAsync("https://logos.invalid/poster.png?w=240&h=360&sig=cdn123", 240, 360, CancellationToken.None);
+        Assert.NotNull(cdnLogo); Assert.True(cdnLogo!.IsFrozen);
         using var unsupported = new ChannelLogoLoader(new HttpClient(new XtreamPhase2Tests.Handler((request, _) =>
         {
             if (request.RequestUri!.AbsolutePath.EndsWith(".webp", StringComparison.Ordinal))

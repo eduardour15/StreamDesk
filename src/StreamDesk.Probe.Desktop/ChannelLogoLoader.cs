@@ -6,6 +6,7 @@ namespace StreamDesk.Probe.Desktop;
 
 public sealed class ChannelLogoLoader(HttpClient client) : IDisposable
 {
+    public const int MaxCacheEntries = 500;
     private readonly SemaphoreSlim _slots = new(4, 4);
     private readonly CancellationTokenSource _shutdown = new();
     private readonly object _sync = new();
@@ -14,14 +15,19 @@ public sealed class ChannelLogoLoader(HttpClient client) : IDisposable
     private bool _disposed;
     public int CachedCount { get { lock (_sync) return _cache.Count; } }
 
-    public async Task<BitmapSource?> GetAsync(string? url, CancellationToken cancellationToken)
+    public Task<BitmapSource?> GetAsync(string? url, CancellationToken cancellationToken) =>
+        GetAsync(url, 64, 64, cancellationToken);
+
+    public async Task<BitmapSource?> GetAsync(string? url, int decodeWidth, int decodeHeight, CancellationToken cancellationToken)
     {
         CancellationToken shutdown;
         lock (_sync) { ObjectDisposedException.ThrowIf(_disposed, this); shutdown = _shutdown.Token; }
         cancellationToken.ThrowIfCancellationRequested();
-        if (!Uri.TryCreate(url, UriKind.Absolute, out var uri) || uri.Scheme is not ("https" or "http") ||
-            uri.Query.Length != 0 || uri.UserInfo.Length != 0 || uri.Fragment.Length != 0) return null;
-        if (TryGet(url!, out var cached)) return cached;
+        var width = Math.Clamp(decodeWidth <= 0 ? 64 : decodeWidth, 16, 480);
+        var height = Math.Clamp(decodeHeight <= 0 ? 64 : decodeHeight, 16, 720);
+        if (!IsSafeImageUrl(url, out var uri)) return null;
+        var cacheKey = $"{width}x{height}:{url}";
+        if (TryGet(cacheKey, out var cached)) return cached;
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, shutdown);
         timeout.CancelAfter(TimeSpan.FromSeconds(10));
         var entered = false;
@@ -29,16 +35,16 @@ public sealed class ChannelLogoLoader(HttpClient client) : IDisposable
         try
         {
             await _slots.WaitAsync(timeout.Token); entered = true;
-            if (TryGet(url!, out cached)) return cached;
+            if (TryGet(cacheKey, out cached)) return cached;
             using var response = await client.GetAsync(uri, HttpCompletionOption.ResponseHeadersRead, timeout.Token);
-            if (!response.IsSuccessStatusCode || response.Content.Headers.ContentLength > 512 * 1024) return Remember(url!, null);
+            if (!response.IsSuccessStatusCode || response.Content.Headers.ContentLength > 512 * 1024) return Remember(cacheKey, null);
             await using var input = await response.Content.ReadAsStreamAsync(timeout.Token);
             using var buffer = new MemoryStream();
             var bytes = new byte[8192];
             int read;
             while ((read = await input.ReadAsync(bytes, timeout.Token)) != 0)
             {
-                if (buffer.Length + read > 512 * 1024) return Remember(url!, null);
+                if (buffer.Length + read > 512 * 1024) return Remember(cacheKey, null);
                 buffer.Write(bytes, 0, read);
             }
             buffer.Position = 0;
@@ -47,13 +53,13 @@ public sealed class ChannelLogoLoader(HttpClient client) : IDisposable
             // error pages.  Check the payload before invoking BitmapImage so a
             // provider's unsupported logo does not produce a first-chance WIC
             // exception for every realized row.
-            if (!LooksLikeWpfRasterImage(encoded)) return Remember(url!, null);
+            if (!LooksLikeWpfRasterImage(encoded)) return Remember(cacheKey, null);
             image = await Task.Run(() =>
             {
                 using var stream = new MemoryStream(encoded);
                 var bitmap = new BitmapImage();
                 bitmap.BeginInit(); bitmap.CacheOption = BitmapCacheOption.OnLoad;
-                bitmap.DecodePixelWidth = 64; bitmap.DecodePixelHeight = 64;
+                bitmap.DecodePixelWidth = width; bitmap.DecodePixelHeight = height;
                 bitmap.StreamSource = stream; bitmap.EndInit(); bitmap.Freeze();
                 return bitmap;
             }, timeout.Token);
@@ -61,7 +67,42 @@ public sealed class ChannelLogoLoader(HttpClient client) : IDisposable
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested || _shutdown.IsCancellationRequested) { throw; }
         catch { /* An unavailable or invalid logo must not interrupt catalogue navigation. */ }
         finally { if (entered) _slots.Release(); }
-        return Remember(url!, image);
+        return Remember(cacheKey, image);
+    }
+
+    public static bool IsSafeImageUrl(string? url, out Uri? uri)
+    {
+        uri = null;
+        if (!Uri.TryCreate(url, UriKind.Absolute, out var parsed) || parsed.Scheme is not ("https" or "http") ||
+            parsed.UserInfo.Length != 0 || parsed.Fragment.Length != 0) return false;
+        if (parsed.Query.Length > 0 && HasSensitiveQueryParameter(parsed.Query)) return false;
+        uri = parsed;
+        return true;
+    }
+
+    private static bool HasSensitiveQueryParameter(string query)
+    {
+        var raw = query.TrimStart('?');
+        foreach (var pair in raw.Split('&', StringSplitOptions.RemoveEmptyEntries))
+        {
+            var eq = pair.IndexOf('=');
+            var key = Uri.UnescapeDataString(eq >= 0 ? pair[..eq] : pair).Trim();
+            if (key.Equals("password", StringComparison.OrdinalIgnoreCase) ||
+                key.Equals("pass", StringComparison.OrdinalIgnoreCase) ||
+                key.Equals("pwd", StringComparison.OrdinalIgnoreCase) ||
+                key.Equals("username", StringComparison.OrdinalIgnoreCase) ||
+                key.Equals("user", StringComparison.OrdinalIgnoreCase) ||
+                key.Equals("secret", StringComparison.OrdinalIgnoreCase) ||
+                key.Equals("token", StringComparison.OrdinalIgnoreCase) ||
+                key.Equals("access_token", StringComparison.OrdinalIgnoreCase) ||
+                key.Equals("api_key", StringComparison.OrdinalIgnoreCase) ||
+                key.Equals("apikey", StringComparison.OrdinalIgnoreCase) ||
+                key.Equals("auth", StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static bool LooksLikeWpfRasterImage(ReadOnlySpan<byte> data)
@@ -96,7 +137,7 @@ public sealed class ChannelLogoLoader(HttpClient client) : IDisposable
             if (_disposed) return null;
             if (_cache.TryGetValue(key, out var existing)) _lru.Remove(existing.Node);
             var node = _lru.AddFirst(key); _cache[key] = (image, node);
-            while (_cache.Count > 128) { var last = _lru.Last!; _cache.Remove(last.Value); _lru.RemoveLast(); }
+            while (_cache.Count > MaxCacheEntries) { var last = _lru.Last!; _cache.Remove(last.Value); _lru.RemoveLast(); }
         }
         return image;
     }

@@ -138,7 +138,7 @@ public sealed partial class MainViewModel : INotifyPropertyChanged, IDisposable,
                 OnPropertyChanged(nameof(SelectedProgress));
             }
             OnPropertyChanged(nameof(MediaCategories)); OnPropertyChanged(nameof(VisibleMediaCategories));
-            OnPropertyChanged(nameof(ShowMovieBrowse)); OnPropertyChanged(nameof(ShowMovieDetails)); OnPropertyChanged(nameof(ShowSeriesBrowse)); OnPropertyChanged(nameof(ShowSeriesDetails)); OnPropertyChanged(nameof(ShowMediaBrowse)); OnPropertyChanged(nameof(ShowPlayerPane));
+            OnPropertyChanged(nameof(ShowMovieBrowse)); OnPropertyChanged(nameof(ShowMovieDetails)); OnPropertyChanged(nameof(ShowSeriesBrowse)); OnPropertyChanged(nameof(ShowSeriesDetails)); OnPropertyChanged(nameof(ShowMediaBrowse)); OnPropertyChanged(nameof(ShowPlayerPane)); OnPropertyChanged(nameof(IsEpisodePlayerFocus));
             OnPropertyChanged(nameof(HeaderSummary)); OnPropertyChanged(nameof(NowPlaying)); OnPropertyChanged(nameof(FooterStatus));
             _ = FilterMediaAsync();
         }
@@ -220,10 +220,18 @@ public sealed partial class MainViewModel : INotifyPropertyChanged, IDisposable,
     {
         if (IsBusy || IsCatalogLoading || _disposed) return;
         if (channel is null) { StatusMessage = "Haz clic en un canal para reproducir."; return; }
+        _channelSwitchCts?.Cancel();
+        _channelSwitchCts?.Dispose();
+        _channelSwitchCts = null;
         var isPlaylistChannel = _playlistStreams.TryGetValue(channel.Id, out var playlistUri);
         var version = _sessionVersion;
         if (!isPlaylistChannel && _client is null && ActiveProfile is not null) await ConnectProfileAsync();
         if (_disposed || version != _sessionVersion) return;
+        _channelSwitchCts?.Cancel();
+        _channelSwitchCts?.Dispose();
+        var zappingCts = CancellationTokenSource.CreateLinkedTokenSource(_session.Token, _shutdown.Token);
+        _channelSwitchCts = zappingCts;
+        var token = zappingCts.Token;
         if (!isPlaylistChannel)
         {
             if (_client is null || _account is null) { StatusMessage = "Configura o selecciona una cuenta antes de reproducir."; return; }
@@ -236,19 +244,20 @@ public sealed partial class MainViewModel : INotifyPropertyChanged, IDisposable,
         {
             if (isPlaylistChannel)
             {
-                await _playlistImporter!.EnsureSafeStreamUriAsync(playlistUri!, _session.Token);
-                if (_disposed || version != _sessionVersion) return;
+                await _playlistImporter!.EnsureSafeStreamUriAsync(playlistUri!, token);
+                if (_disposed || version != _sessionVersion || token.IsCancellationRequested) return;
             }
             await CaptureMediaAsync(true);
-            if (_disposed || version != _sessionVersion) return;
+            if (_disposed || version != _sessionVersion || token.IsCancellationRequested) return;
             var source = isPlaylistChannel ? playlistUri! : _client!.CreateLiveStreamUri(channel, SelectedFormat!);
             _mediaWatch = null;
             _mediaDetails = MediaPlaybackDetails.Empty; NotifyMediaDetails();
             _playbackService.Options = _playbackService.Options with { OnDemand = false, StartPositionMilliseconds = 0 };
             _playingChannelId = channel.Id;
             _watch = new WatchRequest(isPlaylistChannel ? null : _connectedProfileId, channel, version, _playbackService.Snapshot.Sequence);
+            OnPropertyChanged(nameof(PlayingChannelId));
             OnPropertyChanged(nameof(NowPlaying));
-            await _playbackService.PlayAsync(source, _session.Token);
+            await _playbackService.PlayAsync(source, token);
             IsPlaybackReady = _playbackService.IsReady;
             OnPropertyChanged(nameof(PlayerHandle));
             if (isPlaylistChannel) ClearEpgForPlaylist();
@@ -268,6 +277,9 @@ public sealed partial class MainViewModel : INotifyPropertyChanged, IDisposable,
     {
         if (_disposed) return;
         _disposed = true;
+        _channelSwitchCts?.Cancel();
+        _channelSwitchCts?.Dispose();
+        _channelSwitchCts = null;
         await CaptureMediaAsync(true);
         _playbackService.StateChanged -= PlaybackStateChanged;
         _shutdown.Cancel();

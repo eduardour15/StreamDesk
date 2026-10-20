@@ -116,6 +116,5 @@ public sealed class SqliteCatalogStore : ICatalogStore
         transaction.Commit();
     }
 
-    private static bool IsSafeLogo(string? value) => Uri.TryCreate(value, UriKind.Absolute, out var uri)
-        && uri.Scheme is "http" or "https" && uri.Query.Length == 0 && uri.UserInfo.Length == 0 && uri.Fragment.Length == 0;
+    private static bool IsSafeLogo(string? value) => MediaMetadata.SafeImage(value);
 }

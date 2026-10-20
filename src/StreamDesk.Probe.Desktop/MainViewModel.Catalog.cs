@@ -1,4 +1,4 @@
-using System.Windows.Input;
+﻿using System.Windows.Input;
 using StreamDesk.Application;
 using StreamDesk.Probe.Core;
 
@@ -16,6 +16,7 @@ public sealed partial class MainViewModel
     private CatalogSearch _search = new([]);
     private Profile? _activeProfile;
     private string? _connectedProfileId;
+    public string? ConnectedProfileId => _connectedProfileId ?? (ActiveProfile?.ProviderType == "m3u" ? ActiveProfile.Id : null);
     private string _searchText = string.Empty;
     private string _categorySearch = string.Empty;
     private XtreamCategory? _selectedCategory;
@@ -27,7 +28,7 @@ public sealed partial class MainViewModel
     public Profile? ActiveProfile
     {
         get => _activeProfile;
-        set { if (SetProperty(ref _activeProfile, value)) _profileLoad = Task.WhenAll(_profileLoad, LoadProfileCacheAsync(value)); }
+        set { if (SetProperty(ref _activeProfile, value)) { OnPropertyChanged(nameof(ConnectedProfileId)); _profileLoad = Task.WhenAll(_profileLoad, LoadProfileCacheAsync(value)); } }
     }
     public string SearchText
     {
@@ -87,11 +88,12 @@ public sealed partial class MainViewModel
     {
         var version = BeginCatalogSession();
         _client?.Dispose(); _client = null; _account = null; _connectedProfileId = null;
+        OnPropertyChanged(nameof(ConnectedProfileId)); OnPropertyChanged(nameof(IsConnected));
         ClearCatalog(); ConnectionSummary = null;
         _catalogOwnerId = profile?.Id;
         BaseUrl = profile?.BaseUrl ?? string.Empty; Username = string.Empty;
         HttpWarning = profile?.BaseUrl.StartsWith("http://", StringComparison.OrdinalIgnoreCase) == true
-            ? "⚠️ Conexión sin cifrar (HTTP). Si tu proveedor ofrece HTTPS, es más seguro." : null;
+            ? "Conexión sin cifrar (HTTP). Si tu proveedor ofrece HTTPS, es más seguro." : null;
         IsBusy = false; IsCatalogLoading = true;
         var token = _session.Token;
         try
@@ -183,11 +185,12 @@ public sealed partial class MainViewModel
         try
         {
             HttpWarning = provider.UsesUnencryptedTransport
-                ? "⚠️ Conexión sin cifrar (HTTP). Si tu proveedor ofrece HTTPS, es más seguro." : null;
+                ? "Conexión sin cifrar (HTTP). Si tu proveedor ofrece HTTPS, es más seguro." : null;
             var account = await provider.AuthenticateAsync(token);
             token.ThrowIfCancellationRequested();
             if (version != _sessionVersion || _disposed) return;
             _client = provider; provider = null; _account = account; _connectedProfileId = profileId;
+            OnPropertyChanged(nameof(ConnectedProfileId)); OnPropertyChanged(nameof(IsConnected)); OnPropertyChanged(nameof(ActiveConnectionsInfo)); OnPropertyChanged(nameof(AccountExpirationInfo));
             ConnectionSummary = FormatAccount(account);
             foreach (var format in account.AllowedOutputFormats) AvailableFormats.Add(format);
             SelectedFormat = AvailableFormats.FirstOrDefault();

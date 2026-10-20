@@ -7,6 +7,19 @@ public sealed partial class MainViewModel
     private readonly SynchronizationContext? _ui = SynchronizationContext.Current;
     private PlaybackSnapshot _playback = new(0, PlaybackState.Idle);
     private string? _playingChannelId;
+    private CancellationTokenSource? _channelSwitchCts;
+    private string _osdText = string.Empty;
+    private bool _showOsd;
+    public string? PlayingChannelId => _playingChannelId;
+    public string OsdText { get => _osdText; private set => SetProperty(ref _osdText, value); }
+    public bool ShowOsd { get => _showOsd; set => SetProperty(ref _showOsd, value); }
+    public string VolumeLabel => $"{Volume}%";
+    public void TriggerOsd(string message)
+    {
+        if (string.IsNullOrWhiteSpace(message)) return;
+        OsdText = message;
+        ShowOsd = true;
+    }
     public string PlaybackStatus => _playback.Message + (_playback.UsingSoftware ? " · Modo compatible" : "") +
         (_playback.WillRetry && _playback.RetryCount is > 0 and <= 2 && _playback.Failure is PlaybackFailure.Network or PlaybackFailure.Timeout
             ? $" · Reintento {_playback.RetryCount}/2" : "");
@@ -24,6 +37,7 @@ public sealed partial class MainViewModel
         ? SelectedEpisode?.Name ?? SelectedMedia?.Name ?? "Elige un episodio"
         : SelectedMedia?.Name ?? "Elige un título";
     public string PlayPauseIcon => IsPlaying ? "⏸" : "▶";
+    public Wpf.Ui.Controls.SymbolRegular PlayPauseSymbol => IsPlaying ? Wpf.Ui.Controls.SymbolRegular.Pause24 : Wpf.Ui.Controls.SymbolRegular.Play24;
     public string PlayPauseAction => IsPlaying ? "Pausar" : IsPaused ? "Reanudar" : "Reproducir";
     public string PlayPauseToolTip => IsPlaying ? "Pausar (Espacio)" : IsPaused ? "Reanudar (Espacio)" : "Reproducir (Espacio)";
     public string PlayActionIcon => _playback.IsActive ? "⏹" : "▶";
@@ -31,19 +45,35 @@ public sealed partial class MainViewModel
 
     public async Task TogglePlayPauseAsync()
     {
-        if (IsPlaying) await _playbackService.PauseAsync();
-        else if (IsPaused) await _playbackService.ResumeAsync();
+        if (IsPlaying) { await _playbackService.PauseAsync(); TriggerOsd("En pausa"); }
+        else if (IsPaused) { await _playbackService.ResumeAsync(); TriggerOsd("Reproduciendo"); }
         else if (ShowMediaBrowse || ShowMovieDetails || ShowSeriesDetails) await PlayMediaAsync();
         else await PlaySelectedAsync();
     }
     public async Task TogglePlaybackAsync() => await TogglePlayPauseAsync();
-    public int Volume { get => _playbackService.Volume; set { _playbackService.Volume = value; OnPropertyChanged(); } }
+    public int Volume
+    {
+        get => _playbackService.Volume;
+        set
+        {
+            _playbackService.Volume = value;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(VolumeLabel));
+            TriggerOsd($"Volumen: {_playbackService.Volume}%");
+        }
+    }
     public bool IsMuted
     {
         get => _playbackService.IsMuted;
-        set { _playbackService.IsMuted = value; OnPropertyChanged(); OnPropertyChanged(nameof(MuteIcon)); }
+        set
+        {
+            _playbackService.IsMuted = value;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(MuteIcon));
+            OnPropertyChanged(nameof(MuteSymbol)); TriggerOsd(_playbackService.IsMuted ? "Silenciado" : $"Sonido activo ({Volume}%)");
+        }
     }
-    public string MuteIcon => IsMuted ? "🔇" : "🔊";
+    public string MuteIcon => IsMuted ? "Mute" : "Sound"; public Wpf.Ui.Controls.SymbolRegular MuteSymbol => IsMuted ? Wpf.Ui.Controls.SymbolRegular.SpeakerMute24 : Wpf.Ui.Controls.SymbolRegular.Speaker224;
     public int BufferMilliseconds
     {
         get => _playbackService.Options.BufferMilliseconds;
@@ -74,11 +104,15 @@ public sealed partial class MainViewModel
 
     public async Task StopPlaybackAsync()
     {
+        _channelSwitchCts?.Cancel();
+        _channelSwitchCts?.Dispose();
+        _channelSwitchCts = null;
         await CaptureMediaAsync(true);
         _mediaWatch = null;
         _mediaDetails = MediaPlaybackDetails.Empty; NotifyMediaDetails();
         _playingChannelId = null;
         _watch = null;
+        OnPropertyChanged(nameof(PlayingChannelId));
         OnPropertyChanged(nameof(NowPlaying));
         try { await _playbackService.StopAsync(); }
         catch (Exception exception) { _logger.LogError("playback_stop", exception); }
@@ -117,7 +151,7 @@ public sealed partial class MainViewModel
             StatusMessage = PlaybackStatus;
             OnPropertyChanged(nameof(PlaybackStatus)); OnPropertyChanged(nameof(ShowPlaybackPlaceholder)); OnPropertyChanged(nameof(ShowPlaybackCaption)); OnPropertyChanged(nameof(CanRetryPlayback));
             OnPropertyChanged(nameof(IsPlaying)); OnPropertyChanged(nameof(IsPaused)); OnPropertyChanged(nameof(CanStopPlayback)); OnPropertyChanged(nameof(CanHideControls));
-            OnPropertyChanged(nameof(PlayPauseIcon)); OnPropertyChanged(nameof(PlayPauseAction)); OnPropertyChanged(nameof(PlayPauseToolTip));
+            OnPropertyChanged(nameof(PlayPauseIcon)); OnPropertyChanged(nameof(PlayPauseSymbol)); OnPropertyChanged(nameof(PlayPauseAction)); OnPropertyChanged(nameof(PlayPauseToolTip));
             OnPropertyChanged(nameof(PlayAction)); OnPropertyChanged(nameof(PlayActionIcon));
             if (media is not null && ReferenceEquals(media, _mediaWatch) && snapshot.Sequence > media.AfterSequence)
             {

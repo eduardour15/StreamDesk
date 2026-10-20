@@ -23,6 +23,19 @@ public sealed partial class MainViewModel
     public bool ShowMovieDetails => CurrentTabIndex == 5 && SelectedMedia?.Kind == ContentKind.Movie;
     public bool ShowSeriesBrowse => CurrentTabIndex == 6 && SelectedMedia is null;
     public bool ShowSeriesDetails => CurrentTabIndex == 6 && SelectedMedia?.Kind == ContentKind.Series;
+    private bool _isEpisodePlayerFocus;
+    public bool IsEpisodePlayerFocus
+    {
+        get => _isEpisodePlayerFocus && ShowSeriesDetails;
+        set
+        {
+            if (SetProperty(ref _isEpisodePlayerFocus, value))
+            {
+                OnPropertyChanged(nameof(ShowSeriesDetails));
+            }
+        }
+    }
+    public void ReturnToEpisodes() => IsEpisodePlayerFocus = false;
     public bool ShowMediaBrowse => ShowMovieBrowse || ShowSeriesBrowse;
     public bool ShowPlayerPane => !ShowMediaBrowse;
     public bool ShowContinueWatching => CurrentTabIndex == 7;
@@ -31,7 +44,8 @@ public sealed partial class MainViewModel
     public string HeaderSummary => ShowLiveCatalog ? CatalogSummary : ShowContinueWatching ? $"{ContinueWatching.Count} en curso" : $"{MediaItems.Count} títulos";
     public bool HasMovies => _movies?.Items.Count > 0;
     public bool HasSeries => _series?.Items.Count > 0;
-    public bool ContentBusy { get => _contentBusy; private set { if (SetProperty(ref _contentBusy, value)) OnPropertyChanged(nameof(IsWorking)); } }
+    public bool HasNoMediaItems => ShowMediaBrowse && MediaItems.Count == 0 && !ContentBusy;
+    public bool ContentBusy { get => _contentBusy; private set { if (SetProperty(ref _contentBusy, value)) { OnPropertyChanged(nameof(IsWorking)); OnPropertyChanged(nameof(HasNoMediaItems)); } } }
     public string ContentStatus
     {
         get => _contentStatus;
@@ -77,16 +91,16 @@ public sealed partial class MainViewModel
         set
         {
             if (!SetProperty(ref _selectedMedia, value)) return;
-            _selectedDetails = null;
+            _selectedDetails = null; _isEpisodePlayerFocus = false;
             if (value is null && ShowMediaCatalog) ContentStatus = $"Películas: {_movies?.Items.Count ?? 0} · Series: {_series?.Items.Count ?? 0}";
-            foreach (var name in new[] { nameof(MediaDescription), nameof(MediaPosterUrl), nameof(MediaCategoryLabel), nameof(SeriesSummary), nameof(ShowMovieBrowse), nameof(ShowMovieDetails), nameof(ShowSeriesBrowse), nameof(ShowSeriesDetails), nameof(ShowMediaBrowse), nameof(ShowPlayerPane), nameof(NowPlaying) }) OnPropertyChanged(name);
+            foreach (var name in new[] { nameof(MediaDescription), nameof(MediaPosterUrl), nameof(MediaCategoryLabel), nameof(SeriesSummary), nameof(ShowMovieBrowse), nameof(ShowMovieDetails), nameof(ShowSeriesBrowse), nameof(ShowSeriesDetails), nameof(ShowMediaBrowse), nameof(ShowPlayerPane), nameof(NowPlaying), nameof(IsEpisodePlayerFocus) }) OnPropertyChanged(name);
             _ = LoadMediaDetailsAsync(value);
         }
     }
     public MediaItem? SelectedEpisode
     {
         get => _selectedEpisode;
-        set { if (SetProperty(ref _selectedEpisode, value)) OnPropertyChanged(nameof(NowPlaying)); }
+        set { if (SetProperty(ref _selectedEpisode, value)) OnPropertyChanged(nameof(NowPlaying)); OnPropertyChanged(nameof(IsEpisodePlayerFocus)); }
     }
     public XtreamCategory? MediaCategory { get => _mediaCategory ?? MediaCategories.FirstOrDefault(); set { if (SetProperty(ref _mediaCategory, value)) { OnPropertyChanged(nameof(VisibleMediaCategories)); _ = FilterMediaAsync(); } } }
     public XtreamCategory? Season
@@ -200,7 +214,7 @@ public sealed partial class MainViewModel
                 return (string.IsNullOrEmpty(category) || item.CategoryId == category) && CatalogSearch.Normalize(item.Name).Contains(query, StringComparison.Ordinal);
             }).ToArray(), request.Token);
             if (!ReferenceEquals(_mediaFilter, request) || _disposed) return;
-            MediaItems = matches; OnPropertyChanged(nameof(MediaItems)); OnPropertyChanged(nameof(HeaderSummary));
+            MediaItems = matches; OnPropertyChanged(nameof(MediaItems)); OnPropertyChanged(nameof(HasNoMediaItems)); OnPropertyChanged(nameof(HeaderSummary));
         }
         catch (OperationCanceledException) { }
         finally { if (ReferenceEquals(_mediaFilter, request)) _mediaFilter = null; }
@@ -259,10 +273,11 @@ public sealed partial class MainViewModel
             var resume = _progress.FirstOrDefault(entry => entry.Item.Kind == item.Kind && entry.Item.StorageKey == item.StorageKey);
             var position = restart || resume?.Completed != false ? 0 : resume.PositionMilliseconds;
             _watch = null; _playingChannelId = null;
+            OnPropertyChanged(nameof(PlayingChannelId));
             _mediaDetails = MediaPlaybackDetails.Empty; NotifyMediaDetails();
             _mediaWatch = new(item, _connectedProfileId, version, _playbackService.Snapshot.Sequence) { Position = position, Length = resume?.DurationMilliseconds ?? 0 };
             _playbackService.Options = _playbackService.Options with { OnDemand = true, StartPositionMilliseconds = position };
-            OnPropertyChanged(nameof(NowPlaying));
+            OnPropertyChanged(nameof(NowPlaying)); OnPropertyChanged(nameof(IsEpisodePlayerFocus));
             await _playbackService.PlayAsync(uri, _session.Token);
             OnPropertyChanged(nameof(PlayerHandle));
         }
@@ -326,9 +341,25 @@ public sealed partial class MainViewModel
     }
     public async Task SeekToAsync(double seconds)
     {
-        try { if (!CanSeek || !await _playbackService.SeekAsync((long)(Math.Clamp(seconds, 0, DurationSeconds) * 1000), _session.Token)) ContentStatus = "Este vídeo no permite adelantar ni retroceder."; }
+        try
+        {
+            var clamped = Math.Clamp(seconds, 0, DurationSeconds);
+            if (!CanSeek || !await _playbackService.SeekAsync((long)(clamped * 1000), _session.Token)) ContentStatus = "Este vídeo no permite adelantar ni retroceder.";
+            else
+            {
+                _mediaDetails = _mediaDetails with { TimeMilliseconds = (long)(clamped * 1000) };
+                NotifyMediaDetails();
+            }
+        }
         catch (OperationCanceledException) { }
         catch (Exception error) { _logger.LogError("content_seek", error); ContentStatus = "No se pudo cambiar la posición."; }
+    }
+    public async Task SeekRelativeAsync(double deltaSeconds)
+    {
+        if (!CanSeek) return;
+        var target = Math.Clamp(PositionSeconds + deltaSeconds, 0, DurationSeconds);
+        await SeekToAsync(target);
+        TriggerOsd(deltaSeconds < 0 ? $"⏪ {deltaSeconds:0}s" : $"⏩ +{deltaSeconds:0}s");
     }
     public async Task SelectTrackAsync(bool subtitles)
     {
@@ -346,16 +377,16 @@ public sealed partial class MainViewModel
     private void NotifyContent()
     {
         SelectedProgress ??= ContinueWatching.FirstOrDefault();
-        foreach (var name in new[] { nameof(HasMovies), nameof(HasSeries), nameof(MediaCategories), nameof(VisibleMediaCategories), nameof(MediaCategoryLabel), nameof(ContinueWatching), nameof(SelectedProgress) }) OnPropertyChanged(name);
+        foreach (var name in new[] { nameof(HasMovies), nameof(HasSeries), nameof(HasNoMediaItems), nameof(MediaCategories), nameof(VisibleMediaCategories), nameof(MediaCategoryLabel), nameof(ContinueWatching), nameof(SelectedProgress) }) OnPropertyChanged(name);
     }
     private void ResetContent()
     {
         _detailRequest?.Cancel(); _mediaFilter?.Cancel(); _epgRequest?.Cancel();
-        _movies = _series = _episodes = null; _progress = []; _selectedMedia = _selectedEpisode = _selectedDetails = null; _season = _mediaCategory = null;
+        _movies = _series = _episodes = null; _progress = []; _selectedMedia = _selectedEpisode = _selectedDetails = null; _season = _mediaCategory = null; _isEpisodePlayerFocus = false;
         MediaItems = []; _mediaDetails = MediaPlaybackDetails.Empty;
         ContentStatus = "Explora películas y series de tu cuenta."; EpgStatus = "Elige un canal para ver su programación.";
-        NotifyContent(); NotifyMediaDetails(); OnPropertyChanged(nameof(MediaItems)); OnPropertyChanged(nameof(SelectedMedia)); OnPropertyChanged(nameof(MediaDescription)); OnPropertyChanged(nameof(MediaPosterUrl)); OnPropertyChanged(nameof(MediaCategoryLabel)); OnPropertyChanged(nameof(SeriesSummary)); OnPropertyChanged(nameof(Seasons)); OnPropertyChanged(nameof(Episodes));
-        OnPropertyChanged(nameof(ShowMovieBrowse)); OnPropertyChanged(nameof(ShowMovieDetails)); OnPropertyChanged(nameof(ShowSeriesBrowse)); OnPropertyChanged(nameof(ShowSeriesDetails)); OnPropertyChanged(nameof(ShowMediaBrowse)); OnPropertyChanged(nameof(ShowPlayerPane)); OnPropertyChanged(nameof(NowPlaying));
+        NotifyContent(); NotifyMediaDetails(); OnPropertyChanged(nameof(MediaItems)); OnPropertyChanged(nameof(HasNoMediaItems)); OnPropertyChanged(nameof(SelectedMedia)); OnPropertyChanged(nameof(MediaDescription)); OnPropertyChanged(nameof(MediaPosterUrl)); OnPropertyChanged(nameof(MediaCategoryLabel)); OnPropertyChanged(nameof(SeriesSummary)); OnPropertyChanged(nameof(Seasons)); OnPropertyChanged(nameof(Episodes));
+        OnPropertyChanged(nameof(ShowMovieBrowse)); OnPropertyChanged(nameof(ShowMovieDetails)); OnPropertyChanged(nameof(ShowSeriesBrowse)); OnPropertyChanged(nameof(ShowSeriesDetails)); OnPropertyChanged(nameof(ShowMediaBrowse)); OnPropertyChanged(nameof(ShowPlayerPane)); OnPropertyChanged(nameof(NowPlaying)); OnPropertyChanged(nameof(IsEpisodePlayerFocus));
         _epgPrograms = []; UpdateEpgLabels();
     }
     private sealed class MediaWatch(MediaItem item, string? profileId, int version, long afterSequence)

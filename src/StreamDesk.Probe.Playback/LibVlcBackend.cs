@@ -29,7 +29,7 @@ public sealed class LibVlcBackend : IPlaybackBackend
         if (!File.Exists(Path.Combine(directory, "libvlc.dll")) || !File.Exists(Path.Combine(directory, "libvlccore.dll")))
             throw new PlaybackException(PlaybackFailure.Unavailable);
         lock (CoreSync) LibVLCSharp.Shared.Core.Initialize(directory);
-        var lib = new LibVLC("--no-video-title-show");
+        var lib = new LibVLC("--no-video-title-show", "--avcodec-hw=d3d11va");
         try
         {
             // Subscribing replaces VLC's default logger. Raw messages are classified
@@ -54,14 +54,16 @@ public sealed class LibVlcBackend : IPlaybackBackend
         media.AddOption(":network-caching=" + options.BufferMilliseconds);
         media.AddOption(":live-caching=" + options.BufferMilliseconds);
         media.AddOption(":file-caching=" + options.BufferMilliseconds);
-        media.AddOption(options.Hardware == HardwareDecoding.Software ? ":avcodec-hw=none" : ":avcodec-hw=any");
+        media.AddOption(options.Hardware == HardwareDecoding.Software ? ":avcodec-hw=none" : ":avcodec-hw=d3d11va");
         if (options.OnDemand && options.StartPositionMilliseconds > 0)
             media.AddOption(":start-time=" + (options.StartPositionMilliseconds / 1000d).ToString(System.Globalization.CultureInfo.InvariantCulture));
         try
         {
+            token.ThrowIfCancellationRequested();
             _media = media;
             if (!_player.Play(media)) throw new PlaybackException(PlaybackFailure.Unknown);
         }
+        catch (OperationCanceledException) { _media = null; media.Dispose(); throw; }
         catch { _media = null; media.Dispose(); throw new PlaybackException(PlaybackFailure.Unknown); }
     }, token);
 

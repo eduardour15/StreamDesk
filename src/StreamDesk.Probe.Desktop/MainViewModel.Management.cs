@@ -1,4 +1,4 @@
-using System.Collections.ObjectModel;
+﻿using System.Collections.ObjectModel;
 using System.Security.Cryptography;
 using StreamDesk.Application;
 using StreamDesk.Probe.Core;
@@ -91,6 +91,7 @@ public sealed partial class MainViewModel
         SelectedFormat = null;
         StatusMessage = "Desconectado. 0 conexiones activas con el servidor.";
         OnPropertyChanged(nameof(IsConnected));
+        OnPropertyChanged(nameof(ConnectedProfileId));
         OnPropertyChanged(nameof(ActiveConnectionsInfo));
         NotifyCommands();
     }
@@ -241,7 +242,7 @@ public sealed partial class MainViewModel
         }
         catch (CryptographicException)
         {
-            SyncStatus = "⚠️ Contraseña incorrecta o archivo de sincronización dañado.";
+            SyncStatus = "Contraseña incorrecta o archivo de sincronización dañado.";
             return false;
         }
         catch (Exception exception)

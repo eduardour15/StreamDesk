@@ -364,12 +364,39 @@ public sealed partial class XtreamApiClient : IIptvProvider, IContentProvider
     private string? SafeLogoUrl(string? value)
     {
         if (!Uri.TryCreate(value, UriKind.Absolute, out var uri) ||
-            uri.Scheme is not ("https" or "http") || uri.UserInfo.Length != 0 || uri.Query.Length != 0 || uri.Fragment.Length != 0)
+            uri.Scheme is not ("https" or "http") || uri.UserInfo.Length != 0 || uri.Fragment.Length != 0)
             return null;
         var decoded = Uri.UnescapeDataString(uri.AbsoluteUri);
         if (decoded.Contains(_username!, StringComparison.OrdinalIgnoreCase) || decoded.Contains(_password!, StringComparison.OrdinalIgnoreCase))
             return null;
+        if (uri.Query.Length > 0 && HasSensitiveQueryParameter(uri.Query))
+            return null;
         return uri.AbsoluteUri;
+    }
+
+    private static bool HasSensitiveQueryParameter(string query)
+    {
+        var raw = query.TrimStart('?');
+        foreach (var pair in raw.Split('&', StringSplitOptions.RemoveEmptyEntries))
+        {
+            var eq = pair.IndexOf('=');
+            var key = Uri.UnescapeDataString(eq >= 0 ? pair[..eq] : pair).Trim();
+            if (key.Equals("password", StringComparison.OrdinalIgnoreCase) ||
+                key.Equals("pass", StringComparison.OrdinalIgnoreCase) ||
+                key.Equals("pwd", StringComparison.OrdinalIgnoreCase) ||
+                key.Equals("username", StringComparison.OrdinalIgnoreCase) ||
+                key.Equals("user", StringComparison.OrdinalIgnoreCase) ||
+                key.Equals("secret", StringComparison.OrdinalIgnoreCase) ||
+                key.Equals("token", StringComparison.OrdinalIgnoreCase) ||
+                key.Equals("access_token", StringComparison.OrdinalIgnoreCase) ||
+                key.Equals("api_key", StringComparison.OrdinalIgnoreCase) ||
+                key.Equals("apikey", StringComparison.OrdinalIgnoreCase) ||
+                key.Equals("auth", StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static string? ReadString(JsonElement parent, string propertyName)

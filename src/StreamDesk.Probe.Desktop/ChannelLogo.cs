@@ -7,9 +7,13 @@ public sealed class ChannelLogo : Image
 {
     public static readonly DependencyProperty UrlProperty = DependencyProperty.Register(nameof(Url), typeof(string), typeof(ChannelLogo), new PropertyMetadata(null, Changed));
     public static readonly DependencyProperty LoaderProperty = DependencyProperty.Register(nameof(Loader), typeof(ChannelLogoLoader), typeof(ChannelLogo), new PropertyMetadata(null, Changed));
+    public static readonly DependencyProperty DecodeWidthProperty = DependencyProperty.Register(nameof(DecodeWidth), typeof(int), typeof(ChannelLogo), new PropertyMetadata(64, Changed));
+    public static readonly DependencyProperty DecodeHeightProperty = DependencyProperty.Register(nameof(DecodeHeight), typeof(int), typeof(ChannelLogo), new PropertyMetadata(64, Changed));
     private CancellationTokenSource? _load;
     public string? Url { get => (string?)GetValue(UrlProperty); set => SetValue(UrlProperty, value); }
     public ChannelLogoLoader? Loader { get => (ChannelLogoLoader?)GetValue(LoaderProperty); set => SetValue(LoaderProperty, value); }
+    public int DecodeWidth { get => (int)GetValue(DecodeWidthProperty); set => SetValue(DecodeWidthProperty, value); }
+    public int DecodeHeight { get => (int)GetValue(DecodeHeightProperty); set => SetValue(DecodeHeightProperty, value); }
     public ChannelLogo()
     {
         Loaded += (_, _) => Reload();
@@ -23,7 +27,7 @@ public sealed class ChannelLogo : Image
         using var load = new CancellationTokenSource(); _load = load;
         try
         {
-            var image = await Loader.GetAsync(Url, load.Token);
+            var image = await Loader.GetAsync(Url, DecodeWidth, DecodeHeight, load.Token);
             if (ReferenceEquals(_load, load) && IsLoaded) Source = image;
         }
         catch (OperationCanceledException) { }
