@@ -12,7 +12,9 @@ public sealed partial class PlaybackService : IPlaybackService
     private long _version, _attempt, _sequence;
     private bool _disposed;
     private Task? _disposeTask;
+    public const int MaxAmplificationDb = 6;
     private int _volume = 75;
+    private int _amplificationDb;
     private bool _muted;
     private PlaybackOptions _options = new();
     private PlaybackSnapshot _snapshot = new(0, PlaybackState.Idle);
@@ -30,6 +32,7 @@ public sealed partial class PlaybackService : IPlaybackService
     public PlaybackOptions Options { get { lock (_sync) return _options; } set { value.Validate(); lock (_sync) { ObjectDisposedException.ThrowIf(_disposed, this); _options = value; } } }
     public int Volume { get => Volatile.Read(ref _volume); set { Volatile.Write(ref _volume, Math.Clamp(value, 0, 100)); _ = ApplyAudioAsync(); } }
     public bool IsMuted { get => Volatile.Read(ref _muted); set { Volatile.Write(ref _muted, value); _ = ApplyAudioAsync(); } }
+    public int AmplificationDb { get => Volatile.Read(ref _amplificationDb); set { Volatile.Write(ref _amplificationDb, Math.Clamp(value, 0, MaxAmplificationDb)); _ = ApplyAudioAsync(); } }
     public event EventHandler<PlaybackSnapshot>? StateChanged;
 
     public async Task InitializeAsync(CancellationToken cancellationToken = default)
@@ -103,7 +106,7 @@ public sealed partial class PlaybackService : IPlaybackService
     private async Task InitializeCoreAsync(CancellationToken token)
     {
         if (_backend.IsReady) return;
-        try { await _backend.InitializeAsync(token).ConfigureAwait(false); await _backend.SetAudioAsync(Volume, IsMuted).ConfigureAwait(false); }
+        try { await _backend.InitializeAsync(token).ConfigureAwait(false); await _backend.SetAudioAsync(Volume, IsMuted).ConfigureAwait(false); await _backend.SetAmplificationAsync(AmplificationDb).ConfigureAwait(false); }
         catch (OperationCanceledException) { throw; }
         catch { Publish(PlaybackState.Failed, PlaybackFailure.Unavailable); throw new PlaybackException(PlaybackFailure.Unavailable); }
     }
@@ -115,6 +118,7 @@ public sealed partial class PlaybackService : IPlaybackService
         session.Attempt = ++_attempt;
         Publish(PlaybackState.Loading, session: session);
         await _backend.SetAudioAsync(Volume, IsMuted).ConfigureAwait(false);
+        await _backend.SetAmplificationAsync(AmplificationDb).ConfigureAwait(false);
         await _backend.OpenAsync(session.Source, session.Options with { Hardware = session.Software ? HardwareDecoding.Software : session.Options.Hardware, StartPositionMilliseconds = session.ResumePosition }, session.Attempt, session.Token).ConfigureAwait(false);
         ArmTimeout(session);
     }
@@ -135,7 +139,7 @@ public sealed partial class PlaybackService : IPlaybackService
                 case PlaybackSignalKind.Paused:
                     session.CancelTimeout(); Publish(PlaybackState.Paused, session: session); break;
                 case PlaybackSignalKind.Buffering:
-                    if (signal.BufferPercent >= 100 && session.HasPlayed) { session.CancelTimeout(); Publish(PlaybackState.Playing, session: session); }
+                    if (signal.BufferPercent >= 100) { if (session.HasPlayed) { session.CancelTimeout(); Publish(PlaybackState.Playing, session: session); } else Publish(PlaybackState.Loading, session: session); }
                     else { if (Snapshot.State == PlaybackState.Playing) ArmTimeout(session); Publish(PlaybackState.Buffering, session: session, percent: signal.BufferPercent); }
                     break;
                 case PlaybackSignalKind.Ended:
@@ -220,7 +224,7 @@ public sealed partial class PlaybackService : IPlaybackService
     private async Task ApplyAudioAsync()
     {
         await _serial.WaitAsync().ConfigureAwait(false);
-        try { if (!_disposed && _backend.IsReady) await _backend.SetAudioAsync(Volume, IsMuted).ConfigureAwait(false); }
+        try { if (!_disposed && _backend.IsReady) { await _backend.SetAudioAsync(Volume, IsMuted).ConfigureAwait(false); await _backend.SetAmplificationAsync(AmplificationDb).ConfigureAwait(false); } }
         catch { /* Audio controls must not terminate an otherwise valid stream. */ }
         finally { _serial.Release(); }
     }

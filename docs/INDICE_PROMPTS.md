@@ -24,6 +24,13 @@ Continua la fase 2 desde la primera tarea pendiente
 Muestra el estado de StreamDesk
 ```
 
+Mejora posterior a F7:
+
+```text
+Ejecuta el prompt de reproductor inmersivo
+Ejecuta PLAY-UX-T02
+```
+
 ## Archivos por fase
 
 | Fase | Documento | Tareas | Comando corto |
@@ -36,6 +43,12 @@ Muestra el estado de StreamDesk
 | **Fase 5** | [EPG peliculas y series](prompts/FASE_5_CONTENIDO_EPG_VOD.md) | 9 | `Ejecuta la fase 5` |
 | **Fase 6** | [Calidad seguridad e instalador](prompts/FASE_6_VERSION_1_0.md) | 12 | `Ejecuta la fase 6` |
 | **Fase 7** | [Mejoras opcionales](prompts/FASE_7_MEJORAS_OPCIONALES.md) | 6 | `Ejecuta la fase 7` |
+
+## Incrementos posteriores a las fases
+
+| Documento | Alcance | Invocación |
+|---|---|---|
+| [Reproductor inmersivo y series aleatorias](prompts/REPRODUCTOR_INMERSIVO_Y_SERIES_ALEATORIAS.md) | Modo inmersivo, episodios aleatorios, audio amplificado seguro e indicador de carga | `Ejecuta el prompt de reproductor inmersivo` |
 
 ## Flujo recomendado
 

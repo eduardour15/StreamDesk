@@ -23,10 +23,11 @@ public sealed class SqliteViewerStore(string path, bool pooling = true) : IViewe
         var recents = new List<RecentChannel>();
         using (var reader = command.ExecuteReader())
             while (reader.Read()) { cancellationToken.ThrowIfCancellationRequested(); recents.Add(new(reader.GetString(0), DateTimeOffset.Parse(reader.GetString(1)))); }
-        command.CommandText = "SELECT AutoPlayLast FROM ProfilePreferences WHERE ProfileId=$profile;";
-        var autoPlay = command.ExecuteScalar() is long value && value == 1;
+        EnsureAmplificationColumn(connection, transaction);
+        command.CommandText = "SELECT AutoPlayLast, AmplificationDb FROM ProfilePreferences WHERE ProfileId=$profile;";
+        var (autoPlay, amplificationDb) = ReadPreferences(command);
         cancellationToken.ThrowIfCancellationRequested(); transaction.Commit();
-        return new ViewerLibrary(favorites, recents, autoPlay);
+        return new ViewerLibrary(favorites, recents, autoPlay, amplificationDb);
     }, cancellationToken);
 
     public Task SetFavoriteAsync(string profileId, string contentType, string channelId, bool favorite, CancellationToken cancellationToken = default) =>
@@ -62,6 +63,54 @@ public sealed class SqliteViewerStore(string path, bool pooling = true) : IViewe
         command.Parameters.AddWithValue("$profile", profileId); command.Parameters.AddWithValue("$enabled", enabled);
         command.ExecuteNonQuery();
     }, cancellationToken);
+
+    public Task SetAmplificationAsync(string profileId, int amplificationDb, CancellationToken cancellationToken = default) => Task.Run(() =>
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        var clamped = Math.Clamp(amplificationDb, 0, 6);
+        using var connection = Open();
+        EnsureAmplificationColumn(connection, transaction: null);
+        using var command = connection.CreateCommand();
+        command.CommandText = "INSERT INTO ProfilePreferences(ProfileId,AmplificationDb) VALUES($profile,$amp) ON CONFLICT(ProfileId) DO UPDATE SET AmplificationDb=excluded.AmplificationDb;";
+        command.Parameters.AddWithValue("$profile", profileId);
+        command.Parameters.AddWithValue("$amp", clamped);
+        command.ExecuteNonQuery();
+    }, cancellationToken);
+
+    private static (bool AutoPlay, int AmplificationDb) ReadPreferences(SqliteCommand command)
+    {
+        using var reader = command.ExecuteReader();
+        if (!reader.Read()) return (false, 0);
+        var autoPlay = !reader.IsDBNull(0) && reader.GetInt64(0) == 1;
+        var amp = reader.FieldCount > 1 && !reader.IsDBNull(1) ? Math.Clamp(reader.GetInt32(1), 0, 6) : 0;
+        return (autoPlay, amp);
+    }
+
+    private static void EnsureAmplificationColumn(SqliteConnection connection, SqliteTransaction? transaction)
+    {
+        using var check = connection.CreateCommand();
+        check.Transaction = transaction;
+        check.CommandText = "PRAGMA table_info(ProfilePreferences);";
+        var hasAmplificationDb = false;
+        using (var reader = check.ExecuteReader())
+        {
+            while (reader.Read())
+            {
+                if (string.Equals(reader.GetString(1), "AmplificationDb", StringComparison.OrdinalIgnoreCase))
+                {
+                    hasAmplificationDb = true;
+                    break;
+                }
+            }
+        }
+        if (!hasAmplificationDb)
+        {
+            using var alter = connection.CreateCommand();
+            alter.Transaction = transaction;
+            alter.CommandText = "ALTER TABLE ProfilePreferences ADD COLUMN AmplificationDb INTEGER NOT NULL DEFAULT 0 CHECK(AmplificationDb BETWEEN 0 AND 6);";
+            alter.ExecuteNonQuery();
+        }
+    }
 
     public Task<string?> GetLastProfileAsync(CancellationToken cancellationToken = default) => Task.Run(() =>
     {

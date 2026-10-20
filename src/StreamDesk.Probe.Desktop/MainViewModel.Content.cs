@@ -12,7 +12,7 @@ public sealed partial class MainViewModel
     private string _mediaSearch = "", _mediaCategorySearch = "", _contentStatus = "Explora películas y series de tu cuenta.", _epgStatus = "Elige un canal para ver su programación.";
     private bool _contentBusy;
     private CancellationTokenSource? _mediaFilter, _detailRequest, _epgRequest;
-    private Task _progressWrites = Task.CompletedTask;
+    private Task _progressWrites = Task.CompletedTask, _detailTask = Task.CompletedTask, _autoAdvanceTask = Task.CompletedTask;
     private readonly SemaphoreSlim _mediaCapture = new(1, 1);
     private MediaWatch? _mediaWatch;
     private IReadOnlyList<MediaProgress> _progress = [];
@@ -23,21 +23,52 @@ public sealed partial class MainViewModel
     public bool ShowMovieDetails => CurrentTabIndex == 5 && SelectedMedia?.Kind == ContentKind.Movie;
     public bool ShowSeriesBrowse => CurrentTabIndex == 6 && SelectedMedia is null;
     public bool ShowSeriesDetails => CurrentTabIndex == 6 && SelectedMedia?.Kind == ContentKind.Series;
-    private bool _isEpisodePlayerFocus;
-    public bool IsEpisodePlayerFocus
+    private bool _isImmersiveMode;
+    private bool _autoRandomNextEpisode;
+    private readonly HashSet<string> _randomCyclePlayedKeys = new(StringComparer.Ordinal);
+    public Func<int, int> RandomIndex { get; set; } = maxExclusive => Random.Shared.Next(maxExclusive);
+    public bool IsImmersiveMode
     {
-        get => _isEpisodePlayerFocus && ShowSeriesDetails;
+        get => _isImmersiveMode && ShowTv;
         set
         {
-            if (SetProperty(ref _isEpisodePlayerFocus, value))
+            if (SetProperty(ref _isImmersiveMode, value))
             {
+                OnPropertyChanged(nameof(IsEpisodePlayerFocus));
+                OnPropertyChanged(nameof(ImmersiveReturnLabel));
+                OnPropertyChanged(nameof(ShowPlayerPane));
                 OnPropertyChanged(nameof(ShowSeriesDetails));
+                OnPropertyChanged(nameof(ShowMovieDetails));
             }
         }
     }
-    public void ReturnToEpisodes() => IsEpisodePlayerFocus = false;
+    public bool IsEpisodePlayerFocus
+    {
+        get => IsImmersiveMode && ShowSeriesDetails;
+        set => IsImmersiveMode = value;
+    }
+    public string ImmersiveReturnLabel => (ShowSeriesDetails || _mediaWatch?.Item.Kind == ContentKind.Episode)
+        ? "Volver a episodios"
+        : (ShowMovieDetails || CurrentTabIndex == 5 || _mediaWatch?.Item.Kind == ContentKind.Movie)
+            ? "Volver a películas"
+            : "Volver a canales";
+    public void ReturnFromImmersive() => IsImmersiveMode = false;
+    public void ReturnToEpisodes() => ReturnFromImmersive();
+    public bool AutoRandomNextEpisode
+    {
+        get => _autoRandomNextEpisode;
+        set => SetProperty(ref _autoRandomNextEpisode, value);
+    }
+    public bool CanPlayRandomEpisode => ShowSeriesDetails && !ContentBusy && !IsBusy && !IsCatalogLoading && GetPlayableEpisodes().Count > 0;
+    public static bool IsPlayableEpisode(MediaItem? item) =>
+        item is not null &&
+        item.Kind == ContentKind.Episode &&
+        !string.IsNullOrWhiteSpace(item.Id) &&
+        !string.IsNullOrWhiteSpace(item.Name) &&
+        MediaMetadata.SafeExtension(item.Extension);
+    private IReadOnlyList<MediaItem> GetPlayableEpisodes() => (_episodes?.Items ?? []).Where(IsPlayableEpisode).ToArray();
     public bool ShowMediaBrowse => ShowMovieBrowse || ShowSeriesBrowse;
-    public bool ShowPlayerPane => !ShowMediaBrowse;
+    public bool ShowPlayerPane => !ShowMediaBrowse || IsImmersiveMode;
     public bool ShowContinueWatching => CurrentTabIndex == 7;
     public string VersionLabel => typeof(MainViewModel).Assembly.GetCustomAttributes(typeof(System.Reflection.AssemblyInformationalVersionAttribute), false)
         .OfType<System.Reflection.AssemblyInformationalVersionAttribute>().FirstOrDefault()?.InformationalVersion.Split('+')[0] ?? "Candidato";
@@ -45,7 +76,7 @@ public sealed partial class MainViewModel
     public bool HasMovies => _movies?.Items.Count > 0;
     public bool HasSeries => _series?.Items.Count > 0;
     public bool HasNoMediaItems => ShowMediaBrowse && MediaItems.Count == 0 && !ContentBusy;
-    public bool ContentBusy { get => _contentBusy; private set { if (SetProperty(ref _contentBusy, value)) { OnPropertyChanged(nameof(IsWorking)); OnPropertyChanged(nameof(HasNoMediaItems)); } } }
+    public bool ContentBusy { get => _contentBusy; private set { if (SetProperty(ref _contentBusy, value)) { OnPropertyChanged(nameof(IsWorking)); OnPropertyChanged(nameof(HasNoMediaItems)); OnPropertyChanged(nameof(CanPlayRandomEpisode)); } } }
     public string ContentStatus
     {
         get => _contentStatus;
@@ -91,10 +122,10 @@ public sealed partial class MainViewModel
         set
         {
             if (!SetProperty(ref _selectedMedia, value)) return;
-            _selectedDetails = null; _isEpisodePlayerFocus = false;
+            _selectedDetails = null; _isImmersiveMode = false; _randomCyclePlayedKeys.Clear();
             if (value is null && ShowMediaCatalog) ContentStatus = $"Películas: {_movies?.Items.Count ?? 0} · Series: {_series?.Items.Count ?? 0}";
-            foreach (var name in new[] { nameof(MediaDescription), nameof(MediaPosterUrl), nameof(MediaCategoryLabel), nameof(SeriesSummary), nameof(ShowMovieBrowse), nameof(ShowMovieDetails), nameof(ShowSeriesBrowse), nameof(ShowSeriesDetails), nameof(ShowMediaBrowse), nameof(ShowPlayerPane), nameof(NowPlaying), nameof(IsEpisodePlayerFocus) }) OnPropertyChanged(name);
-            _ = LoadMediaDetailsAsync(value);
+            foreach (var name in new[] { nameof(MediaDescription), nameof(MediaPosterUrl), nameof(MediaCategoryLabel), nameof(SeriesSummary), nameof(ShowMovieBrowse), nameof(ShowMovieDetails), nameof(ShowSeriesBrowse), nameof(ShowSeriesDetails), nameof(ShowMediaBrowse), nameof(ShowPlayerPane), nameof(NowPlaying), nameof(IsEpisodePlayerFocus), nameof(IsImmersiveMode), nameof(ImmersiveReturnLabel), nameof(CanPlayRandomEpisode) }) OnPropertyChanged(name);
+            _detailTask = LoadMediaDetailsAsync(value);
         }
     }
     public MediaItem? SelectedEpisode
@@ -222,7 +253,7 @@ public sealed partial class MainViewModel
 
     private async Task LoadMediaDetailsAsync(MediaItem? item)
     {
-        _detailRequest?.Cancel(); _episodes = null; Season = null; SelectedEpisode = null; OnPropertyChanged(nameof(Seasons)); OnPropertyChanged(nameof(Episodes));
+        _detailRequest?.Cancel(); _episodes = null; _randomCyclePlayedKeys.Clear(); Season = null; SelectedEpisode = null; OnPropertyChanged(nameof(Seasons)); OnPropertyChanged(nameof(Episodes)); OnPropertyChanged(nameof(CanPlayRandomEpisode));
         if (item is null || _disposed) return;
         ContentStatus = item.Kind == ContentKind.Series ? "Cargando temporadas y episodios…" : "Cargando información de la película…";
         using var request = CancellationTokenSource.CreateLinkedTokenSource(_shutdown.Token, _session.Token); _detailRequest = request;
@@ -241,11 +272,12 @@ public sealed partial class MainViewModel
             else
             {
                 var cached = _contentStore is not null && _connectedProfileId is { } profile ? await _contentStore.LoadCatalogAsync(profile, ContentKind.Episode, item.Id, request.Token) : null;
-                var episodes = cached ?? await provider.GetEpisodesAsync(item.Id, request.Token);
+                var rawEpisodes = cached ?? await provider.GetEpisodesAsync(item.Id, request.Token);
+                var episodes = rawEpisodes with { Items = rawEpisodes.Items.Where(IsPlayableEpisode).ToArray() };
                 request.Token.ThrowIfCancellationRequested(); if (!ReferenceEquals(_selectedMedia, item) || version != _sessionVersion) return;
                 if (cached is null && _contentStore is not null && _connectedProfileId is { } id) await _contentStore.SaveCatalogAsync(id, ContentKind.Episode, item.Id, episodes, request.Token);
                 if (version != _sessionVersion) return;
-                _episodes = episodes; Season = Seasons.FirstOrDefault(); OnPropertyChanged(nameof(Seasons)); OnPropertyChanged(nameof(Episodes)); OnPropertyChanged(nameof(SeriesSummary));
+                _episodes = episodes; _randomCyclePlayedKeys.Clear(); Season = Seasons.FirstOrDefault(); OnPropertyChanged(nameof(Seasons)); OnPropertyChanged(nameof(Episodes)); OnPropertyChanged(nameof(SeriesSummary)); OnPropertyChanged(nameof(CanPlayRandomEpisode));
                 SelectedEpisode ??= Episodes.FirstOrDefault();
                 ContentStatus = episodes.Items.Count == 0 ? "Sin episodios disponibles." : $"{episodes.Items.Count} episodios disponibles.";
             }
@@ -277,7 +309,9 @@ public sealed partial class MainViewModel
             _mediaDetails = MediaPlaybackDetails.Empty; NotifyMediaDetails();
             _mediaWatch = new(item, _connectedProfileId, version, _playbackService.Snapshot.Sequence) { Position = position, Length = resume?.DurationMilliseconds ?? 0 };
             _playbackService.Options = _playbackService.Options with { OnDemand = true, StartPositionMilliseconds = position };
-            OnPropertyChanged(nameof(NowPlaying)); OnPropertyChanged(nameof(IsEpisodePlayerFocus));
+            if (item.Kind == ContentKind.Episode) _randomCyclePlayedKeys.Add(item.StorageKey);
+            IsImmersiveMode = true;
+            OnPropertyChanged(nameof(NowPlaying)); OnPropertyChanged(nameof(IsEpisodePlayerFocus)); OnPropertyChanged(nameof(IsImmersiveMode)); OnPropertyChanged(nameof(ImmersiveReturnLabel));
             await _playbackService.PlayAsync(uri, _session.Token);
             OnPropertyChanged(nameof(PlayerHandle));
         }
@@ -291,6 +325,66 @@ public sealed partial class MainViewModel
         var index = items.ToList().FindIndex(item => item.StorageKey == key); var next = index + direction;
         if (direction is not (-1 or 1) || index < 0 || next < 0 || next >= items.Count) return;
         SelectedEpisode = items[next]; await PlayMediaItemAsync(items[next]);
+    }
+
+    public async Task PlayRandomEpisodeAsync()
+    {
+        if (_disposed || IsBusy || IsCatalogLoading || ContentBusy) return;
+        var chosen = SelectNextRandomEpisode();
+        if (chosen is null)
+        {
+            ContentStatus = "No hay episodios reproducibles en esta serie.";
+            return;
+        }
+        var targetSeason = Seasons.FirstOrDefault(season => season.Id == chosen.CategoryId);
+        if (targetSeason is not null && _season?.Id != targetSeason.Id)
+        {
+            _season = targetSeason;
+            OnPropertyChanged(nameof(Season));
+            OnPropertyChanged(nameof(Episodes));
+        }
+        SelectedEpisode = chosen;
+        TriggerOsd($"Al azar: {chosen.Name}");
+        await PlayMediaItemAsync(chosen);
+    }
+
+    private async Task AdvanceRandomEpisodeOnEndedAsync(MediaWatch completedMedia)
+    {
+        if (_disposed || !AutoRandomNextEpisode || completedMedia.Version != _sessionVersion || !ReferenceEquals(completedMedia, _mediaWatch)) return;
+        await PlayRandomEpisodeAsync();
+    }
+
+    private MediaItem? SelectNextRandomEpisode()
+    {
+        var playable = GetPlayableEpisodes();
+        if (playable.Count == 0) return null;
+        if (playable.Count == 1)
+        {
+            _randomCyclePlayedKeys.Clear();
+            _randomCyclePlayedKeys.Add(playable[0].StorageKey);
+            return playable[0];
+        }
+        var currentKey = _mediaWatch?.Item.Kind == ContentKind.Episode ? _mediaWatch.Item.StorageKey : SelectedEpisode?.StorageKey;
+        if (!string.IsNullOrEmpty(currentKey) && playable.Any(item => item.StorageKey == currentKey))
+            _randomCyclePlayedKeys.Add(currentKey);
+        var candidates = playable.Where(item => item.StorageKey != currentKey && !_randomCyclePlayedKeys.Contains(item.StorageKey)).ToArray();
+        if (candidates.Length == 0)
+        {
+            _randomCyclePlayedKeys.Clear();
+            if (!string.IsNullOrEmpty(currentKey) && playable.Any(item => item.StorageKey == currentKey))
+                _randomCyclePlayedKeys.Add(currentKey);
+            candidates = playable.Where(item => item.StorageKey != currentKey).ToArray();
+            if (candidates.Length == 0) candidates = playable.ToArray();
+        }
+        var rawIndex = RandomIndex(candidates.Length);
+        var index = ((rawIndex % candidates.Length) + candidates.Length) % candidates.Length;
+        var chosen = candidates[index];
+        _randomCyclePlayedKeys.Add(chosen.StorageKey);
+        return chosen;
+    }
+
+    private void EndNavigateEpisodePlaceholder()
+    {
     }
 
     public async Task CaptureMediaAsync(bool persist = false)
@@ -382,17 +476,17 @@ public sealed partial class MainViewModel
     private void ResetContent()
     {
         _detailRequest?.Cancel(); _mediaFilter?.Cancel(); _epgRequest?.Cancel();
-        _movies = _series = _episodes = null; _progress = []; _selectedMedia = _selectedEpisode = _selectedDetails = null; _season = _mediaCategory = null; _isEpisodePlayerFocus = false;
+        _movies = _series = _episodes = null; _progress = []; _selectedMedia = _selectedEpisode = _selectedDetails = null; _season = _mediaCategory = null; _isImmersiveMode = false; _randomCyclePlayedKeys.Clear();
         MediaItems = []; _mediaDetails = MediaPlaybackDetails.Empty;
         ContentStatus = "Explora películas y series de tu cuenta."; EpgStatus = "Elige un canal para ver su programación.";
         NotifyContent(); NotifyMediaDetails(); OnPropertyChanged(nameof(MediaItems)); OnPropertyChanged(nameof(HasNoMediaItems)); OnPropertyChanged(nameof(SelectedMedia)); OnPropertyChanged(nameof(MediaDescription)); OnPropertyChanged(nameof(MediaPosterUrl)); OnPropertyChanged(nameof(MediaCategoryLabel)); OnPropertyChanged(nameof(SeriesSummary)); OnPropertyChanged(nameof(Seasons)); OnPropertyChanged(nameof(Episodes));
-        OnPropertyChanged(nameof(ShowMovieBrowse)); OnPropertyChanged(nameof(ShowMovieDetails)); OnPropertyChanged(nameof(ShowSeriesBrowse)); OnPropertyChanged(nameof(ShowSeriesDetails)); OnPropertyChanged(nameof(ShowMediaBrowse)); OnPropertyChanged(nameof(ShowPlayerPane)); OnPropertyChanged(nameof(NowPlaying)); OnPropertyChanged(nameof(IsEpisodePlayerFocus));
+        OnPropertyChanged(nameof(ShowMovieBrowse)); OnPropertyChanged(nameof(ShowMovieDetails)); OnPropertyChanged(nameof(ShowSeriesBrowse)); OnPropertyChanged(nameof(ShowSeriesDetails)); OnPropertyChanged(nameof(ShowMediaBrowse)); OnPropertyChanged(nameof(ShowPlayerPane)); OnPropertyChanged(nameof(NowPlaying)); OnPropertyChanged(nameof(IsEpisodePlayerFocus)); OnPropertyChanged(nameof(IsImmersiveMode)); OnPropertyChanged(nameof(ImmersiveReturnLabel)); OnPropertyChanged(nameof(CanPlayRandomEpisode));
         _epgPrograms = []; UpdateEpgLabels();
     }
     private sealed class MediaWatch(MediaItem item, string? profileId, int version, long afterSequence)
     {
         public MediaItem Item { get; } = item; public string? ProfileId { get; } = profileId; public int Version { get; } = version;
         public long AfterSequence { get; } = afterSequence;
-        public bool Played, Completed; public long Position, Length; public DateTimeOffset LastSaved;
+        public bool Played, Completed, RandomAdvanceTriggered; public long Position, Length; public DateTimeOffset LastSaved;
     }
 }

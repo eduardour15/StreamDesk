@@ -19,7 +19,8 @@ internal static class ViewerMigration
             ORDER BY r.PlayedAt DESC,r.ChannelId LIMIT 50);
         CREATE TABLE ProfilePreferences (
             ProfileId TEXT PRIMARY KEY NOT NULL REFERENCES Profiles(Id) ON DELETE CASCADE,
-            AutoPlayLast INTEGER NOT NULL DEFAULT 0 CHECK(AutoPlayLast IN (0,1)));
+            AutoPlayLast INTEGER NOT NULL DEFAULT 0 CHECK(AutoPlayLast IN (0,1)),
+            AmplificationDb INTEGER NOT NULL DEFAULT 0 CHECK(AmplificationDb BETWEEN 0 AND 6));
         CREATE TABLE AppPreferences (
             Id INTEGER PRIMARY KEY CHECK(Id=1), LastProfileId TEXT REFERENCES Profiles(Id) ON DELETE SET NULL);
         UPDATE SchemaVersion SET Version=3;

@@ -8,7 +8,9 @@ public sealed partial class MainViewModel
 {
     private readonly IEpgImporter? _epgImporter;
     private IReadOnlyList<EpgProgram> _epgPrograms = [];
-    public async Task RefreshEpgAsync(bool force = false)
+    private Task _epgTask = Task.CompletedTask;
+    public Task RefreshEpgAsync(bool force = false) => _epgTask = RefreshEpgCoreAsync(force);
+    private async Task RefreshEpgCoreAsync(bool force = false)
     {
         var channel = _watch?.Channel ?? SelectedChannel;
         if (_disposed || channel is null) { EpgStatus = "Elige un canal para ver su programación."; return; }

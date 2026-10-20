@@ -1,3 +1,4 @@
+using StreamDesk.Application;
 using StreamDesk.Probe.Core;
 
 namespace StreamDesk.Probe.Desktop;
@@ -29,6 +30,17 @@ public sealed partial class MainViewModel
     public bool IsPlaying => _playback.State == PlaybackState.Playing;
     public bool IsPaused => _playback.State == PlaybackState.Paused;
     public bool CanStopPlayback => _playback.IsActive;
+    public bool IsVideoLoading => !_disposed && _playback.State is PlaybackState.Loading or PlaybackState.Buffering;
+    public bool HasVideoBufferPercent => _playback.State == PlaybackState.Buffering && _playback.BufferPercent is > 0f and < 100f;
+    public int VideoBufferPercent => HasVideoBufferPercent ? (int)Math.Round(Math.Clamp(_playback.BufferPercent, 1f, 99f)) : 0;
+    public bool IsVideoLoadingIndeterminate => IsVideoLoading && !HasVideoBufferPercent;
+    public string VideoLoadingMessage => !IsVideoLoading
+        ? string.Empty
+        : _playback.State == PlaybackState.Loading
+            ? "Abriendo transmisión…"
+            : HasVideoBufferPercent
+                ? $"Cargando búfer ({VideoBufferPercent}%)…"
+                : "Cargando búfer…";
     public bool CanHideControls => IsPlaying && !IsWorking;
     public string NowPlaying => _playback.IsActive
         ? _mediaWatch?.Item.Name ?? _watch?.Channel.Name ?? CurrentPlaybackPrompt
@@ -74,6 +86,47 @@ public sealed partial class MainViewModel
         }
     }
     public string MuteIcon => IsMuted ? "Mute" : "Sound"; public Wpf.Ui.Controls.SymbolRegular MuteSymbol => IsMuted ? Wpf.Ui.Controls.SymbolRegular.SpeakerMute24 : Wpf.Ui.Controls.SymbolRegular.Speaker224;
+    public int MaxAmplificationDb => PlaybackService.MaxAmplificationDb;
+    public int AmplificationDb
+    {
+        get => _playbackService.AmplificationDb;
+        set
+        {
+            var clamped = Math.Clamp(value, 0, PlaybackService.MaxAmplificationDb);
+            var changed = _playbackService.AmplificationDb != clamped;
+            _playbackService.AmplificationDb = clamped;
+            NotifyAmplificationState();
+            if (changed)
+            {
+                TriggerOsd(clamped == 0 ? "Amplificación: 0 dB (Normal)" : $"Amplificación: +{clamped} dB");
+                QueueAmplificationSave(clamped);
+            }
+        }
+    }
+    public bool IsAmplified => AmplificationDb > 0;
+    public string AmplificationLabel => AmplificationDb <= 0 ? "0 dB (Normal)" : $"+{AmplificationDb} dB";
+    public string AmplificationShortLabel => $"+{AmplificationDb} dB";
+    public void CycleAmplification() => AmplificationDb = AmplificationDb >= PlaybackService.MaxAmplificationDb ? 0 : AmplificationDb + 2;
+    private void ApplyProfileAmplification(int amplificationDb)
+    {
+        _playbackService.AmplificationDb = Math.Clamp(amplificationDb, 0, PlaybackService.MaxAmplificationDb);
+        NotifyAmplificationState();
+    }
+    private void NotifyAmplificationState()
+    {
+        OnPropertyChanged(nameof(AmplificationDb));
+        OnPropertyChanged(nameof(IsAmplified));
+        OnPropertyChanged(nameof(AmplificationLabel));
+        OnPropertyChanged(nameof(AmplificationShortLabel));
+    }
+    private void NotifyPlaybackLoadingState()
+    {
+        OnPropertyChanged(nameof(IsVideoLoading));
+        OnPropertyChanged(nameof(HasVideoBufferPercent));
+        OnPropertyChanged(nameof(VideoBufferPercent));
+        OnPropertyChanged(nameof(IsVideoLoadingIndeterminate));
+        OnPropertyChanged(nameof(VideoLoadingMessage));
+    }
     public int BufferMilliseconds
     {
         get => _playbackService.Options.BufferMilliseconds;
@@ -112,6 +165,12 @@ public sealed partial class MainViewModel
         _mediaDetails = MediaPlaybackDetails.Empty; NotifyMediaDetails();
         _playingChannelId = null;
         _watch = null;
+        IsImmersiveMode = false;
+        if (_playback.State is PlaybackState.Loading or PlaybackState.Buffering)
+        {
+            _playback = new(_playback.Sequence, PlaybackState.Stopped);
+            NotifyPlaybackLoadingState();
+        }
         OnPropertyChanged(nameof(PlayingChannelId));
         OnPropertyChanged(nameof(NowPlaying));
         try { await _playbackService.StopAsync(); }
@@ -147,7 +206,12 @@ public sealed partial class MainViewModel
         void Apply()
         {
             if (_disposed || snapshot.Sequence <= _playback.Sequence) return;
+            if (snapshot.State is PlaybackState.Loading or PlaybackState.Buffering)
+            {
+                if ((watch is not null && !ReferenceEquals(watch, _watch)) || (media is not null && !ReferenceEquals(media, _mediaWatch))) return;
+            }
             _playback = snapshot;
+            NotifyPlaybackLoadingState();
             StatusMessage = PlaybackStatus;
             OnPropertyChanged(nameof(PlaybackStatus)); OnPropertyChanged(nameof(ShowPlaybackPlaceholder)); OnPropertyChanged(nameof(ShowPlaybackCaption)); OnPropertyChanged(nameof(CanRetryPlayback));
             OnPropertyChanged(nameof(IsPlaying)); OnPropertyChanged(nameof(IsPaused)); OnPropertyChanged(nameof(CanStopPlayback)); OnPropertyChanged(nameof(CanHideControls));
@@ -156,7 +220,16 @@ public sealed partial class MainViewModel
             if (media is not null && ReferenceEquals(media, _mediaWatch) && snapshot.Sequence > media.AfterSequence)
             {
                 if (snapshot.State == PlaybackState.Playing) media.Played = true;
-                if (snapshot.EndOfMedia) { media.Completed = true; _progressWrites = SaveMediaProgressAsync(_progressWrites, media); }
+                if (snapshot.EndOfMedia)
+                {
+                    media.Completed = true;
+                    _progressWrites = SaveMediaProgressAsync(_progressWrites, media);
+                    if (AutoRandomNextEpisode && media.Item.Kind == ContentKind.Episode && !media.RandomAdvanceTriggered && media.Version == _sessionVersion)
+                    {
+                        media.RandomAdvanceTriggered = true;
+                        _autoAdvanceTask = AdvanceRandomEpisodeOnEndedAsync(media);
+                    }
+                }
             }
             if (snapshot.State == PlaybackState.Playing && watch is not null && ReferenceEquals(watch, _watch) && snapshot.Sequence > watch.AfterSequence && !watch.Recorded)
             {

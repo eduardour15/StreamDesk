@@ -2,6 +2,12 @@
 
 Reproductor IPTV para Windows con .NET 10, WPF/WPF UI y LibVLCSharp. Incluye TV, favoritos, recientes y, cuando la cuenta ofrece datos, EPG/películas/series con progreso y pistas. El candidato **0.5.0-rc.2 autocontenido win-x64** agrega ventana flotante/PiP; 1.0 sigue pendiente de pruebas reales y revisión completa de licencias nativas.
 
+## Licencia y marca
+
+El código y los recursos originales de StreamDesk se ofrecen bajo la [licencia de uso, modificación y redistribución no comercial](LICENSE), con autoría de **eduardour15**. Permite usar, modificar y redistribuir copias gratuitas; prohíbe la redistribución comercial. Esta condición no es compatible con la [definición de código abierto de OSI](https://opensource.org/osd). Las bibliotecas y demás materiales de terceros conservan sus propias licencias y avisos en `packaging/`.
+
+Los logos vectoriales y el icono de Windows están en `src/StreamDesk.Probe.Desktop/Resources/`.
+
 ## Requisitos
 
 - Para desarrollar: Windows x64 con .NET 10 SDK. El candidato autocontenido no necesita SDK ni runtime externo.

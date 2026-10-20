@@ -7,7 +7,7 @@ public sealed partial class MainViewModel
 {
     private readonly IViewerStore? _viewer;
     private ViewerLibrary _library = new(new HashSet<string>(), []);
-    private Task _profileLoad = Task.CompletedTask, _historyWrites = Task.CompletedTask;
+    private Task _profileLoad = Task.CompletedTask, _historyWrites = Task.CompletedTask, _preferenceWrites = Task.CompletedTask;
     private bool _startupEvaluated, _recentsOnly, _libraryBusy;
     private WatchRequest? _watch;
     private string? _catalogOwnerId;
@@ -91,9 +91,11 @@ public sealed partial class MainViewModel
     private async Task LoadLibraryAsync(string? profileId, int version, CancellationToken token)
     {
         if (_viewer is null || profileId is null) return;
+        try { await _preferenceWrites; } catch { }
         var library = await _viewer.LoadAsync(profileId, token);
         if (version != _sessionVersion || _disposed) return;
         _library = library;
+        ApplyProfileAmplification(library.AmplificationDb);
         if (_snapshot is not null) _snapshot = _snapshot with { FavoriteChannelIds = library.Favorites };
         NotifyLibrary(); await ApplyFilterAsync(false);
     }
@@ -129,7 +131,24 @@ public sealed partial class MainViewModel
             .OrderByDescending(item => counts.GetValueOrDefault(item.Id)).ThenBy(item => item.Name).Take(4).ToArray();
         OnPropertyChanged(nameof(FrequentCategories));
     }
-    private void ResetLibrary() { _library = new(new HashSet<string>(), []); NotifyLibrary(); }
+    private void ResetLibrary() { _library = new(new HashSet<string>(), []); ApplyProfileAmplification(0); NotifyLibrary(); }
+
+    private void QueueAmplificationSave(int amplificationDb)
+    {
+        var clamped = Math.Clamp(amplificationDb, 0, PlaybackService.MaxAmplificationDb);
+        _library = _library with { AmplificationDb = clamped };
+        if (_viewer is null || ActiveProfile is not { Id: var profileId } || _disposed) return;
+        _preferenceWrites = SaveAmplificationPreferenceAsync(_preferenceWrites, profileId, clamped);
+    }
+
+    private async Task SaveAmplificationPreferenceAsync(Task previous, string profileId, int amplificationDb)
+    {
+        try { await previous.ConfigureAwait(false); } catch { }
+        if (_viewer is null) return;
+        try { await _viewer.SetAmplificationAsync(profileId, amplificationDb).ConfigureAwait(false); }
+        catch (OperationCanceledException) { }
+        catch (Exception exception) { _logger.LogError("amplification_write", exception); }
+    }
     private sealed class WatchRequest(string? profileId, XtreamChannel channel, int version, long afterSequence)
     {
         public string? ProfileId { get; } = profileId;

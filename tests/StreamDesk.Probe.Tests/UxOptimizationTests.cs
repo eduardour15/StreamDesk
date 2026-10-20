@@ -323,6 +323,392 @@ public sealed class UxOptimizationTests
         Assert.Equal(initialMediaCatCount, vm.VisibleMediaCategories.Count);
     }
 
+    [Fact]
+    public async Task ImmersiveMode_WorksAcrossLiveTvMoviesAndSeries_PreservingContextAndStream()
+    {
+        using var db = new TestDatabase();
+        await db.Settings.InitializeAsync();
+        await db.AddProfileAsync("first");
+        var credentials = new FixtureCredentials();
+        var backend = new ControlledBackend();
+        var playback = new PlaybackService(backend);
+        await using var vm = new MainViewModel(
+            (_, _, _) => new VodFixtureProvider(),
+            playback,
+            new ProfileService(db.Settings, credentials),
+            new FixtureLogger(),
+            new CatalogService(db.Store),
+            credentials,
+            new StreamDesk.Probe.Infrastructure.SqliteViewerStore(db.PathName, false),
+            new StreamDesk.Probe.Infrastructure.SqliteContentStore(db.PathName, false),
+            new StreamDesk.Probe.Infrastructure.XmlTvReader());
+
+        await vm.LoadProfilesAsync();
+        await vm.ConnectProfileAsync();
+        await vm.LoadCatalogAsync();
+        await vm.ProbeContentAsync();
+
+        // 1. Live TV Immersive Mode
+        vm.CurrentTabIndex = 1;
+        vm.SearchText = "Canal";
+        await PlaybackTests.UntilAsync(() => vm.Channels.Count > 0);
+        var liveChannel = vm.Channels[0];
+        vm.SelectedChannel = liveChannel;
+        await vm.PlaySelectedAsync();
+        Assert.True(vm.IsImmersiveMode);
+        Assert.Equal("Volver a canales", vm.ImmersiveReturnLabel);
+        Assert.Equal(1, backend.Active);
+
+        vm.ReturnFromImmersive();
+        Assert.False(vm.IsImmersiveMode);
+        Assert.Equal(1, backend.Active);
+        Assert.Same(liveChannel, vm.SelectedChannel);
+        Assert.Equal("Canal", vm.SearchText);
+
+        // 2. Movie Immersive Mode
+        vm.CurrentTabIndex = 5;
+        await PlaybackTests.UntilAsync(() => vm.MediaItems.Count > 0);
+        vm.MediaCategorySearch = "Acción";
+        var movie = vm.MediaItems[0];
+        vm.SelectedMedia = movie;
+        await vm.PlayMediaAsync();
+        Assert.True(vm.IsImmersiveMode);
+        Assert.Equal("Volver a películas", vm.ImmersiveReturnLabel);
+        Assert.Equal(1, backend.Active);
+
+        vm.ReturnFromImmersive();
+        Assert.False(vm.IsImmersiveMode);
+        Assert.Equal(1, backend.Active);
+        Assert.Same(movie, vm.SelectedMedia);
+        Assert.Equal("Acción", vm.MediaCategorySearch);
+
+        // 3. Series Immersive Mode
+        vm.CurrentTabIndex = 6;
+        await PlaybackTests.UntilAsync(() => vm.MediaItems.Count > 0);
+        var series = vm.MediaItems[0];
+        vm.SelectedMedia = series;
+        await PlaybackTests.UntilAsync(() => vm.Episodes.Count > 0);
+        var episode = vm.Episodes[0];
+        vm.SelectedEpisode = episode;
+        await vm.PlayMediaAsync();
+        Assert.True(vm.IsImmersiveMode);
+        Assert.True(vm.IsEpisodePlayerFocus);
+        Assert.Equal("Volver a episodios", vm.ImmersiveReturnLabel);
+        Assert.Equal(1, backend.Active);
+
+        vm.ReturnFromImmersive();
+        Assert.False(vm.IsImmersiveMode);
+        Assert.False(vm.IsEpisodePlayerFocus);
+        Assert.Equal(1, backend.Active);
+        Assert.Same(series, vm.SelectedMedia);
+        Assert.Same(episode, vm.SelectedEpisode);
+    }
+
+    [Fact]
+    public async Task RandomEpisodePlayback_ManualAndAutoAdvance_AvoidsRepeatsFiltersInvalidAndRespectsEndOfMedia()
+    {
+        using var db = new TestDatabase();
+        await db.Settings.InitializeAsync();
+        await db.AddProfileAsync("first");
+        var credentials = new FixtureCredentials();
+        var backend = new ControlledBackend();
+        var playback = new PlaybackService(backend);
+        var provider = new MultiSeasonSeriesProvider();
+        await using var vm = new MainViewModel(
+            (_, _, _) => provider,
+            playback,
+            new ProfileService(db.Settings, credentials),
+            new FixtureLogger(),
+            new CatalogService(db.Store),
+            credentials,
+            new StreamDesk.Probe.Infrastructure.SqliteViewerStore(db.PathName, false),
+            new StreamDesk.Probe.Infrastructure.SqliteContentStore(db.PathName, false),
+            new StreamDesk.Probe.Infrastructure.XmlTvReader())
+        {
+            RandomIndex = _ => 0
+        };
+
+        await vm.LoadProfilesAsync();
+        await vm.ConnectProfileAsync();
+        await vm.ProbeContentAsync();
+
+        vm.CurrentTabIndex = 6;
+        await PlaybackTests.UntilAsync(() => vm.MediaItems.Count == 3);
+        Assert.False(vm.AutoRandomNextEpisode);
+
+        // Series 1 has 3 playable episodes across 2 seasons + 2 invalid episodes
+        var mainSeries = vm.MediaItems.Single(item => item.Id == "series-multi");
+        vm.SelectedMedia = mainSeries;
+        await PlaybackTests.UntilAsync(() => vm.Seasons.Count == 2 && vm.CanPlayRandomEpisode);
+        Assert.Equal(1, provider.GetEpisodesCalls);
+        Assert.Equal("ep-1", vm.SelectedEpisode?.Id);
+
+        // Pick 1: current is ep-1, remaining playable in cycle are [ep-2, ep-3] -> picks ep-2
+        await vm.PlayRandomEpisodeAsync();
+        Assert.Equal("ep-2", vm.SelectedEpisode?.Id);
+        Assert.Equal("season-1", vm.Season?.Id);
+        Assert.Equal(1, provider.GetEpisodesCalls);
+
+        // Pick 2: current is ep-2, remaining unplayed in cycle is [ep-3] (in season-2) -> picks ep-3 and switches Season
+        await vm.PlayRandomEpisodeAsync();
+        Assert.Equal("ep-3", vm.SelectedEpisode?.Id);
+        Assert.Equal("season-2", vm.Season?.Id);
+        Assert.Equal(1, provider.GetEpisodesCalls);
+
+        // Pick 3: cycle exhausted, resets cycle excluding just-played ep-3 -> candidates [ep-1, ep-2] -> picks ep-1
+        await vm.PlayRandomEpisodeAsync();
+        Assert.Equal("ep-1", vm.SelectedEpisode?.Id);
+        Assert.Equal("season-1", vm.Season?.Id);
+
+        // AutoRandomNextEpisode is false by default -> natural Ended does NOT open a new stream
+        var opensBeforeEnded = backend.Opens.Count;
+        var attempt1 = backend.Opens.Last().Id;
+        backend.Emit(new(attempt1, PlaybackSignalKind.Playing));
+        await PlaybackTests.UntilAsync(() => vm.IsPlaying);
+        backend.Emit(new(attempt1, PlaybackSignalKind.Ended));
+        await PlaybackTests.UntilAsync(() => !vm.CanStopPlayback);
+        await Task.Delay(30);
+        Assert.Equal(opensBeforeEnded, backend.Opens.Count);
+
+        // Enable AutoRandomNextEpisode: natural Ended advances once to random episode
+        vm.AutoRandomNextEpisode = true;
+        await vm.PlayMediaAsync();
+        var attempt2 = backend.Opens.Last().Id;
+        var opensOnStart = backend.Opens.Count;
+        backend.Emit(new(attempt2, PlaybackSignalKind.Playing));
+        await PlaybackTests.UntilAsync(() => vm.IsPlaying);
+
+        // Paused or Failed must NEVER trigger random advance
+        backend.Emit(new(attempt2, PlaybackSignalKind.Paused));
+        await PlaybackTests.UntilAsync(() => vm.IsPaused);
+        Assert.Equal(opensOnStart, backend.Opens.Count);
+        backend.Emit(new(attempt2, PlaybackSignalKind.Playing));
+        await PlaybackTests.UntilAsync(() => vm.IsPlaying);
+
+        // Natural Ended triggers exactly 1 random episode advance
+        backend.Emit(new(attempt2, PlaybackSignalKind.Ended));
+        await PlaybackTests.UntilAsync(() => backend.Opens.Count == opensOnStart + 1);
+        Assert.NotEqual("ep-1", vm.SelectedEpisode?.Id);
+        Assert.Equal(1, backend.Peak);
+
+        // Failure on the new attempt must NOT trigger random advance
+        var attempt3 = backend.Opens.Last().Id;
+        var opensAfterAuto = backend.Opens.Count;
+        backend.Emit(new(attempt3, PlaybackSignalKind.Failed, PlaybackFailure.Forbidden));
+        await PlaybackTests.UntilAsync(() => vm.CanRetryPlayback);
+        await Task.Delay(30);
+        Assert.Equal(opensAfterAuto, backend.Opens.Count);
+
+        // Edge case: Series with 1 playable episode
+        var singleSeries = vm.MediaItems.Single(item => item.Id == "series-single");
+        vm.SelectedMedia = singleSeries;
+        await PlaybackTests.UntilAsync(() => vm.CanPlayRandomEpisode && vm.SelectedEpisode?.Id == "single-1");
+        await vm.PlayRandomEpisodeAsync();
+        Assert.Equal("single-1", vm.SelectedEpisode?.Id);
+
+        // Edge case: Series with 0 playable episodes
+        await vm.StopPlaybackAsync();
+        var opensBeforeEmpty = backend.Opens.Count;
+        var emptySeries = vm.MediaItems.Single(item => item.Id == "series-empty");
+        vm.SelectedMedia = emptySeries;
+        await PlaybackTests.UntilAsync(() => !vm.ContentBusy);
+        Assert.False(vm.CanPlayRandomEpisode);
+        await vm.PlayRandomEpisodeAsync();
+        Assert.Equal(opensBeforeEmpty, backend.Opens.Count);
+        Assert.Contains("No hay episodios reproducibles", vm.ContentStatus, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task AudioAmplification_ClampsRange_PersistsPerProfile_And_KeepsNominalVolumeIntact()
+    {
+        using var db = new TestDatabase();
+        await db.Settings.InitializeAsync();
+        await db.AddProfileAsync("first");
+        await db.AddProfileAsync("second");
+        var credentials = new FixtureCredentials();
+        var store = new StreamDesk.Probe.Infrastructure.SqliteViewerStore(db.PathName, false);
+        var backend = new ControlledBackend();
+        var playback = new PlaybackService(backend);
+
+        await using (var vm = new MainViewModel(
+            (_, _, _) => new VodFixtureProvider(),
+            playback,
+            new ProfileService(db.Settings, credentials),
+            new FixtureLogger(),
+            new CatalogService(db.Store),
+            credentials,
+            store))
+        {
+            await vm.LoadProfilesAsync();
+            await PlaybackTests.UntilAsync(() => !vm.IsWorking && vm.ActiveProfile?.Id == "first");
+            await vm.InitializePlaybackAsync();
+
+            Assert.Equal(0, vm.AmplificationDb);
+            Assert.Equal("0 dB (Normal)", vm.AmplificationLabel);
+            Assert.False(vm.IsAmplified);
+
+            // Nominal volume stays strictly 0..100
+            vm.Volume = 150;
+            Assert.Equal(100, vm.Volume);
+            Assert.Equal("100%", vm.VolumeLabel);
+            vm.Volume = -20;
+            Assert.Equal(0, vm.Volume);
+
+            // Amplification clamps to 0..6 dB
+            vm.AmplificationDb = 4;
+            Assert.Equal(4, vm.AmplificationDb);
+            Assert.True(vm.IsAmplified);
+            Assert.Equal("+4 dB", vm.AmplificationLabel);
+            await PlaybackTests.UntilAsync(() => backend.AmplificationDb == 4);
+
+            vm.AmplificationDb = 99;
+            Assert.Equal(6, vm.AmplificationDb);
+            await PlaybackTests.UntilAsync(() => backend.AmplificationDb == 6);
+
+            vm.AmplificationDb = -5;
+            Assert.Equal(0, vm.AmplificationDb);
+            await PlaybackTests.UntilAsync(() => backend.AmplificationDb == 0);
+
+            // CycleAmplification steps 0 -> 2 -> 4 -> 6 -> 0
+            vm.CycleAmplification();
+            Assert.Equal(2, vm.AmplificationDb);
+            vm.CycleAmplification();
+            Assert.Equal(4, vm.AmplificationDb);
+
+            // Switch to second profile -> resets to 0 dB
+            vm.ActiveProfile = vm.Profiles.Single(p => p.Id == "second");
+            await PlaybackTests.UntilAsync(() => !vm.IsWorking && vm.AmplificationDb == 0);
+            vm.AmplificationDb = 6;
+
+            // Switch back to first profile -> restores +4 dB
+            vm.ActiveProfile = vm.Profiles.Single(p => p.Id == "first");
+            await PlaybackTests.UntilAsync(() => !vm.IsWorking && vm.AmplificationDb == 4);
+        }
+
+        var firstLib = await store.LoadAsync("first");
+        var secondLib = await store.LoadAsync("second");
+        Assert.Equal(4, firstLib.AmplificationDb);
+        Assert.Equal(6, secondLib.AmplificationDb);
+    }
+
+    [Fact]
+    public async Task VideoLoadingIndicator_DistinguishesLoadingAndBuffering_AndHidesOnPlayPauseFailStopOrCancel()
+    {
+        using var db = new TestDatabase();
+        await db.Settings.InitializeAsync();
+        await db.AddProfileAsync("first");
+        var credentials = new FixtureCredentials();
+        var backend = new ControlledBackend();
+        var playback = new PlaybackService(backend);
+        await using var vm = new MainViewModel(
+            (_, _, _) => new VodFixtureProvider(),
+            playback,
+            new ProfileService(db.Settings, credentials),
+            new FixtureLogger(),
+            new CatalogService(db.Store),
+            credentials);
+
+        await vm.LoadProfilesAsync();
+        await vm.ConnectProfileAsync();
+        await vm.LoadCatalogAsync();
+
+        Assert.False(vm.IsVideoLoading);
+        Assert.Equal(string.Empty, vm.VideoLoadingMessage);
+
+        vm.SelectedChannel = vm.Channels[0];
+        await vm.PlaySelectedAsync();
+        var attempt = backend.Opens.Last().Id;
+
+        // Initial Loading state
+        Assert.True(vm.IsVideoLoading);
+        Assert.True(vm.IsVideoLoadingIndeterminate);
+        Assert.False(vm.HasVideoBufferPercent);
+        Assert.Equal("Abriendo transmisión…", vm.VideoLoadingMessage);
+
+        // Buffering without percentage (0%)
+        backend.Emit(new(attempt, PlaybackSignalKind.Buffering, BufferPercent: 0));
+        await PlaybackTests.UntilAsync(() => vm.VideoLoadingMessage == "Cargando búfer…");
+        Assert.True(vm.IsVideoLoading);
+        Assert.True(vm.IsVideoLoadingIndeterminate);
+        Assert.False(vm.HasVideoBufferPercent);
+
+        // Buffering with percentage (45%)
+        backend.Emit(new(attempt, PlaybackSignalKind.Buffering, BufferPercent: 45));
+        await PlaybackTests.UntilAsync(() => vm.HasVideoBufferPercent && vm.VideoBufferPercent == 45);
+        Assert.True(vm.IsVideoLoading);
+        Assert.False(vm.IsVideoLoadingIndeterminate);
+        Assert.Equal("Cargando búfer (45%)…", vm.VideoLoadingMessage);
+
+        // Playing hides loading immediately
+        backend.Emit(new(attempt, PlaybackSignalKind.Playing));
+        await PlaybackTests.UntilAsync(() => vm.IsPlaying);
+        Assert.False(vm.IsVideoLoading);
+        Assert.Equal(string.Empty, vm.VideoLoadingMessage);
+
+        // Rebuffering shows indicator again
+        backend.Emit(new(attempt, PlaybackSignalKind.Buffering, BufferPercent: 60));
+        await PlaybackTests.UntilAsync(() => vm.IsVideoLoading && vm.VideoBufferPercent == 60);
+
+        // Manual Stop hides indicator immediately and ignores late signals from old attempt
+        await vm.StopPlaybackAsync();
+        Assert.False(vm.IsVideoLoading);
+        backend.Emit(new(attempt, PlaybackSignalKind.Buffering, BufferPercent: 80));
+        await Task.Delay(30);
+        Assert.False(vm.IsVideoLoading);
+    }
+
+    private sealed class MultiSeasonSeriesProvider : IIptvProvider, IContentProvider
+    {
+        public int GetEpisodesCalls { get; private set; }
+        public bool UsesUnencryptedTransport => false;
+        public Task<XtreamAccount> AuthenticateAsync(CancellationToken cancellationToken = default) =>
+            Task.FromResult(new XtreamAccount("Active", 0, 1, false, DateTimeOffset.UtcNow.AddDays(30), ["ts", "m3u8"]));
+        public Task<IReadOnlyList<XtreamCategory>> GetLiveCategoriesAsync(CancellationToken cancellationToken = default) =>
+            Task.FromResult<IReadOnlyList<XtreamCategory>>([]);
+        public Task<IReadOnlyList<XtreamChannel>> GetLiveChannelsAsync(CancellationToken cancellationToken = default) =>
+            Task.FromResult<IReadOnlyList<XtreamChannel>>([]);
+        public Uri CreateLiveStreamUri(XtreamChannel channel, string format) => new("https://provider.invalid/live.ts");
+        public Uri CreateMediaUri(MediaItem item) => new($"https://provider.invalid/series/{item.Id}.{item.Extension}");
+        public Task<MediaCatalog> GetMediaCatalogAsync(ContentKind kind, CancellationToken cancellationToken = default) =>
+            Task.FromResult(new MediaCatalog([new("drama", "Drama")],
+                kind == ContentKind.Series
+                    ? [new("series-multi", "Serie Multi", ContentKind.Series, "drama"),
+                       new("series-single", "Serie Única", ContentKind.Series, "drama"),
+                       new("series-empty", "Serie Vacía", ContentKind.Series, "drama")]
+                    : [],
+                DateTimeOffset.UtcNow));
+        public Task<MediaItem> GetMovieInfoAsync(MediaItem movie, CancellationToken cancellationToken = default) => Task.FromResult(movie);
+        public Task<MediaCatalog> GetEpisodesAsync(string seriesId, CancellationToken cancellationToken = default)
+        {
+            GetEpisodesCalls++;
+            if (seriesId == "series-single")
+            {
+                return Task.FromResult(new MediaCatalog([new("s1", "Temporada 1")],
+                    [new("single-1", "Episodio Único", ContentKind.Episode, "s1", "mp4", SeriesId: seriesId, Season: 1, Episode: 1)],
+                    DateTimeOffset.UtcNow));
+            }
+            if (seriesId == "series-empty")
+            {
+                return Task.FromResult(new MediaCatalog([new("s1", "Temporada 1")],
+                    [new("bad-ext", "Episodio Inválido", ContentKind.Episode, "s1", "exe", SeriesId: seriesId, Season: 1, Episode: 1)],
+                    DateTimeOffset.UtcNow));
+            }
+            return Task.FromResult(new MediaCatalog(
+                [new("season-1", "Temporada 1"), new("season-2", "Temporada 2")],
+                [
+                    new("ep-1", "Episodio 1", ContentKind.Episode, "season-1", "mp4", SeriesId: seriesId, Season: 1, Episode: 1),
+                    new("ep-2", "Episodio 2", ContentKind.Episode, "season-1", "mkv", SeriesId: seriesId, Season: 1, Episode: 2),
+                    new("", "Sin ID", ContentKind.Episode, "season-1", "mp4", SeriesId: seriesId, Season: 1, Episode: 3),
+                    new("ep-bad", "Extensión Inválida", ContentKind.Episode, "season-2", "bat", SeriesId: seriesId, Season: 2, Episode: 1),
+                    new("ep-3", "Episodio 3", ContentKind.Episode, "season-2", "mp4", SeriesId: seriesId, Season: 2, Episode: 2)
+                ],
+                DateTimeOffset.UtcNow));
+        }
+        public Task<IReadOnlyList<EpgProgram>> GetEpgAsync(string channelId, CancellationToken cancellationToken = default) =>
+            Task.FromResult<IReadOnlyList<EpgProgram>>([]);
+        public void Dispose() { }
+    }
+
     private sealed class VodFixtureProvider : IIptvProvider, IContentProvider
     {
         private readonly CatalogSnapshot _catalog = CatalogFixtures.Create(5);

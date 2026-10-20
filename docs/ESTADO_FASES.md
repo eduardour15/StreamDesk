@@ -15,6 +15,28 @@ Este archivo registra trabajo y evidencias reales. La confirmación del usuario 
 
 ## Bitácora de evidencias
 
+### 2026-10-20 — Reproductor Inmersivo Unificado, Episodios al Azar, Amplificación de Audio Controlada e Indicador de Carga (`PLAY-UX-T01` a `PLAY-UX-T04`)
+
+- **Solicitud y alcance:** Ejecución del prompt `docs/prompts/REPRODUCTOR_INMERSIVO_Y_SERIES_ALEATORIAS.md` como incremento post-F7 sin alterar gates históricos ni relajar reglas de seguridad ni de stream único.
+- **Estado por tarea:**
+  - **`PLAY-UX-T01` (`COMPLETADA`):** Modo inmersivo generalizado (`IsImmersiveMode` en `MainViewModel.Content.cs`, `MainViewModel.cs`, `MainWindow.xaml` y `MainWindow.xaml.cs`) para **TV en vivo, películas y episodios de series**. Al iniciar reproducción por acción del usuario se ocultan barra lateral, cabecera, avisos, filtros y paneles de catálogo/ficha (`SidebarColumn.Width = 0`, `CatalogColumn.Width = 0`) maximizando el vídeo. Incluye botón de retorno contextual (`ImmersiveReturnLabel`: `Volver a canales`, `Volver a películas`, `Volver a episodios`) y salida con `Esc` (respetando prioridad Fullscreen/PiP primero y luego modo inmersivo) sin detener el stream activo y conservando filtros, búsqueda y selección previa.
+  - **`PLAY-UX-T02` (`COMPLETADA`):** Acción manual `Episodio al azar` (`PlayRandomEpisodeButton` / `PlayRandomEpisodeAsync`) y toggle explícito `Siguiente episodio al azar` (`RandomNextEpisodeCheckBox` / `AutoRandomNextEpisode`, desactivado por defecto) en la vista de serie. Filtra episodios reproducibles (`IsPlayableEpisode`) sobre el catálogo `_episodes` ya cargado en todas las temporadas sin redescargar del proveedor, evita repetir el episodio actual cuando hay `> 1` episodios y completa ciclos sin repetición con fuente de aleatoriedad inyectable (`RandomIndex`). El avance automático se ejecuta una sola vez únicamente ante fin natural (`EndOfMedia == true`), nunca en error, timeout, pausa, parada manual ni cambio de perfil.
+  - **`PLAY-UX-T03` (`COMPLETADA`):** Volumen nominal mantenido estrictamente en `0..100` (`100% = 0 dB`). Control adicional e independiente de `Amplificación` (`AmplificationDb`, rango conservador **`0..6 dB`**, por defecto `0 dB (Normal)`) tanto en la barra del reproductor (`AmplificationButton`) como en Ajustes (`AmplificationSlider`), respaldado por preamplificación nativa `LibVLCSharp.Shared.Equalizer` (`SetPreamp` + `MediaPlayer.SetEqualizer` cuando `> 0 dB` y `MediaPlayer.UnsetEqualizer()` en `0 dB`) en `LibVlcBackend` y persistido por perfil en `ProfilePreferences.AmplificationDb` (`SqliteSettingsService`, `SqliteViewerStore`) sin secretos.
+  - **`PLAY-UX-T04` (`COMPLETADA`):** Indicador visual animado y accesible (`VideoLoadingIndicator` en `Grid.Row="2"` de `PlayerPane`, fuera del HWND nativo de `VideoView` para respetar *airspace*) que distingue apertura inicial (`Abriendo transmisión…`, indeterminado) y búfer (`Cargando búfer (N%)…` cuando `0 < BufferPercent < 100` o `Cargando búfer…` indeterminado), ocultándose de inmediato al pasar a `Playing`, `Paused`, `Failed`, `Stopped` o al cancelar/cambiar de canal.
+- **Además:** Se corrigió en `MainViewModel.ShutdownCoreAsync()` la espera determinista de tareas en segundo plano (`_epgTask`, `_detailTask`, `_autoAdvanceTask`, `_preferenceWrites`) antes de completar `DisposeAsync()`, evitando bloqueos transitorios de archivo en `streamdesk.db` al cerrar sesiones rápidas.
+- **Decisión técnica documentada:** [`docs/ADR/ADR-010-reproductor-inmersivo-series-aleatorias-amplificacion-y-carga.md`](ADR/ADR-010-reproductor-inmersivo-series-aleatorias-amplificacion-y-carga.md).
+- **Comandos ejecutados y resultados:**
+  - `dotnet build StreamDesk.sln -c Release`: **0 advertencias, 0 errores**.
+  - `dotnet test StreamDesk.sln -c Release --maxcpucount:1`: **177 pasadas, 0 fallidas, 0 omitidas**.
+- **Validación manual / proveedor físico:** `PENDIENTE_DE_VALIDACION` en hardware real con streams IPTV de distintas ganancias de audio y latencias de red.
+
+| ID | Estado final | Evidencia |
+|---|---|---|
+| `PLAY-UX-T01` | COMPLETADA | `IsImmersiveMode` activo en TV, películas y series; retorno contextual y `Esc` preservan contexto y stream activo (`UxOptimizationTests`, `CatalogUiTests`). |
+| `PLAY-UX-T02` | COMPLETADA | `PlayRandomEpisodeAsync` y `AutoRandomNextEpisode` con ciclo sin repetición, filtrado de episodios inválidos y avance exclusivo en `EndOfMedia` (`UxOptimizationTests`). |
+| `PLAY-UX-T03` | COMPLETADA | `AmplificationDb` (`0..6 dB`) con `LibVLCSharp.Shared.Equalizer` nativo verificado en `LibVlcBackend` real y persistencia por perfil en SQLite (`UxOptimizationTests`, `CatalogUiTests`). |
+| `PLAY-UX-T04` | COMPLETADA | `VideoLoadingIndicator` fuera del HWND de `VideoView` para `Loading`/`Buffering` con porcentaje condicional y ocultación inmediata (`UxOptimizationTests`, `CatalogUiTests`). |
+
 ### 2026-10-20 — Eliminación Total de Emojis por Íconos Fluent de Código Abierto y Restauración Unificada del Buscador de Categorías
 
 - **Solicitud y alcance:**

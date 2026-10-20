@@ -11,6 +11,7 @@ public interface IPlaybackService : IDisposable, IAsyncDisposable
     PlaybackOptions Options { get; set; }
     int Volume { get; set; }
     bool IsMuted { get; set; }
+    int AmplificationDb { get => 0; set { } }
     event EventHandler<PlaybackSnapshot>? StateChanged;
     Task InitializeAsync(CancellationToken cancellationToken = default);
     Task PlayAsync(Uri source, CancellationToken cancellationToken = default);
@@ -36,6 +37,7 @@ public interface IPlaybackBackend : IAsyncDisposable
     Task PauseAsync() => Task.CompletedTask;
     Task ResumeAsync() => Task.CompletedTask;
     Task SetAudioAsync(int volume, bool muted);
+    Task SetAmplificationAsync(int amplificationDb) => Task.CompletedTask;
     Task<MediaPlaybackDetails> ReadDetailsAsync(CancellationToken cancellationToken) => Task.FromResult(MediaPlaybackDetails.Empty);
     Task<bool> SeekAsync(long milliseconds, CancellationToken cancellationToken) => Task.FromResult(false);
     Task<bool> SelectTrackAsync(bool subtitles, int id, CancellationToken cancellationToken) => Task.FromResult(false);

@@ -1,0 +1,56 @@
+﻿LICENCIA DE STREAMDESK: USO, MODIFICACIÓN Y REDISTRIBUCIÓN NO COMERCIAL
+
+Copyright (c) 2026 eduardour15
+Creador: eduardour15
+
+Esta licencia cubre el código fuente y los recursos originales de StreamDesk
+entregados por eduardour15, salvo que un archivo indique expresamente otras
+condiciones. Los componentes de terceros se rigen por sus propias licencias;
+consulta packaging/THIRD-PARTY-NOTICES.md y los avisos incluidos con ellos.
+
+1. Permisos
+
+Se concede a cualquier persona una licencia mundial, gratuita, no exclusiva y
+perpetua para usar, copiar, estudiar, modificar y crear obras derivadas de los
+materiales cubiertos, así como distribuir copias originales o modificadas sin
+cobrar por ellas, siempre que respete las condiciones siguientes. El uso del
+programa, incluso en una actividad comercial, está permitido; la restricción de
+esta licencia se aplica a la redistribución comercial de copias.
+
+2. Condiciones de redistribución
+
+Al redistribuir copias, incluso modificadas, debes:
+
+- incluir una copia íntegra de esta licencia;
+- conservar los avisos de autoría y copyright que acompañen al material;
+- indicar de forma visible si modificaste el material; y
+- no presentar tus cambios como aprobados o respaldados por el creador.
+
+No puedes vender, alquilar ni cobrar por entregar una copia del material
+cubierto. Tampoco puedes incluirlo en un producto, paquete o descarga cuya
+redistribución se ofrezca a cambio de dinero o principalmente para obtener una
+ventaja comercial o compensación monetaria. Para obtener permiso de
+redistribución comercial, solicita autorización escrita a eduardour15.
+
+Esta limitación no prohíbe usar una copia dentro de una actividad comercial si
+no se redistribuye comercialmente, ni cobrar por servicios que no impliquen
+entregar una copia del material cubierto.
+
+3. Marcas
+
+Esta licencia no concede derechos sobre marcas, nombres comerciales ni logos
+de StreamDesk. Puedes modificar los recursos gráficos, pero no afirmar que una
+versión modificada es oficial ni usar las marcas para sugerir respaldo.
+
+4. Exclusión de garantía y responsabilidad
+
+El material se ofrece «tal cual», sin garantía expresa o implícita, en la
+medida permitida por la ley aplicable. En esa misma medida, el creador no será
+responsable por daños derivados del uso o la imposibilidad de uso del material.
+
+5. Componentes de terceros
+
+Esta licencia no reemplaza ni modifica las licencias de bibliotecas, runtimes,
+codecs u otros materiales de terceros distribuidos con StreamDesk. Si las
+condiciones de un componente difieren, se aplican las condiciones de ese
+componente a sus propios archivos.

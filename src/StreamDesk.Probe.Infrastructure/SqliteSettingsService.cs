@@ -141,7 +141,31 @@ public sealed class SqliteSettingsService : ISettingsService
             command.CommandText = ProfileAndSettingsMigration.Sql;
             await command.ExecuteNonQueryAsync(cancellationToken);
         }
+        await EnsureAmplificationColumnAsync(command, cancellationToken);
         await transaction.CommitAsync(cancellationToken);
+    }
+
+    private static async Task EnsureAmplificationColumnAsync(SqliteCommand command, CancellationToken cancellationToken)
+    {
+        var hasAmplificationDb = false;
+        command.CommandText = "PRAGMA table_info(ProfilePreferences);";
+        await using (var prefReader = await command.ExecuteReaderAsync(cancellationToken))
+        {
+            while (await prefReader.ReadAsync(cancellationToken))
+            {
+                if (string.Equals(prefReader.GetString(1), "AmplificationDb", StringComparison.OrdinalIgnoreCase))
+                {
+                    hasAmplificationDb = true;
+                    break;
+                }
+            }
+        }
+
+        if (!hasAmplificationDb)
+        {
+            command.CommandText = "ALTER TABLE ProfilePreferences ADD COLUMN AmplificationDb INTEGER NOT NULL DEFAULT 0 CHECK(AmplificationDb BETWEEN 0 AND 6);";
+            await command.ExecuteNonQueryAsync(cancellationToken);
+        }
     }
 
     private async Task<IReadOnlyList<Profile>> GetProfilesCoreAsync(CancellationToken cancellationToken)

@@ -1,4 +1,4 @@
-﻿using System.Windows;
+using System.Windows;
 using System.ComponentModel;
 using System.Windows.Input;
 using System.Windows.Controls;
@@ -141,6 +141,8 @@ public partial class MainWindow : FluentWindow
     private async void AutoPlay_Click(object sender, RoutedEventArgs e) => await _viewModel.SetAutoPlayAsync(AutoPlayCheckBox.IsChecked == true);
     private async void ProbeContent_Click(object sender, RoutedEventArgs e) => await _viewModel.ProbeContentAsync();
     private async void PlayMedia_Click(object sender, RoutedEventArgs e) => await _viewModel.PlayMediaAsync();
+    private async void PlayRandomEpisode_Click(object sender, RoutedEventArgs e) => await _viewModel.PlayRandomEpisodeAsync();
+    private void CycleAmplification_Click(object sender, RoutedEventArgs e) => _viewModel.CycleAmplification();
     private async void RestartMedia_Click(object sender, RoutedEventArgs e) => await _viewModel.PlayMediaAsync(true);
     private async void RefreshEpg_Click(object sender, RoutedEventArgs e) => await _viewModel.RefreshEpgAsync(true);
     private async void ApplyAudio_Click(object sender, RoutedEventArgs e) => await _viewModel.SelectTrackAsync(false);
@@ -286,7 +288,7 @@ public partial class MainWindow : FluentWindow
     private async void BackToMediaBrowse_Click(object sender, RoutedEventArgs e)
     {
         await _viewModel.StopPlaybackAsync();
-        _viewModel.IsEpisodePlayerFocus = false;
+        _viewModel.IsImmersiveMode = false;
         _viewModel.SelectedMedia = null;
     }
     private void ClearMediaFilters_Click(object sender, RoutedEventArgs e)
@@ -405,7 +407,7 @@ public partial class MainWindow : FluentWindow
     }
     private void BackToEpisodes_Click(object sender, RoutedEventArgs e)
     {
-        _viewModel.ReturnToEpisodes();
+        _viewModel.ReturnFromImmersive();
         UpdateLayoutMode();
     }
     private async void ContinueWatching_MouseUp(object sender, MouseButtonEventArgs e)
@@ -466,17 +468,17 @@ public partial class MainWindow : FluentWindow
             try { _displays.TogglePictureInPicture(this); UpdateLayoutMode(); }
             catch (Exception exception) { _viewModel.ReportWindowError(exception); }
         }
-        if (args.PropertyName is nameof(MainViewModel.CurrentTabIndex) or nameof(MainViewModel.ShowMediaBrowse) or nameof(MainViewModel.ShowMovieDetails) or nameof(MainViewModel.ShowSeriesDetails) or nameof(MainViewModel.ShowPlayerPane) or nameof(MainViewModel.IsEpisodePlayerFocus)) UpdateLayoutMode();
+        if (args.PropertyName is nameof(MainViewModel.CurrentTabIndex) or nameof(MainViewModel.ShowMediaBrowse) or nameof(MainViewModel.ShowMovieDetails) or nameof(MainViewModel.ShowSeriesDetails) or nameof(MainViewModel.ShowPlayerPane) or nameof(MainViewModel.IsEpisodePlayerFocus) or nameof(MainViewModel.IsImmersiveMode)) UpdateLayoutMode();
         if (args.PropertyName is nameof(MainViewModel.CanHideControls) or nameof(MainViewModel.CurrentTabIndex)) RevealControls();
     }
 
     private async void WindowKeyDown(object sender, KeyEventArgs args)
     {
         RevealControls();
-        if (args.Key == Key.Escape && _viewModel.IsEpisodePlayerFocus && !_displays.IsFullscreen && !_displays.IsPictureInPicture)
+        if (args.Key == Key.Escape && _viewModel.IsImmersiveMode && !_displays.IsFullscreen && !_displays.IsPictureInPicture)
         {
             args.Handled = true;
-            _viewModel.ReturnToEpisodes();
+            _viewModel.ReturnFromImmersive();
             UpdateLayoutMode();
             return;
         }
@@ -541,19 +543,28 @@ public partial class MainWindow : FluentWindow
         var picture = _displays.IsPictureInPicture;
         if (!fullscreen) EnsureNativeCaptionButtons();
         var compact = fullscreen || picture;
+        var immersive = !compact && _viewModel.IsImmersiveMode;
+        var hideChrome = compact || immersive;
         if (AppTitleBar is not null) AppTitleBar.Visibility = compact ? Visibility.Collapsed : Visibility.Visible;
         Shell.Margin = new Thickness(fullscreen ? 0 : picture ? 6 : 16);
-        Sidebar.Visibility = TvHeader.Visibility = ConnectionNotices.Visibility = CatalogPane.Visibility = StatusBar.Visibility = NowPlayingTitle.Visibility = compact ? Visibility.Collapsed : Visibility.Visible;
-        SidebarColumn.Width = new GridLength(compact ? 0 : ActualWidth < 1050 ? 132 : 158);
-        var mediaDetails = (_viewModel.ShowMovieDetails || _viewModel.ShowSeriesDetails) && !_viewModel.IsEpisodePlayerFocus;
-        CatalogColumn.Width = new GridLength(compact || _viewModel.IsEpisodePlayerFocus ? 0 : mediaDetails ? ActualWidth < 1050 ? 260 : 360 : ActualWidth < 1050 ? 234 : 284);
-        Workspace.Margin = new Thickness(compact ? 0 : 20, 0, 0, 0);
+        Sidebar.Visibility = TvHeader.Visibility = ConnectionNotices.Visibility = CatalogPane.Visibility = StatusBar.Visibility = hideChrome ? Visibility.Collapsed : Visibility.Visible;
+        NowPlayingTitle.Visibility = compact ? Visibility.Collapsed : Visibility.Visible;
+        SidebarColumn.Width = new GridLength(hideChrome ? 0 : ActualWidth < 1050 ? 132 : 158);
+        var mediaDetails = (_viewModel.ShowMovieDetails || _viewModel.ShowSeriesDetails) && !immersive;
+        CatalogColumn.Width = new GridLength(hideChrome ? 0 : mediaDetails ? ActualWidth < 1050 ? 260 : 360 : ActualWidth < 1050 ? 234 : 284);
+        Workspace.Margin = new Thickness(hideChrome ? 0 : 20, 0, 0, 0);
+
+
+
         PipHeader.Visibility = PipControls.Visibility = picture ? Visibility.Visible : Visibility.Collapsed;
         StandardControls.Visibility = picture ? Visibility.Collapsed : Visibility.Visible;
-        EpgPanel.Visibility = !compact && !_viewModel.IsEpisodePlayerFocus ? Visibility.Visible : Visibility.Collapsed;
-        MediaBrowsePane.Visibility = !compact && _viewModel.ShowMediaBrowse ? Visibility.Visible : Visibility.Collapsed;
-        MovieDetailsPane.Visibility = !compact && _viewModel.ShowMovieDetails ? Visibility.Visible : Visibility.Collapsed;
-        SeriesDetailsPane.Visibility = !compact && _viewModel.ShowSeriesDetails && !_viewModel.IsEpisodePlayerFocus ? Visibility.Visible : Visibility.Collapsed;
+        EpgPanel.Visibility = !hideChrome ? Visibility.Visible : Visibility.Collapsed;
+        MediaBrowsePane.Visibility = !hideChrome && _viewModel.ShowMediaBrowse ? Visibility.Visible : Visibility.Collapsed;
+        MovieDetailsPane.Visibility = !hideChrome && _viewModel.ShowMovieDetails ? Visibility.Visible : Visibility.Collapsed;
+        SeriesDetailsPane.Visibility = !hideChrome && _viewModel.ShowSeriesDetails ? Visibility.Visible : Visibility.Collapsed;
+
+
+
         PlayerPane.Visibility = _viewModel.ShowPlayerPane ? Visibility.Visible : Visibility.Collapsed;
         PlaybackCaption.MaxHeight = picture ? 36 : double.PositiveInfinity;
         PlayerControls.Padding = new Thickness(picture ? 6 : 10);

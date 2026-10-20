@@ -117,6 +117,7 @@ public sealed partial class MainViewModel : INotifyPropertyChanged, IDisposable,
         set
         {
             if (!SetProperty(ref _currentTabIndex, value)) return;
+            _isImmersiveMode = false;
             if (value is >= 1 and <= 3)
             {
                 _favoritesOnly = value == 2; _recentsOnly = value == 3;
@@ -138,7 +139,7 @@ public sealed partial class MainViewModel : INotifyPropertyChanged, IDisposable,
                 OnPropertyChanged(nameof(SelectedProgress));
             }
             OnPropertyChanged(nameof(MediaCategories)); OnPropertyChanged(nameof(VisibleMediaCategories));
-            OnPropertyChanged(nameof(ShowMovieBrowse)); OnPropertyChanged(nameof(ShowMovieDetails)); OnPropertyChanged(nameof(ShowSeriesBrowse)); OnPropertyChanged(nameof(ShowSeriesDetails)); OnPropertyChanged(nameof(ShowMediaBrowse)); OnPropertyChanged(nameof(ShowPlayerPane)); OnPropertyChanged(nameof(IsEpisodePlayerFocus));
+            OnPropertyChanged(nameof(ShowMovieBrowse)); OnPropertyChanged(nameof(ShowMovieDetails)); OnPropertyChanged(nameof(ShowSeriesBrowse)); OnPropertyChanged(nameof(ShowSeriesDetails)); OnPropertyChanged(nameof(ShowMediaBrowse)); OnPropertyChanged(nameof(ShowPlayerPane)); OnPropertyChanged(nameof(IsEpisodePlayerFocus)); OnPropertyChanged(nameof(IsImmersiveMode)); OnPropertyChanged(nameof(ImmersiveReturnLabel)); OnPropertyChanged(nameof(CanPlayRandomEpisode));
             OnPropertyChanged(nameof(HeaderSummary)); OnPropertyChanged(nameof(NowPlaying)); OnPropertyChanged(nameof(FooterStatus));
             _ = FilterMediaAsync();
         }
@@ -257,6 +258,7 @@ public sealed partial class MainViewModel : INotifyPropertyChanged, IDisposable,
             _watch = new WatchRequest(isPlaylistChannel ? null : _connectedProfileId, channel, version, _playbackService.Snapshot.Sequence);
             OnPropertyChanged(nameof(PlayingChannelId));
             OnPropertyChanged(nameof(NowPlaying));
+            IsImmersiveMode = true;
             await _playbackService.PlayAsync(source, token);
             IsPlaybackReady = _playbackService.IsReady;
             OnPropertyChanged(nameof(PlayerHandle));
@@ -288,8 +290,14 @@ public sealed partial class MainViewModel : INotifyPropertyChanged, IDisposable,
         _client = null;
         _account = null;
         try { await _profileLoad.ConfigureAwait(false); } catch { }
-        await _historyWrites.ConfigureAwait(false);
-        await _progressWrites.ConfigureAwait(false);
+        try { await _epgTask.ConfigureAwait(false); } catch { }
+        try { await _detailTask.ConfigureAwait(false); } catch { }
+        try { await _autoAdvanceTask.ConfigureAwait(false); } catch { }
+        try { await _historyWrites.ConfigureAwait(false); } catch { }
+        try { await _progressWrites.ConfigureAwait(false); } catch { }
+        try { await _preferenceWrites.ConfigureAwait(false); } catch { }
+
+
         try { await _playbackService.DisposeAsync().ConfigureAwait(false); }
         catch (Exception exception) { _logger.LogError("playback_dispose", exception); }
         finally { _shutdown.Dispose(); }
@@ -353,7 +361,7 @@ public sealed partial class MainViewModel : INotifyPropertyChanged, IDisposable,
     private void NotifyBusyChanged()
     {
         OnPropertyChanged(nameof(IsBusy)); OnPropertyChanged(nameof(CanConnect)); OnPropertyChanged(nameof(IsWorking));
-        OnPropertyChanged(nameof(CanImportPlaylist));
+        OnPropertyChanged(nameof(CanImportPlaylist)); OnPropertyChanged(nameof(CanPlayRandomEpisode));
         NotifyCommands();
     }
 

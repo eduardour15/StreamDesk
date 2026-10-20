@@ -182,6 +182,7 @@ internal sealed class ControlledBackend : IPlaybackBackend
     public int OpeningDelay { get; init; }
     public int Disposals { get; private set; }
     public (int, bool) Audio { get; private set; }
+    public int AmplificationDb { get; private set; }
     public object? PlayerHandle => _ready ? this : null;
     public bool IsReady => _ready;
     public event EventHandler<PlaybackSignal>? Signal;
@@ -195,6 +196,7 @@ internal sealed class ControlledBackend : IPlaybackBackend
     }
     public Task StopAsync() { Interlocked.Exchange(ref _active, 0); return Task.CompletedTask; }
     public Task SetAudioAsync(int volume, bool muted) { Audio = (volume, muted); return Task.CompletedTask; }
+    public Task SetAmplificationAsync(int amplificationDb) { AmplificationDb = amplificationDb; return Task.CompletedTask; }
     public void Emit(PlaybackSignal value) => Signal?.Invoke(this, value);
     public ValueTask DisposeAsync() { Disposals++; _ready = false; Interlocked.Exchange(ref _active, 0); return ValueTask.CompletedTask; }
 }

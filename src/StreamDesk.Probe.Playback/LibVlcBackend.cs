@@ -8,7 +8,10 @@ namespace StreamDesk.Probe.Playback;
 
 public sealed class LibVlcBackend : IPlaybackBackend
 {
+    public const int MaxAmplificationDb = 6;
     private static readonly object CoreSync = new();
+    private Equalizer? _equalizer;
+    private int _amplificationDb;
     private LibVLC? _libVlc;
     private MediaPlayer? _player;
     private Media? _media;
@@ -17,6 +20,9 @@ public sealed class LibVlcBackend : IPlaybackBackend
     private bool _disposed;
     public object? PlayerHandle => _player;
     public bool IsReady => _player is not null && !_disposed;
+    public int ActiveAmplificationDb => Volatile.Read(ref _amplificationDb);
+    public bool IsEqualizerEnabled => Volatile.Read(ref _amplificationDb) > 0 && _equalizer is not null && !_disposed;
+    public float ActivePreampDb => _equalizer is { } eq && !_disposed ? eq.Preamp : 0f;
     public event EventHandler<PlaybackSignal>? Signal;
 
     public Task InitializeAsync(CancellationToken token) => Task.Run(() =>
@@ -40,6 +46,7 @@ public sealed class LibVlcBackend : IPlaybackBackend
             player.Paused += Paused;
             player.EncounteredError += Failed; player.EndReached += Ended;
             _libVlc = lib; _player = player;
+            ApplyAmplificationCore(Volatile.Read(ref _amplificationDb));
         }
         catch { lib.Dispose(); throw; }
     }, token);
@@ -61,6 +68,7 @@ public sealed class LibVlcBackend : IPlaybackBackend
         {
             token.ThrowIfCancellationRequested();
             _media = media;
+            ApplyAmplificationCore(Volatile.Read(ref _amplificationDb));
             if (!_player.Play(media)) throw new PlaybackException(PlaybackFailure.Unknown);
         }
         catch (OperationCanceledException) { _media = null; media.Dispose(); throw; }
@@ -78,6 +86,25 @@ public sealed class LibVlcBackend : IPlaybackBackend
     }
     public Task SetAudioAsync(int volume, bool muted) => Task.Run(() =>
     { if (_player is not null && !_disposed) { _player.Volume = Math.Clamp(volume, 0, 100); _player.Mute = muted; } });
+
+    public Task SetAmplificationAsync(int amplificationDb) => Task.Run(() => ApplyAmplificationCore(amplificationDb));
+
+    private void ApplyAmplificationCore(int amplificationDb)
+    {
+        var clamped = Math.Clamp(amplificationDb, 0, MaxAmplificationDb);
+        Volatile.Write(ref _amplificationDb, clamped);
+        if (_player is null || _disposed) return;
+        if (clamped <= 0)
+        {
+            _player.UnsetEqualizer();
+            _equalizer?.Dispose();
+            _equalizer = null;
+            return;
+        }
+        var equalizer = _equalizer ??= new Equalizer();
+        equalizer.SetPreamp(clamped);
+        _player.SetEqualizer(equalizer);
+    }
 
     private void Playing(object? sender, EventArgs args)
     { Volatile.Write(ref _failure, (int)PlaybackFailure.None); Emit(PlaybackSignalKind.Playing); }
@@ -118,11 +145,13 @@ public sealed class LibVlcBackend : IPlaybackBackend
                 if (_player is not null)
                 {
                     _player.Playing -= Playing; _player.Buffering -= Buffering;
+                    _player.Paused -= Paused;
                     _player.EncounteredError -= Failed; _player.EndReached -= Ended;
+                    _player.UnsetEqualizer();
                     _player.Dispose();
                 }
             }
-            finally { _player = null; if (_libVlc is not null) { _libVlc.Log -= NativeLog; _libVlc.Dispose(); _libVlc = null; } }
+            finally { _player = null; _equalizer?.Dispose(); _equalizer = null; if (_libVlc is not null) { _libVlc.Log -= NativeLog; _libVlc.Dispose(); _libVlc = null; } }
         }
     }));
 }

@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 220" role="img" aria-labelledby="title desc">
+  <title id="title">StreamDesk</title>
+  <desc id="desc">StreamDesk wordmark with its mint television play icon.</desc>
+  <svg x="0" y="4" width="212" height="212" viewBox="0 0 512 512">
+    <rect x="24" y="24" width="464" height="464" rx="112" fill="#171A21"/>
+    <rect x="104" y="102" width="304" height="260" rx="48" fill="none" stroke="#70D6B2" stroke-width="24"/>
+    <path d="M225 174c-9-5-20 1-20 12v92c0 11 11 17 20 12l77-46c9-5 9-18 0-24z" fill="#F2F4F7"/>
+    <path d="M256 375v40m-66 13h132" fill="none" stroke="#70D6B2" stroke-width="24" stroke-linecap="round" stroke-linejoin="round"/>
+  </svg>
+  <text x="250" y="146" font-family="Segoe UI, Arial, sans-serif" font-size="100" font-weight="650" letter-spacing="-3">
+    <tspan fill="#F2F4F7">Stream</tspan><tspan fill="#70D6B2">Desk</tspan>
+  </text>
+</svg>
