@@ -3,14 +3,14 @@
     xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml" xmlns:lvs="clr-namespace:LibVLCSharp.WPF;assembly=LibVLCSharp.WPF"
     xmlns:local="clr-namespace:StreamDesk.Probe.Desktop"
     Title="StreamDesk" Icon="Resources/StreamDesk.ico" Width="1360" Height="850" MinWidth="760" MinHeight="540"
-    WindowStartupLocation="CenterScreen" WindowStyle="SingleBorderWindow" ResizeMode="CanResize" ExtendsContentIntoTitleBar="False" Background="{StaticResource CanvasBrush}">
+    WindowStartupLocation="CenterScreen" WindowStyle="SingleBorderWindow" ResizeMode="CanResize" ExtendsContentIntoTitleBar="False" Background="{DynamicResource CanvasBrush}">
     <ui:FluentWindow.Resources>
         <local:FavoriteConverter x:Key="FavoriteConverter" />
         <Style TargetType="TextBox">
             <Setter Property="MinHeight" Value="36"/><Setter Property="Padding" Value="10,6"/>
-            <Setter Property="Background" Value="#FF15171D"/><Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}"/>
-            <Setter Property="CaretBrush" Value="{StaticResource AccentBrush}"/>
-            <Setter Property="BorderBrush" Value="#FF626B78"/><Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Background" Value="{DynamicResource SurfaceRaisedBrush}"/><Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}"/>
+            <Setter Property="CaretBrush" Value="{DynamicResource AccentBrush}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource ControlBorderBrush}"/><Setter Property="BorderThickness" Value="1"/>
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="TextBox">
@@ -18,7 +18,7 @@
                             <Grid>
                                 <ScrollViewer x:Name="PART_ContentHost" Margin="{TemplateBinding Padding}" VerticalAlignment="Center"/>
                                 <TextBlock x:Name="Placeholder" Text="{TemplateBinding Tag}" Margin="{TemplateBinding Padding}" VerticalAlignment="Center"
-                                           Foreground="{StaticResource TextMutedBrush}" Opacity="0.7" IsHitTestVisible="False" Visibility="Collapsed" TextTrimming="CharacterEllipsis"/>
+                                           Foreground="{DynamicResource TextMutedBrush}" Opacity="0.7" IsHitTestVisible="False" Visibility="Collapsed" TextTrimming="CharacterEllipsis"/>
                             </Grid>
                         </Border>
                         <ControlTemplate.Triggers>
@@ -29,7 +29,7 @@
                                 <Setter TargetName="Placeholder" Property="Visibility" Value="Visible"/>
                             </Trigger>
                             <Trigger Property="IsKeyboardFocused" Value="True">
-                                <Setter TargetName="BoxBorder" Property="BorderBrush" Value="{StaticResource AccentBrush}"/>
+                                <Setter TargetName="BoxBorder" Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
                                 <Setter TargetName="BoxBorder" Property="BorderThickness" Value="2"/>
                             </Trigger>
                             <Trigger Property="IsEnabled" Value="False">
@@ -47,7 +47,7 @@
         <Style x:Key="StarToggle" TargetType="ToggleButton">
             <Setter Property="Width" Value="36"/><Setter Property="Height" Value="36"/>
             <Setter Property="Background" Value="Transparent"/>
-            <Setter Property="Foreground" Value="{StaticResource TextMutedBrush}"/>
+            <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}"/>
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="ToggleButton">
@@ -56,14 +56,14 @@
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsChecked" Value="True">
-                                <Setter TargetName="StarIcon" Property="Foreground" Value="{StaticResource AccentBrush}"/>
+                                <Setter TargetName="StarIcon" Property="Foreground" Value="{DynamicResource AccentBrush}"/>
                                 <Setter TargetName="StarIcon" Property="Filled" Value="True"/>
                             </Trigger>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="StarBorder" Property="Background" Value="{StaticResource SurfaceRaisedBrush}"/>
+                                <Setter TargetName="StarBorder" Property="Background" Value="{DynamicResource SurfaceRaisedBrush}"/>
                             </Trigger>
                             <Trigger Property="IsKeyboardFocused" Value="True">
-                                <Setter TargetName="StarBorder" Property="BorderBrush" Value="{StaticResource AccentBrush}"/>
+                                <Setter TargetName="StarBorder" Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
                             </Trigger>
                             <Trigger Property="IsEnabled" Value="False">
                                 <Setter Property="Opacity" Value="0.4"/>
@@ -86,16 +86,16 @@
                                         <ColumnDefinition Width="Auto"/>
                                     </Grid.ColumnDefinitions>
                                     <TextBlock Text="{Binding DataContext.SelectedCategory.Name, RelativeSource={RelativeSource AncestorType=ComboBox}, TargetNullValue='Todas las categorías', FallbackValue='Todas las categorías'}"
-                                               Foreground="{StaticResource TextPrimaryBrush}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
-                                    <ui:SymbolIcon Grid.Column="1" Symbol="ChevronDown24" FontSize="12" Foreground="{StaticResource TextMutedBrush}" VerticalAlignment="Center" Margin="6,0,0,0"/>
+                                               Foreground="{DynamicResource TextPrimaryBrush}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                                    <ui:SymbolIcon Grid.Column="1" Symbol="ChevronDown24" FontSize="12" Foreground="{DynamicResource TextMutedBrush}" VerticalAlignment="Center" Margin="6,0,0,0"/>
                                 </Grid>
                             </Border>
                             <ControlTemplate.Triggers>
                                 <Trigger Property="IsMouseOver" Value="True">
-                                    <Setter TargetName="ToggleBorder" Property="BorderBrush" Value="{StaticResource AccentBrush}"/>
+                                    <Setter TargetName="ToggleBorder" Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
                                 </Trigger>
                                 <Trigger Property="IsChecked" Value="True">
-                                    <Setter TargetName="ToggleBorder" Property="BorderBrush" Value="{StaticResource AccentBrush}"/>
+                                    <Setter TargetName="ToggleBorder" Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
                                     <Setter TargetName="ToggleBorder" Property="BorderThickness" Value="2"/>
                                 </Trigger>
                             </ControlTemplate.Triggers>
@@ -128,13 +128,13 @@
                                          AutomationProperties.Name="Buscar categoría"
                                          TextChanged="CategorySearchBox_TextChanged"
                                          PreviewKeyDown="CategorySearchBox_PreviewKeyDown"/>
-                                <ui:SymbolIcon Grid.Column="0" Symbol="Search24" FontSize="13" Foreground="{StaticResource TextMutedBrush}"
+                                <ui:SymbolIcon Grid.Column="0" Symbol="Search24" FontSize="13" Foreground="{DynamicResource TextMutedBrush}"
                                                VerticalAlignment="Center" Margin="7,0,0,0" IsHitTestVisible="False"/>
                                 <Button Grid.Column="2" Click="ClearCategorySearch_Click"
                                         Visibility="{Binding HasCategorySearch, Converter={StaticResource BooleanToVisibilityConverter}}"
                                         HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,4,0" Padding="4,2" MinHeight="20"
                                         Background="Transparent" BorderThickness="0" ToolTip="Borrar búsqueda">
-                                    <ui:SymbolIcon Symbol="Dismiss24" FontSize="11" Foreground="{StaticResource TextMutedBrush}"/>
+                                    <ui:SymbolIcon Symbol="Dismiss24" FontSize="11" Foreground="{DynamicResource TextMutedBrush}"/>
                                 </Button>
                             </Grid>
                             <ScrollViewer Grid.Row="1" MaxHeight="240" CanContentScroll="True">
@@ -158,16 +158,16 @@
                                         <ColumnDefinition Width="Auto"/>
                                     </Grid.ColumnDefinitions>
                                     <TextBlock Text="{Binding DataContext.MediaCategory.Name, RelativeSource={RelativeSource AncestorType=ComboBox}, TargetNullValue='Todas las categorías', FallbackValue='Todas las categorías'}"
-                                               Foreground="{StaticResource TextPrimaryBrush}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
-                                    <ui:SymbolIcon Grid.Column="1" Symbol="ChevronDown24" FontSize="12" Foreground="{StaticResource TextMutedBrush}" VerticalAlignment="Center" Margin="6,0,0,0"/>
+                                               Foreground="{DynamicResource TextPrimaryBrush}" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                                    <ui:SymbolIcon Grid.Column="1" Symbol="ChevronDown24" FontSize="12" Foreground="{DynamicResource TextMutedBrush}" VerticalAlignment="Center" Margin="6,0,0,0"/>
                                 </Grid>
                             </Border>
                             <ControlTemplate.Triggers>
                                 <Trigger Property="IsMouseOver" Value="True">
-                                    <Setter TargetName="ToggleBorder" Property="BorderBrush" Value="{StaticResource AccentBrush}"/>
+                                    <Setter TargetName="ToggleBorder" Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
                                 </Trigger>
                                 <Trigger Property="IsChecked" Value="True">
-                                    <Setter TargetName="ToggleBorder" Property="BorderBrush" Value="{StaticResource AccentBrush}"/>
+                                    <Setter TargetName="ToggleBorder" Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
                                     <Setter TargetName="ToggleBorder" Property="BorderThickness" Value="2"/>
                                 </Trigger>
                             </ControlTemplate.Triggers>
@@ -200,13 +200,13 @@
                                          AutomationProperties.Name="Buscar categoría de películas o series"
                                          TextChanged="MediaCategorySearchBox_TextChanged"
                                          PreviewKeyDown="MediaCategorySearchBox_PreviewKeyDown"/>
-                                <ui:SymbolIcon Grid.Column="0" Symbol="Search24" FontSize="13" Foreground="{StaticResource TextMutedBrush}"
+                                <ui:SymbolIcon Grid.Column="0" Symbol="Search24" FontSize="13" Foreground="{DynamicResource TextMutedBrush}"
                                                VerticalAlignment="Center" Margin="7,0,0,0" IsHitTestVisible="False"/>
                                 <Button Grid.Column="2" Click="ClearMediaCategorySearch_Click"
                                         Visibility="{Binding HasMediaCategorySearch, Converter={StaticResource BooleanToVisibilityConverter}}"
                                         HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,4,0" Padding="4,2" MinHeight="20"
                                         Background="Transparent" BorderThickness="0" ToolTip="Borrar búsqueda de categoría">
-                                    <ui:SymbolIcon Symbol="Dismiss24" FontSize="11" Foreground="{StaticResource TextMutedBrush}"/>
+                                    <ui:SymbolIcon Symbol="Dismiss24" FontSize="11" Foreground="{DynamicResource TextMutedBrush}"/>
                                 </Button>
                             </Grid>
                             <ScrollViewer Grid.Row="1" MaxHeight="240" CanContentScroll="True">
@@ -218,25 +218,25 @@
             </Grid>
         </ControlTemplate>
     </ui:FluentWindow.Resources>
-    <Grid Background="{StaticResource CanvasBrush}">
+    <Grid Background="{DynamicResource CanvasBrush}">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
         </Grid.RowDefinitions>
-        <ui:TitleBar x:Name="AppTitleBar" Title="StreamDesk" Grid.Row="0"/>
-        <Grid x:Name="Shell" Grid.Row="1" Margin="16" Background="{StaticResource CanvasBrush}">
+        <ui:TitleBar x:Name="AppTitleBar" Title="StreamDesk" Grid.Row="0" Foreground="{DynamicResource TextPrimaryBrush}" ButtonsForeground="{DynamicResource TextPrimaryBrush}"/>
+        <Grid x:Name="Shell" Grid.Row="1" Margin="16" Background="{DynamicResource CanvasBrush}">
             <Grid.ColumnDefinitions><ColumnDefinition x:Name="SidebarColumn" Width="158"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-        <Border x:Name="Sidebar" Background="{StaticResource SurfaceBrush}" CornerRadius="12" Padding="10">
+        <Border x:Name="Sidebar" Background="{DynamicResource SurfaceBrush}" CornerRadius="12" Padding="10">
             <DockPanel>
                 <StackPanel DockPanel.Dock="Top" Margin="10,12,0,20">
                     <StackPanel Orientation="Horizontal">
                         <Image Source="Resources/StreamDesk.ico" Width="20" Height="20" Stretch="Uniform" Margin="0,0,6,0" VerticalAlignment="Center"/>
-                        <TextBlock Text="StreamDesk" FontWeight="Bold" FontSize="14" Foreground="{StaticResource AccentBrush}" VerticalAlignment="Center"/>
+                        <TextBlock Text="StreamDesk" FontWeight="Bold" FontSize="14" Foreground="{DynamicResource AccentBrush}" VerticalAlignment="Center"/>
                     </StackPanel>
-                    <TextBlock Text="TV simple y rápida" FontSize="12" Foreground="{StaticResource TextMutedBrush}" Margin="0,4,0,0"/>
+                    <TextBlock Text="TV simple y rápida" FontSize="12" Foreground="{DynamicResource TextMutedBrush}" Margin="0,4,0,0"/>
                 </StackPanel>
                 <StackPanel DockPanel.Dock="Bottom" Margin="10,12,0,6">
-                    <TextBlock Text="{Binding VersionLabel}" FontSize="11" Foreground="{StaticResource TextMutedBrush}"/>
+                    <TextBlock Text="{Binding VersionLabel}" FontSize="11" Foreground="{DynamicResource TextMutedBrush}"/>
                 </StackPanel>
                 <ListBox x:Name="NavigationTabs" Background="Transparent" BorderThickness="0" SelectedIndex="{Binding CurrentTabIndex, Mode=TwoWay}"
                          ItemContainerStyle="{StaticResource NavItem}" AutomationProperties.Name="Navegación principal" VerticalAlignment="Top">
@@ -296,12 +296,12 @@
             <ScrollViewer x:Name="HomePage" VerticalScrollBarVisibility="Auto" Visibility="{Binding ShowHome, Converter={StaticResource BooleanToVisibilityConverter}}">
                 <StackPanel Margin="12,20" MaxWidth="820" HorizontalAlignment="Left">
                     <TextBlock Text="¿Qué quieres ver hoy?" FontSize="32" FontWeight="SemiBold"/>
-                    <TextBlock Text="Haz clic en cualquier canal o película para empezar al instante." FontSize="15" Foreground="{StaticResource TextMutedBrush}" Margin="0,6,0,24"/>
-                    <Border Background="{StaticResource SurfaceBrush}" CornerRadius="12" Padding="22" Margin="0,0,0,18">
+                    <TextBlock Text="Haz clic en cualquier canal o película para empezar al instante." FontSize="15" Foreground="{DynamicResource TextMutedBrush}" Margin="0,6,0,24"/>
+                    <Border Background="{DynamicResource SurfaceBrush}" CornerRadius="12" Padding="22" Margin="0,0,0,18">
                         <StackPanel>
                             <StackPanel Orientation="Horizontal">
-                                <ui:SymbolIcon Symbol="Play24" FontSize="12" Foreground="{StaticResource AccentBrush}" Margin="0,0,6,0" VerticalAlignment="Center"/>
-                                <TextBlock Text="ÚLTIMO CANAL VISTO" FontSize="12" Foreground="{StaticResource AccentBrush}" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                                <ui:SymbolIcon Symbol="Play24" FontSize="12" Foreground="{DynamicResource AccentBrush}" Margin="0,0,6,0" VerticalAlignment="Center"/>
+                                <TextBlock Text="ÚLTIMO CANAL VISTO" FontSize="12" Foreground="{DynamicResource AccentBrush}" FontWeight="SemiBold" VerticalAlignment="Center"/>
                             </StackPanel>
                             <TextBlock Text="{Binding LastChannelLabel}" FontSize="22" TextWrapping="Wrap" Margin="0,8,0,16"/>
                             <WrapPanel>
@@ -327,22 +327,22 @@
                         </StackPanel>
                     </Border>
                     <WrapPanel>
-                        <Border Background="{StaticResource SurfaceBrush}" CornerRadius="10" Padding="16" Width="250" Margin="0,0,12,12">
+                        <Border Background="{DynamicResource SurfaceBrush}" CornerRadius="10" Padding="16" Width="250" Margin="0,0,12,12">
                             <StackPanel>
                                 <TextBlock Text="1. Añade tu cuenta" FontWeight="SemiBold" Margin="0,0,0,4"/>
-                                <TextBlock Text="Ej: https://tuservidor.com:8080" FontSize="12" Foreground="{StaticResource TextMutedBrush}"/>
+                                <TextBlock Text="Ej: https://tuservidor.com:8080" FontSize="12" Foreground="{DynamicResource TextMutedBrush}"/>
                             </StackPanel>
                         </Border>
-                        <Border Background="{StaticResource SurfaceBrush}" CornerRadius="10" Padding="16" Width="250" Margin="0,0,12,12">
+                        <Border Background="{DynamicResource SurfaceBrush}" CornerRadius="10" Padding="16" Width="250" Margin="0,0,12,12">
                             <StackPanel>
                                 <TextBlock Text="2. Elige con 1 clic" FontWeight="SemiBold" Margin="0,0,0,4"/>
-                                <TextBlock Text="Toca cualquier canal para reproducir" FontSize="12" Foreground="{StaticResource TextMutedBrush}"/>
+                                <TextBlock Text="Toca cualquier canal para reproducir" FontSize="12" Foreground="{DynamicResource TextMutedBrush}"/>
                             </StackPanel>
                         </Border>
-                        <Border Background="{StaticResource SurfaceBrush}" CornerRadius="10" Padding="16" Width="250" Margin="0,0,0,12">
+                        <Border Background="{DynamicResource SurfaceBrush}" CornerRadius="10" Padding="16" Width="250" Margin="0,0,0,12">
                             <StackPanel>
                                 <TextBlock Text="3. Guarda tus favoritos" FontWeight="SemiBold" Margin="0,0,0,4"/>
-                                <TextBlock Text="Marca tus canales preferidos" FontSize="12" Foreground="{StaticResource TextMutedBrush}"/>
+                                <TextBlock Text="Marca tus canales preferidos" FontSize="12" Foreground="{DynamicResource TextMutedBrush}"/>
                             </StackPanel>
                         </Border>
                     </WrapPanel>
@@ -353,7 +353,7 @@
                 <Grid x:Name="TvHeader" Margin="0,4,0,12">
                     <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
                     <StackPanel><TextBlock Text="{Binding SectionTitle}" Style="{StaticResource TypographyPageTitle}"/>
-                        <TextBlock Text="{Binding HeaderSummary}" FontSize="12" Foreground="{StaticResource TextMutedBrush}" TextTrimming="CharacterEllipsis" Margin="0,4,8,0"/></StackPanel>
+                        <TextBlock Text="{Binding HeaderSummary}" FontSize="12" Foreground="{DynamicResource TextMutedBrush}" TextTrimming="CharacterEllipsis" Margin="0,4,8,0"/></StackPanel>
                     <WrapPanel Grid.Column="1" VerticalAlignment="Center">
                         <ComboBox Width="140" ItemsSource="{Binding Profiles}" DisplayMemberPath="Name" SelectedItem="{Binding ActiveProfile, Mode=TwoWay}" ToolTip="Cambiar cuenta activa" AutomationProperties.Name="Perfil activo" Margin="0,0,8,0"/>
                         <ui:Button Command="{Binding LoadCatalogCommand}" ToolTip="Actualizar canales en vivo">
@@ -370,7 +370,7 @@
                         </ui:Button>
                         <ui:Button x:Name="PipButton" Click="TogglePictureInPicture_Click" IsEnabled="{Binding ShowPlayerPane}" ToolTip="Modo ventana flotante (P)" Margin="8,0,0,0">
                             <StackPanel Orientation="Horizontal">
-                                <ui:SymbolIcon Symbol="Pin24" FontSize="14" Margin="0,0,6,0" VerticalAlignment="Center"/>
+                                <ui:SymbolIcon Symbol="PictureInPicture24" FontSize="14" Margin="0,0,6,0" VerticalAlignment="Center"/>
                                 <TextBlock Text="Flotante" VerticalAlignment="Center"/>
                             </StackPanel>
                         </ui:Button>
@@ -380,7 +380,7 @@
                     <TextBlock Text="{Binding HttpWarning}" Visibility="{Binding HasHttpWarning, Converter={StaticResource BooleanToVisibilityConverter}}" Foreground="#FFFFCF72" FontSize="12" TextWrapping="Wrap" Margin="0,0,0,6"/>
                     <Expander Header="Importar lista M3U/M3U8" Visibility="{Binding ShowLiveCatalog, Converter={StaticResource BooleanToVisibilityConverter}}" Margin="0,0,0,6">
                         <StackPanel Margin="8,4">
-                            <TextBlock Text="La lista solo se conserva durante esta sesión. Vuelve a importarla al reiniciar." Foreground="{StaticResource TextMutedBrush}" FontSize="12" Margin="0,0,0,6"/>
+                            <TextBlock Text="La lista solo se conserva durante esta sesión. Vuelve a importarla al reiniciar." Foreground="{DynamicResource TextMutedBrush}" FontSize="12" Margin="0,0,0,6"/>
                             <WrapPanel VerticalAlignment="Center">
                                 <ui:Button Click="ImportPlaylistFile_Click" IsEnabled="{Binding CanImportPlaylist}" Margin="0,0,8,6" ToolTip="Importar un archivo .m3u o .m3u8">
                                     <StackPanel Orientation="Horizontal">
@@ -395,7 +395,7 @@
                                         <TextBlock Text="Importar URL" VerticalAlignment="Center"/>
                                     </StackPanel>
                                 </ui:Button>
-                                <TextBlock Text="{Binding PlaylistStatus}" Visibility="{Binding HasPlaylistStatus, Converter={StaticResource BooleanToVisibilityConverter}}" Foreground="{StaticResource TextMutedBrush}" FontSize="12" VerticalAlignment="Center" TextWrapping="Wrap" Margin="0,0,0,6" AutomationProperties.LiveSetting="Polite"/>
+                                <TextBlock Text="{Binding PlaylistStatus}" Visibility="{Binding HasPlaylistStatus, Converter={StaticResource BooleanToVisibilityConverter}}" Foreground="{DynamicResource TextMutedBrush}" FontSize="12" VerticalAlignment="Center" TextWrapping="Wrap" Margin="0,0,0,6" AutomationProperties.LiveSetting="Polite"/>
                             </WrapPanel>
                         </StackPanel>
                     </Expander>
@@ -410,14 +410,14 @@
                 <Grid Grid.Row="2" x:Name="TvLayout">
                     <Grid.ColumnDefinitions><ColumnDefinition x:Name="CatalogColumn" Width="284"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
                     <Grid x:Name="CatalogPane">
-                    <Border Padding="12" CornerRadius="10" Background="{StaticResource SurfaceBrush}" Margin="0,0,14,0" Visibility="{Binding ShowLiveCatalog, Converter={StaticResource BooleanToVisibilityConverter}}">
+                    <Border Padding="12" CornerRadius="10" Background="{DynamicResource SurfaceBrush}" Margin="0,0,14,0" Visibility="{Binding ShowLiveCatalog, Converter={StaticResource BooleanToVisibilityConverter}}">
                         <Grid>
                             <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
                             <Grid Margin="0,0,0,8">
                                 <TextBox x:Name="SearchBox" Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}" Tag="Buscar canal (ej. Deportes, Noticias)..." Padding="10,6,32,6" AutomationProperties.Name="Buscar canal"/>
                                 <Button Click="ClearSearch_Click" Visibility="{Binding HasSearchText, Converter={StaticResource BooleanToVisibilityConverter}}"
                                         HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,4,0" Padding="6,2" MinHeight="24" Background="Transparent" BorderThickness="0" ToolTip="Borrar búsqueda">
-                                    <ui:SymbolIcon Symbol="Dismiss24" FontSize="12" Foreground="{StaticResource TextMutedBrush}"/>
+                                    <ui:SymbolIcon Symbol="Dismiss24" FontSize="12" Foreground="{DynamicResource TextMutedBrush}"/>
                                 </Button>
                             </Grid>
                             <ComboBox x:Name="CategoryFilter" Grid.Row="1" ItemsSource="{Binding VisibleCategories}" DisplayMemberPath="Name"
@@ -426,7 +426,7 @@
                                       DropDownOpened="CategoryFilter_DropDownOpened"
                                       AutomationProperties.Name="Categoría" Margin="0,0,0,8"/>
                             <DockPanel Grid.Row="2" Margin="0,0,0,6">
-                                <TextBlock Text="{Binding ResultSummary}" FontSize="12" Foreground="{StaticResource TextMutedBrush}" VerticalAlignment="Center"/>
+                                <TextBlock Text="{Binding ResultSummary}" FontSize="12" Foreground="{DynamicResource TextMutedBrush}" VerticalAlignment="Center"/>
                                 <Button Content="Ver todos" Click="ClearFilters_Click" DockPanel.Dock="Right" Padding="6,2" MinHeight="24" HorizontalAlignment="Right" FontSize="11"/>
                             </DockPanel>
                             <Grid Grid.Row="3">
@@ -438,7 +438,7 @@
                                     </Style></ListBox.ItemContainerStyle>
                                     <ListBox.ItemTemplate><DataTemplate>
                                         <Grid Margin="4" ToolTip="Clic para reproducir"><Grid.ColumnDefinitions><ColumnDefinition Width="36"/><ColumnDefinition Width="*"/><ColumnDefinition Width="36"/></Grid.ColumnDefinitions>
-                                            <Border Background="{StaticResource SurfaceRaisedBrush}" Width="32" Height="32" CornerRadius="4">
+                                            <Border Background="{DynamicResource SurfaceRaisedBrush}" Width="32" Height="32" CornerRadius="4">
                                                 <local:ChannelLogo Url="{Binding LogoUrl}" Loader="{Binding LogoLoader, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Stretch="Uniform"/>
                                             </Border>
                                             <TextBlock Grid.Column="1" Text="{Binding Name}" VerticalAlignment="Center" Margin="8,0,4,0" TextTrimming="CharacterEllipsis"/>
@@ -451,13 +451,13 @@
                                         </Grid>
                                     </DataTemplate></ListBox.ItemTemplate>
                                 </ListBox>
-                                <TextBlock Text="{Binding EmptyMessage}" Visibility="{Binding HasNoChannels, Converter={StaticResource BooleanToVisibilityConverter}}" TextWrapping="Wrap" TextAlignment="Center" VerticalAlignment="Center" Foreground="{StaticResource TextMutedBrush}" Margin="12" IsHitTestVisible="False"/>
+                                <TextBlock Text="{Binding EmptyMessage}" Visibility="{Binding HasNoChannels, Converter={StaticResource BooleanToVisibilityConverter}}" TextWrapping="Wrap" TextAlignment="Center" VerticalAlignment="Center" Foreground="{DynamicResource TextMutedBrush}" Margin="12" IsHitTestVisible="False"/>
                             </Grid>
                         </Grid>
                     </Border>
-                    <Border Background="{StaticResource SurfaceBrush}" CornerRadius="10" Padding="12" Margin="0,0,14,0" Visibility="{Binding ShowContinueWatching, Converter={StaticResource BooleanToVisibilityConverter}}">
+                    <Border Background="{DynamicResource SurfaceBrush}" CornerRadius="10" Padding="12" Margin="0,0,14,0" Visibility="{Binding ShowContinueWatching, Converter={StaticResource BooleanToVisibilityConverter}}">
                         <DockPanel>
-                            <TextBlock DockPanel.Dock="Top" Text="Haz clic en un título para continuar donde lo dejaste:" FontSize="12" Foreground="{StaticResource TextMutedBrush}" Margin="0,0,0,8"/>
+                            <TextBlock DockPanel.Dock="Top" Text="Haz clic en un título para continuar donde lo dejaste:" FontSize="12" Foreground="{DynamicResource TextMutedBrush}" Margin="0,0,0,8"/>
                             <ui:Button DockPanel.Dock="Bottom" Click="PlayMedia_Click" Margin="0,10,0,0">
                                 <StackPanel Orientation="Horizontal">
                                     <ui:SymbolIcon Symbol="Play24" FontSize="14" Margin="0,0,6,0" VerticalAlignment="Center"/>
@@ -469,7 +469,7 @@
                         </DockPanel>
                     </Border>
                     </Grid>
-                    <Border x:Name="MediaBrowsePane" Grid.ColumnSpan="2" Background="{StaticResource SurfaceBrush}" CornerRadius="10" Padding="18" Visibility="Collapsed">
+                    <Border x:Name="MediaBrowsePane" Grid.ColumnSpan="2" Background="{DynamicResource SurfaceBrush}" CornerRadius="10" Padding="18" Visibility="Collapsed">
                         <Grid>
                             <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
                             <Grid Grid.Row="0" Margin="0,0,0,12">
@@ -484,7 +484,7 @@
                                     <Button Click="ClearMediaSearch_Click" Visibility="{Binding HasMediaSearch, Converter={StaticResource BooleanToVisibilityConverter}}"
                                             HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,4,0" Padding="6,2" MinHeight="24"
                                             Background="Transparent" BorderThickness="0" ToolTip="Borrar búsqueda">
-                                        <ui:SymbolIcon Symbol="Dismiss24" FontSize="12" Foreground="{StaticResource TextMutedBrush}"/>
+                                        <ui:SymbolIcon Symbol="Dismiss24" FontSize="12" Foreground="{DynamicResource TextMutedBrush}"/>
                                     </Button>
                                 </Grid>
                                 <ComboBox x:Name="MediaCategoryFilter" Grid.Column="1" Margin="0,0,10,0"
@@ -500,14 +500,14 @@
                                      VirtualizingPanel.IsVirtualizing="True" VirtualizingPanel.VirtualizationMode="Recycling" ScrollViewer.CanContentScroll="True" AutomationProperties.Name="Películas o series">
                                 <ListBox.ItemContainerStyle><Style TargetType="ListBoxItem" BasedOn="{StaticResource {x:Type ListBoxItem}}"><Setter Property="Height" Value="104"/><Setter Property="HorizontalContentAlignment" Value="Stretch"/><Setter Property="Padding" Value="4"/></Style></ListBox.ItemContainerStyle>
                                 <ListBox.ItemTemplate><DataTemplate>
-                                    <Border Background="{StaticResource SurfaceRaisedBrush}" CornerRadius="8" Padding="10" Margin="0,0,8,8">
+                                    <Border Background="{DynamicResource SurfaceRaisedBrush}" CornerRadius="8" Padding="10" Margin="0,0,8,8">
                                         <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="64"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-                                            <Border Background="{StaticResource SurfaceBrush}" CornerRadius="4" ClipToBounds="True">
+                                            <Border Background="{DynamicResource SurfaceBrush}" CornerRadius="4" ClipToBounds="True">
                                                 <local:ChannelLogo Url="{Binding PosterUrl}" Loader="{Binding LogoLoader, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Stretch="UniformToFill"/>
                                             </Border>
                                             <StackPanel Grid.Column="1" Margin="12,4,4,4" VerticalAlignment="Center">
                                                 <TextBlock Text="{Binding Name}" FontSize="16" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
-                                                <TextBlock Text="{Binding Description}" FontSize="12" Foreground="{StaticResource TextMutedBrush}" TextWrapping="Wrap" MaxHeight="36" Margin="0,5,0,0"/>
+                                                <TextBlock Text="{Binding Description}" FontSize="12" Foreground="{DynamicResource TextMutedBrush}" TextWrapping="Wrap" MaxHeight="36" Margin="0,5,0,0"/>
                                             </StackPanel>
                                         </Grid>
                                     </Border>
@@ -515,7 +515,7 @@
                             </ListBox>
                         </Grid>
                     </Border>
-                    <Border x:Name="MovieDetailsPane" Background="{StaticResource SurfaceBrush}" CornerRadius="10" Padding="14" Margin="0,0,14,0" Visibility="Collapsed">
+                    <Border x:Name="MovieDetailsPane" Background="{DynamicResource SurfaceBrush}" CornerRadius="10" Padding="14" Margin="0,0,14,0" Visibility="Collapsed">
                         <Grid>
                             <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
                             <DockPanel Grid.Row="0" Margin="0,0,0,12">
@@ -528,11 +528,11 @@
                                 <local:ChannelLogo Width="78" Height="112" Url="{Binding MediaPosterUrl}" Loader="{Binding LogoLoader, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Stretch="UniformToFill" Margin="0,0,12,0"/>
                                 <StackPanel VerticalAlignment="Center">
                                     <TextBlock Text="{Binding SelectedMedia.Name}" FontWeight="SemiBold" TextWrapping="Wrap"/>
-                                    <TextBlock Text="{Binding MediaCategoryLabel}" FontSize="12" Foreground="{StaticResource AccentBrush}" Margin="0,6,0,0"/>
+                                    <TextBlock Text="{Binding MediaCategoryLabel}" FontSize="12" Foreground="{DynamicResource AccentBrush}" Margin="0,6,0,0"/>
                                 </StackPanel>
                             </StackPanel>
                             <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto">
-                                <TextBlock Text="{Binding MediaDescription}" TextWrapping="Wrap" Foreground="{StaticResource TextMutedBrush}"/>
+                                <TextBlock Text="{Binding MediaDescription}" TextWrapping="Wrap" Foreground="{DynamicResource TextMutedBrush}"/>
                             </ScrollViewer>
                             <WrapPanel Grid.Row="3" Margin="0,12,0,0">
                                 <ui:Button Click="PlayMedia_Click" ToolTip="Reproducir película" AutomationProperties.Name="Reproducir película" Padding="12,6" Margin="0,0,8,4">
@@ -544,7 +544,7 @@
                             </WrapPanel>
                         </Grid>
                     </Border>
-                    <Border x:Name="SeriesDetailsPane" Background="{StaticResource SurfaceBrush}" CornerRadius="10" Padding="14" Margin="0,0,14,0" Visibility="Collapsed">
+                    <Border x:Name="SeriesDetailsPane" Background="{DynamicResource SurfaceBrush}" CornerRadius="10" Padding="14" Margin="0,0,14,0" Visibility="Collapsed">
                         <Grid>
                             <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
                             <DockPanel Grid.Row="0" Margin="0,0,0,10">
@@ -557,11 +557,11 @@
                                 <local:ChannelLogo Width="66" Height="92" Url="{Binding MediaPosterUrl}" Loader="{Binding LogoLoader, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Stretch="UniformToFill" Margin="0,0,10,0"/>
                                 <StackPanel VerticalAlignment="Center">
                                     <TextBlock Text="{Binding SelectedMedia.Name}" FontWeight="SemiBold" TextWrapping="Wrap"/>
-                                    <TextBlock Text="{Binding MediaCategoryLabel}" FontSize="12" Foreground="{StaticResource AccentBrush}" TextWrapping="Wrap" Margin="0,5,0,0"/>
-                                    <TextBlock Text="{Binding SeriesSummary}" FontSize="11" Foreground="{StaticResource TextMutedBrush}" TextWrapping="Wrap" Margin="0,5,0,0"/>
+                                    <TextBlock Text="{Binding MediaCategoryLabel}" FontSize="12" Foreground="{DynamicResource AccentBrush}" TextWrapping="Wrap" Margin="0,5,0,0"/>
+                                    <TextBlock Text="{Binding SeriesSummary}" FontSize="11" Foreground="{DynamicResource TextMutedBrush}" TextWrapping="Wrap" Margin="0,5,0,0"/>
                                 </StackPanel>
                             </StackPanel>
-                            <TextBlock Grid.Row="2" Text="{Binding MediaDescription}" TextWrapping="Wrap" MaxHeight="72" FontSize="12" Foreground="{StaticResource TextMutedBrush}" Margin="0,0,0,10"/>
+                            <TextBlock Grid.Row="2" Text="{Binding MediaDescription}" TextWrapping="Wrap" MaxHeight="72" FontSize="12" Foreground="{DynamicResource TextMutedBrush}" Margin="0,0,0,10"/>
                             <Grid Grid.Row="3">
                                 <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
                                 <StackPanel Grid.Row="0" Margin="0,0,0,8">
@@ -582,7 +582,7 @@
                                     <ListBox.ItemContainerStyle><Style TargetType="ListBoxItem" BasedOn="{StaticResource {x:Type ListBoxItem}}"><Setter Property="MinHeight" Value="48"/><Setter Property="HorizontalContentAlignment" Value="Stretch"/></Style></ListBox.ItemContainerStyle>
                                     <ListBox.ItemTemplate><DataTemplate>
                                         <Grid Margin="4"><Grid.ColumnDefinitions><ColumnDefinition Width="38"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-                                            <Border Background="{StaticResource SurfaceRaisedBrush}" CornerRadius="4" Width="30" Height="30" VerticalAlignment="Center">
+                                            <Border Background="{DynamicResource SurfaceRaisedBrush}" CornerRadius="4" Width="30" Height="30" VerticalAlignment="Center">
                                                 <TextBlock Text="{Binding Episode}" FontSize="12" FontWeight="SemiBold" HorizontalAlignment="Center" VerticalAlignment="Center"/>
                                             </Border>
                                             <TextBlock Grid.Column="1" Text="{Binding Name}" VerticalAlignment="Center" Margin="8,0,4,0" TextTrimming="CharacterEllipsis" TextWrapping="Wrap"/>
@@ -590,13 +590,13 @@
                                     </DataTemplate></ListBox.ItemTemplate>
                                 </ListBox>
                             </Grid>
-                            <TextBlock Grid.Row="4" Text="{Binding ContentStatus}" FontSize="11" Foreground="{StaticResource TextMutedBrush}" TextTrimming="CharacterEllipsis" Margin="0,8,0,0"/>
+                            <TextBlock Grid.Row="4" Text="{Binding ContentStatus}" FontSize="11" Foreground="{DynamicResource TextMutedBrush}" TextTrimming="CharacterEllipsis" Margin="0,8,0,0"/>
                         </Grid>
                     </Border>
                     <Grid Grid.Column="1" x:Name="PlayerPane" MouseMove="Player_MouseMove" MouseLeave="Player_MouseLeave">
                         <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
                         <DockPanel x:Name="NowPlayingTitle" Margin="4,0,4,8">
-                            <TextBlock Text="{Binding EpgNow}" DockPanel.Dock="Right" FontSize="12" Foreground="{StaticResource TextMutedBrush}" VerticalAlignment="Center" MaxWidth="260" TextTrimming="CharacterEllipsis" Margin="12,0,0,0"/>
+                            <TextBlock Text="{Binding EpgNow}" DockPanel.Dock="Right" FontSize="12" Foreground="{DynamicResource TextMutedBrush}" VerticalAlignment="Center" MaxWidth="260" TextTrimming="CharacterEllipsis" Margin="12,0,0,0"/>
                             <ui:Button x:Name="BackToEpisodesButton" DockPanel.Dock="Left" Click="BackToEpisodes_Click"
                                        Visibility="{Binding IsImmersiveMode, Converter={StaticResource BooleanToVisibilityConverter}}"
                                        ToolTip="{Binding ImmersiveReturnLabel}" AutomationProperties.Name="{Binding ImmersiveReturnLabel}"
@@ -620,7 +620,7 @@
                             </CheckBox>
                             <ui:Button x:Name="PipReturn" Grid.Column="2" Click="TogglePictureInPicture_Click" ToolTip="Volver a ventana normal (Esc)" AutomationProperties.Name="Volver a la ventana normal">
                                 <StackPanel Orientation="Horizontal">
-                                    <ui:SymbolIcon Symbol="FullScreenMaximize24" FontSize="13" Margin="0,0,6,0" VerticalAlignment="Center"/>
+                                    <ui:SymbolIcon Symbol="PictureInPicture24" FontSize="13" Margin="0,0,6,0" VerticalAlignment="Center"/>
                                     <TextBlock Text="Volver" VerticalAlignment="Center"/>
                                 </StackPanel>
                             </ui:Button>
@@ -634,7 +634,7 @@
                                 </lvs:VideoView>
                                 <StackPanel VerticalAlignment="Center" Margin="24" Visibility="{Binding ShowPlaybackPlaceholder, Converter={StaticResource BooleanToVisibilityConverter}}"
                                             AutomationProperties.Name="{Binding PlaybackStatus}" AutomationProperties.HelpText="Reproducción detenida.">
-                                    <ui:SymbolIcon Symbol="Tv24" FontSize="48" Foreground="{StaticResource TextMutedBrush}" HorizontalAlignment="Center"/>
+                                    <ui:SymbolIcon Symbol="Tv24" FontSize="48" Foreground="{DynamicResource TextMutedBrush}" HorizontalAlignment="Center"/>
                                 </StackPanel>
                                 <Border Background="#D9000000" CornerRadius="8" Padding="18,10"
                                         HorizontalAlignment="Center" VerticalAlignment="Center"
@@ -645,23 +645,32 @@
                             </Grid>
                         </Border>
                         <StackPanel Grid.Row="2">
-                            <Border x:Name="VideoLoadingIndicator" Background="{StaticResource SurfaceRaisedBrush}" CornerRadius="6" Padding="10,6" Margin="4,6,4,2"
+                          <Grid Height="34">
+                            <Border x:Name="VideoLoadingIndicator" Background="{DynamicResource SurfaceRaisedBrush}" CornerRadius="6" Padding="10,6" Margin="4,6,4,2"
                                     Visibility="{Binding IsVideoLoading, Converter={StaticResource BooleanToVisibilityConverter}}"
                                     AutomationProperties.Name="{Binding VideoLoadingMessage}" AutomationProperties.LiveSetting="Polite">
-                                <DockPanel>
-                                    <TextBlock x:Name="VideoLoadingText" DockPanel.Dock="Left" Text="{Binding VideoLoadingMessage}" FontSize="12" FontWeight="SemiBold" Foreground="{StaticResource AccentBrush}" VerticalAlignment="Center" Margin="0,0,12,0"/>
+                                <Grid>
+                                    <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="76"/></Grid.ColumnDefinitions>
+                                    <TextBlock x:Name="VideoLoadingText" Text="{Binding VideoLoadingMessage}" TextTrimming="CharacterEllipsis" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource AccentBrush}" VerticalAlignment="Center" Margin="0,0,12,0"/>
                                     <ProgressBar x:Name="VideoLoadingProgress" Height="6" Minimum="0" Maximum="100"
+                                                 Grid.Column="1"
                                                  Value="{Binding VideoBufferPercent, Mode=OneWay}"
                                                  IsIndeterminate="{Binding IsVideoLoadingIndeterminate, Mode=OneWay}"
                                                  VerticalAlignment="Center" AutomationProperties.Name="Progreso de carga del vídeo"/>
-                                </DockPanel>
+                                </Grid>
                             </Border>
-                            <TextBlock x:Name="PlaybackCaption" Text="{Binding PlaybackStatus}" Visibility="{Binding ShowPlaybackCaption, Converter={StaticResource BooleanToVisibilityConverter}}" TextWrapping="Wrap" Foreground="{StaticResource TextMutedBrush}" FontSize="12" Margin="4,6,4,6" AutomationProperties.LiveSetting="Polite"/>
+                            <TextBlock x:Name="PlaybackCaption" Text="{Binding PlaybackStatus}" TextWrapping="Wrap" Foreground="{DynamicResource TextMutedBrush}" FontSize="12" Margin="4,6,4,6" AutomationProperties.LiveSetting="Polite">
+                                <TextBlock.Style><Style TargetType="TextBlock" BasedOn="{StaticResource {x:Type TextBlock}}"><Style.Triggers>
+                                    <DataTrigger Binding="{Binding ShowPlaybackCaption}" Value="False"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger>
+                                    <DataTrigger Binding="{Binding IsVideoLoading}" Value="True"><Setter Property="Visibility" Value="Collapsed"/></DataTrigger>
+                                </Style.Triggers></Style></TextBlock.Style>
+                            </TextBlock>
+                          </Grid>
                             <Grid x:Name="EpgPanel">
                                 <Expander Header="Programación del canal (ahora y siguiente)" Visibility="{Binding ShowLiveCatalog, Converter={StaticResource BooleanToVisibilityConverter}}" Margin="4,0,4,6">
                                     <StackPanel Margin="8,6">
                                         <TextBlock Text="{Binding EpgNow}" TextWrapping="Wrap" FontWeight="SemiBold"/>
-                                        <TextBlock Text="{Binding EpgNext}" TextWrapping="Wrap" Foreground="{StaticResource TextMutedBrush}" Margin="0,4,0,6"/>
+                                        <TextBlock Text="{Binding EpgNext}" TextWrapping="Wrap" Foreground="{DynamicResource TextMutedBrush}" Margin="0,4,0,6"/>
                                         <WrapPanel VerticalAlignment="Center">
                                             <Button Click="RefreshEpg_Click" Padding="8,4" Margin="0,0,8,0">
                                                 <StackPanel Orientation="Horizontal">
@@ -675,25 +684,21 @@
                                                     <TextBlock Text="Cargar guía (.xml)" VerticalAlignment="Center"/>
                                                 </StackPanel>
                                             </Button>
-                                            <TextBlock Text="{Binding EpgStatus}" Foreground="{StaticResource TextMutedBrush}" FontSize="12" VerticalAlignment="Center" TextWrapping="Wrap"/>
+                                            <TextBlock Text="{Binding EpgStatus}" Foreground="{DynamicResource TextMutedBrush}" FontSize="12" VerticalAlignment="Center" TextWrapping="Wrap"/>
                                         </WrapPanel>
                                     </StackPanel>
                                 </Expander>
                             </Grid>
                         </StackPanel>
-                        <Border Grid.Row="3" x:Name="PlayerControls" Background="#E610141D" BorderBrush="#26FFFFFF" BorderThickness="1" CornerRadius="8" Padding="10,6" Margin="0,4,0,0" MouseEnter="Controls_MouseEnter" MouseLeave="Controls_MouseLeave" PreviewTouchDown="Controls_TouchDown">
+                        <Border Grid.Row="3" x:Name="PlayerControls" Background="{DynamicResource SurfaceRaisedBrush}" BorderBrush="{DynamicResource ControlBorderBrush}" BorderThickness="1" CornerRadius="8" Padding="10,6" Margin="0,4,0,0" MouseEnter="Controls_MouseEnter" MouseLeave="Controls_MouseLeave" PreviewTouchDown="Controls_TouchDown">
                             <Grid><StackPanel x:Name="StandardControls">
                                     <DockPanel Margin="0,0,0,6" Visibility="{Binding CanSeek, Converter={StaticResource BooleanToVisibilityConverter}}">
-                                        <TextBlock Text="{Binding PositionLabel}" DockPanel.Dock="Right" FontSize="11" Foreground="{StaticResource TextMutedBrush}" VerticalAlignment="Center" Margin="10,0,0,0"/>
+                                        <TextBlock Text="{Binding PositionLabel}" DockPanel.Dock="Right" FontSize="11" Foreground="{DynamicResource TextMutedBrush}" VerticalAlignment="Center" Margin="10,0,0,0"/>
                                         <Slider x:Name="SeekSlider" Minimum="0" Maximum="{Binding DurationSeconds}" Value="{Binding PositionSeconds, Mode=OneWay}" IsEnabled="{Binding CanSeek}" PreviewMouseLeftButtonUp="Seek_Completed" KeyUp="Seek_KeyUp" AutomationProperties.Name="Posición del contenido"/>
                                     </DockPanel>
-                                    <Grid>
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="Auto"/>
-                                            <ColumnDefinition Width="*"/>
-                                            <ColumnDefinition Width="Auto"/>
-                                        </Grid.ColumnDefinitions>
-                                        <WrapPanel Grid.Column="0" VerticalAlignment="Center">
+                                    <StackPanel>
+                                        <TextBlock x:Name="ControlsMediaTitle" Text="{Binding NowPlaying}" FontWeight="SemiBold" FontSize="13" Foreground="{DynamicResource TextPrimaryBrush}" TextTrimming="CharacterEllipsis" ToolTip="{Binding NowPlaying}" Margin="2,0,2,6"/>
+                                        <WrapPanel x:Name="PlaybackActions" VerticalAlignment="Center">
                                             <ui:Button Click="TogglePlayPause_Click" ToolTip="{Binding PlayPauseToolTip}" AutomationProperties.Name="{Binding PlayPauseAction}" MinWidth="34" MinHeight="32" Padding="6,4" Margin="0,0,4,0">
                                                 <ui:SymbolIcon Symbol="{Binding PlayPauseSymbol}" FontSize="15"/>
                                             </ui:Button>
@@ -701,14 +706,11 @@
                                             <ui:Button x:Name="SeekForwardButton" Content="↻10" Click="SeekForward_Click" IsEnabled="{Binding CanSeek}" ToolTip="Adelantar 10 segundos (L)" AutomationProperties.Name="Adelantar 10 segundos" MinWidth="32" MinHeight="32" Padding="4,4" Margin="0,0,4,0"/>
                                             <ui:Button x:Name="StopButton" Content="⏹" Click="Stop_Click" ToolTip="Detener reproducción" AutomationProperties.Name="Detener" IsEnabled="{Binding CanStopPlayback}" MinWidth="30" MinHeight="32" Padding="4,4" Margin="0,0,6,0"/>
                                             <ToggleButton IsChecked="{Binding IsMuted, Mode=TwoWay}" ToolTip="Silenciar o activar sonido" AutomationProperties.Name="Silenciar" Background="Transparent" BorderThickness="0" MinWidth="30" MinHeight="32" Padding="4,4" VerticalAlignment="Center" Margin="0,0,4,0">
-                                                <ui:SymbolIcon Symbol="{Binding MuteSymbol}" FontSize="15" Foreground="{StaticResource TextMutedBrush}"/>
+                                                <ui:SymbolIcon Symbol="{Binding MuteSymbol}" FontSize="15" Foreground="{DynamicResource TextMutedBrush}"/>
                                             </ToggleButton>
-                                            <Slider x:Name="VolumeSlider" Width="56" Minimum="0" Maximum="100" Value="{Binding Volume, Mode=TwoWay}" TickFrequency="1" IsSnapToTickEnabled="True" VerticalAlignment="Center" Margin="0,0,4,0" AutomationProperties.Name="Volumen"/>
-                                            <TextBlock x:Name="VolumePercentageText" Text="{Binding VolumeLabel}" FontSize="11" Foreground="{StaticResource TextMutedBrush}" VerticalAlignment="Center" MinWidth="26" Margin="0,0,2,0" AutomationProperties.Name="Porcentaje de volumen"/>
-                                            <ui:Button x:Name="AmplificationButton" Content="{Binding AmplificationShortLabel}" Click="CycleAmplification_Click" ToolTip="{Binding AmplificationLabel, StringFormat=Amplificación de audio: {0} (0 a +6 dB)}" AutomationProperties.Name="Amplificación de audio" MinWidth="40" MinHeight="28" Padding="5,2" FontSize="11" Margin="2,0,2,0" VerticalAlignment="Center"/>
-                                        </WrapPanel>
-                                        <TextBlock Grid.Column="1" Text="{Binding NowPlaying}" FontWeight="SemiBold" FontSize="13" Foreground="{StaticResource TextPrimaryBrush}" HorizontalAlignment="Center" VerticalAlignment="Center" TextAlignment="Center" TextTrimming="CharacterEllipsis" ToolTip="{Binding NowPlaying}" Margin="6,0"/>
-                                        <WrapPanel Grid.Column="2" VerticalAlignment="Center" HorizontalAlignment="Right">
+                                            <Slider x:Name="VolumeSlider" Width="72" Minimum="0" Maximum="400" Value="{Binding Volume, Mode=TwoWay}" TickFrequency="5" IsSnapToTickEnabled="False" VerticalAlignment="Center" Margin="0,0,4,0" ToolTip="Volumen y Sound Booster (0% a 400%)" AutomationProperties.Name="Volumen"/>
+                                            <TextBlock x:Name="VolumePercentageText" Text="{Binding VolumeLabel}" FontSize="11" Foreground="{DynamicResource TextMutedBrush}" VerticalAlignment="Center" MinWidth="34" Margin="0,0,2,0" AutomationProperties.Name="Porcentaje de volumen"/>
+
                                             <ui:Button x:Name="EpisodeReturnControl" Click="BackToEpisodes_Click"
                                                        Visibility="{Binding IsImmersiveMode, Converter={StaticResource BooleanToVisibilityConverter}}"
                                                        ToolTip="{Binding ImmersiveReturnLabel}" AutomationProperties.Name="{Binding ImmersiveReturnLabel}"
@@ -721,30 +723,42 @@
                                             <ui:Button Click="Next_Click" ToolTip="Canal o episodio siguiente (→)" AutomationProperties.Name="Siguiente" MinWidth="30" MinHeight="32" Padding="4,4" Margin="0,0,6,0">
                                                 <ui:SymbolIcon Symbol="Next24" FontSize="14"/>
                                             </ui:Button>
-                                            <ui:SymbolIcon Symbol="Headphones24" ToolTip="Audio" AutomationProperties.Name="Audio" FontSize="14" VerticalAlignment="Center" Margin="0,0,4,0" Foreground="{StaticResource TextMutedBrush}"/>
+                                            <ui:SymbolIcon Symbol="Headphones24" ToolTip="Audio" AutomationProperties.Name="Audio" FontSize="14" VerticalAlignment="Center" Margin="0,0,4,0" Foreground="{DynamicResource TextMutedBrush}"/>
                                             <ComboBox x:Name="AudioTrackBox" Width="80" MinHeight="32" ItemsSource="{Binding AudioTracks}" SelectedItem="{Binding SelectedAudioTrack}" DisplayMemberPath="Name" DropDownClosed="AudioTrack_Changed" AutomationProperties.Name="Pista de audio" Margin="0,0,6,0"/>
-                                            <ui:SymbolIcon Symbol="ClosedCaption24" ToolTip="Subtítulos" AutomationProperties.Name="Subtítulos" FontSize="14" VerticalAlignment="Center" Margin="0,0,4,0" Foreground="{StaticResource TextMutedBrush}"/>
+                                            <ui:SymbolIcon Symbol="ClosedCaption24" ToolTip="Subtítulos" AutomationProperties.Name="Subtítulos" FontSize="14" VerticalAlignment="Center" Margin="0,0,4,0" Foreground="{DynamicResource TextMutedBrush}"/>
                                             <ComboBox x:Name="SubtitleTrackBox" Width="80" MinHeight="32" ItemsSource="{Binding SubtitleTracks}" SelectedItem="{Binding SelectedSubtitleTrack}" DisplayMemberPath="Name" DropDownClosed="SubtitleTrack_Changed" AutomationProperties.Name="Subtítulos" Margin="0,0,6,0"/>
-                                            <ComboBox Width="62" MinHeight="32" ItemsSource="{Binding AvailableFormats}" SelectedItem="{Binding SelectedFormat, Mode=TwoWay}" ToolTip="Formato de emisión" AutomationProperties.Name="Formato de reproducción" Margin="0,0,6,0"/>
+                                            <ComboBox x:Name="FormatBox" Width="62" MinHeight="32" ItemsSource="{Binding AvailableFormats}" SelectedItem="{Binding SelectedFormat, Mode=TwoWay}" DropDownClosed="Format_Changed" ToolTip="Formato de emisión (ts / m3u8)" AutomationProperties.Name="Formato de reproducción" Margin="0,0,6,0"/>
                                             <ui:Button Click="Retry_Click" ToolTip="Reintentar" AutomationProperties.Name="Reintentar" IsEnabled="{Binding CanRetryPlayback}" MinWidth="30" MinHeight="32" Padding="4,4" Margin="0,0,4,0">
                                                 <ui:SymbolIcon Symbol="ArrowSync24" FontSize="14"/>
+                                            </ui:Button>
+                                            <ui:Button x:Name="PlaybackPipButton" Click="TogglePictureInPicture_Click" ToolTip="Ventana flotante PiP (P)" AutomationProperties.Name="Ventana flotante PiP" MinWidth="32" MinHeight="32" Padding="4,4" Margin="0,0,4,0">
+                                                <ui:SymbolIcon Symbol="PictureInPicture24" FontSize="14"/>
                                             </ui:Button>
                                             <ui:Button Click="ToggleFullscreen_Click" ToolTip="Pantalla completa (F o doble clic)" AutomationProperties.Name="Pantalla completa" MinWidth="32" MinHeight="32" Padding="4,4">
                                                 <ui:SymbolIcon Symbol="FullScreenMaximize24" FontSize="14"/>
                                             </ui:Button>
                                         </WrapPanel>
-                                    </Grid>
+                                    </StackPanel>
                             </StackPanel>
-                                <WrapPanel x:Name="PipControls" Visibility="Collapsed">
-                                    <ui:Button Click="TogglePlayPause_Click" ToolTip="{Binding PlayPauseToolTip}" AutomationProperties.Name="{Binding PlayPauseAction}" Margin="0,0,6,0">
-                                        <ui:SymbolIcon Symbol="{Binding PlayPauseSymbol}" FontSize="14"/>
+                                <WrapPanel x:Name="PipControls" Visibility="Collapsed" VerticalAlignment="Center" HorizontalAlignment="Center">
+                                    <ui:Button Click="TogglePlayPause_Click" ToolTip="{Binding PlayPauseToolTip}" AutomationProperties.Name="{Binding PlayPauseAction}" MinWidth="28" MinHeight="26" Padding="4,2" Margin="0,0,4,0">
+                                        <ui:SymbolIcon Symbol="{Binding PlayPauseSymbol}" FontSize="13"/>
                                     </ui:Button>
-                                    <ui:Button Content="⏹" Click="Stop_Click" ToolTip="Detener reproducción" AutomationProperties.Name="Detener" IsEnabled="{Binding CanStopPlayback}" Margin="0,0,10,0"/>
-                                    <ToggleButton IsChecked="{Binding IsMuted, Mode=TwoWay}" ToolTip="Silenciar o activar sonido" AutomationProperties.Name="Silenciar" Background="Transparent" BorderThickness="0" VerticalAlignment="Center" Margin="0,0,12,0">
-                                        <ui:SymbolIcon Symbol="{Binding MuteSymbol}" FontSize="14" Foreground="{StaticResource TextMutedBrush}"/>
+                                    <ui:Button Click="Previous_Click" ToolTip="Anterior (←)" AutomationProperties.Name="Anterior" MinWidth="26" MinHeight="26" Padding="4,2" Margin="0,0,4,0">
+                                        <ui:SymbolIcon Symbol="Previous24" FontSize="12"/>
+                                    </ui:Button>
+                                    <ui:Button Click="Next_Click" ToolTip="Siguiente (→)" AutomationProperties.Name="Siguiente" MinWidth="26" MinHeight="26" Padding="4,2" Margin="0,0,4,0">
+                                        <ui:SymbolIcon Symbol="Next24" FontSize="12"/>
+                                    </ui:Button>
+                                    <ToggleButton IsChecked="{Binding IsMuted, Mode=TwoWay}" ToolTip="Silenciar o activar sonido" AutomationProperties.Name="Silenciar" Background="Transparent" BorderThickness="0" MinWidth="26" MinHeight="26" Padding="4,2" VerticalAlignment="Center" Margin="0,0,4,0">
+                                        <ui:SymbolIcon Symbol="{Binding MuteSymbol}" FontSize="13" Foreground="{DynamicResource TextMutedBrush}"/>
                                     </ToggleButton>
-                                    <ui:Button Click="Retry_Click" ToolTip="Reintentar" AutomationProperties.Name="Reintentar" IsEnabled="{Binding CanRetryPlayback}">
-                                        <ui:SymbolIcon Symbol="ArrowSync24" FontSize="14"/>
+                                    <ui:Button Content="⏹" Click="Stop_Click" ToolTip="Detener reproducción" AutomationProperties.Name="Detener" IsEnabled="{Binding CanStopPlayback}" MinWidth="26" MinHeight="26" Padding="4,2" Margin="0,0,4,0"/>
+                                    <ui:Button Click="Retry_Click" ToolTip="Reintentar" AutomationProperties.Name="Reintentar" IsEnabled="{Binding CanRetryPlayback}" MinWidth="26" MinHeight="26" Padding="4,2" Margin="0,0,4,0">
+                                        <ui:SymbolIcon Symbol="ArrowSync24" FontSize="12"/>
+                                    </ui:Button>
+                                    <ui:Button Click="TogglePictureInPicture_Click" ToolTip="Volver a ventana normal (Esc o doble clic)" AutomationProperties.Name="Volver a la ventana normal" MinWidth="26" MinHeight="26" Padding="4,2">
+                                        <ui:SymbolIcon Symbol="PictureInPicture24" FontSize="12"/>
                                     </ui:Button>
                                 </WrapPanel>
                             </Grid>
@@ -755,10 +769,10 @@
             <ScrollViewer x:Name="SettingsPage" VerticalScrollBarVisibility="Auto" Visibility="{Binding ShowSettings, Converter={StaticResource BooleanToVisibilityConverter}}">
                 <StackPanel Margin="8" MaxWidth="760">
                     <StackPanel Orientation="Horizontal" Margin="0,0,0,16">
-                        <ui:SymbolIcon Symbol="Settings24" FontSize="24" Foreground="{StaticResource AccentBrush}" Margin="0,0,10,0" VerticalAlignment="Center"/>
+                        <ui:SymbolIcon Symbol="Settings24" FontSize="24" Foreground="{DynamicResource AccentBrush}" Margin="0,0,10,0" VerticalAlignment="Center"/>
                         <TextBlock Text="Ajustes y cuentas" Style="{StaticResource TypographyPageTitle}" VerticalAlignment="Center"/>
                     </StackPanel>
-                    <Border Background="{StaticResource SurfaceBrush}" Padding="18" CornerRadius="10" Margin="0,0,0,14">
+                    <Border Background="{DynamicResource SurfaceBrush}" Padding="18" CornerRadius="10" Margin="0,0,0,14">
                         <StackPanel>
                             <TextBlock Text="Añadir o actualizar cuenta" FontSize="18" FontWeight="SemiBold" Margin="0,0,0,12"/>
                             <Grid>
@@ -792,10 +806,10 @@
                                 </ui:Button>
                                 <ui:Button Content="Guardar cuenta" Click="CreateProfile_Click" IsEnabled="{Binding CanConnect}"/>
                             </WrapPanel>
-                            <TextBlock Text="{Binding ProfileStatus}" TextWrapping="Wrap" Foreground="{StaticResource AccentBrush}" FontSize="12" Margin="0,10,0,0"/>
+                            <TextBlock Text="{Binding ProfileStatus}" TextWrapping="Wrap" Foreground="{DynamicResource AccentBrush}" FontSize="12" Margin="0,10,0,0"/>
                         </StackPanel>
                     </Border>
-                    <Border Background="{StaticResource SurfaceBrush}" Padding="18" CornerRadius="10" Margin="0,0,0,14">
+                    <Border Background="{DynamicResource SurfaceBrush}" Padding="18" CornerRadius="10" Margin="0,0,0,14">
                         <StackPanel>
                             <TextBlock Text="Mis cuentas guardadas y conexiones" FontSize="18" FontWeight="SemiBold" Margin="0,0,0,10"/>
                             <ListBox ItemsSource="{Binding Profiles}" SelectedItem="{Binding SelectedProfile, Mode=TwoWay}" MinHeight="56" MaxHeight="140" DisplayMemberPath="Name" AutomationProperties.Name="Cuentas guardadas"/>
@@ -826,14 +840,14 @@
                                 </ui:Button>
                             </WrapPanel>
                             <StackPanel Orientation="Horizontal" Margin="0,8,0,0">
-                                <TextBlock Text="Pantallas:" Foreground="{StaticResource TextMutedBrush}" FontSize="12" Margin="0,0,6,0"/>
-                                <TextBlock Text="{Binding ActiveConnectionsInfo}" Foreground="{StaticResource AccentBrush}" FontSize="12" Margin="0,0,16,0"/>
-                                <TextBlock Text="Vencimiento:" Foreground="{StaticResource TextMutedBrush}" FontSize="12" Margin="0,0,6,0"/>
-                                <TextBlock Text="{Binding AccountExpirationInfo}" Foreground="{StaticResource TextPrimaryBrush}" FontSize="12"/>
+                                <TextBlock Text="Pantallas:" Foreground="{DynamicResource TextMutedBrush}" FontSize="12" Margin="0,0,6,0"/>
+                                <TextBlock Text="{Binding ActiveConnectionsInfo}" Foreground="{DynamicResource AccentBrush}" FontSize="12" Margin="0,0,16,0"/>
+                                <TextBlock Text="Vencimiento:" Foreground="{DynamicResource TextMutedBrush}" FontSize="12" Margin="0,0,6,0"/>
+                                <TextBlock Text="{Binding AccountExpirationInfo}" Foreground="{DynamicResource TextPrimaryBrush}" FontSize="12"/>
                             </StackPanel>
                         </StackPanel>
                     </Border>
-                    <Border Background="{StaticResource SurfaceBrush}" Padding="18" CornerRadius="10" Margin="0,0,0,14">
+                    <Border Background="{DynamicResource SurfaceBrush}" Padding="18" CornerRadius="10" Margin="0,0,0,14">
                         <StackPanel>
                             <TextBlock Text="Guardar lista M3U/M3U8 como perfil" FontSize="18" FontWeight="SemiBold" Margin="0,0,0,10"/>
                             <Grid>
@@ -855,10 +869,10 @@
                             </ui:Button>
                         </StackPanel>
                     </Border>
-                    <Border Background="{StaticResource SurfaceBrush}" Padding="18" CornerRadius="10" Margin="0,0,0,14">
+                    <Border Background="{DynamicResource SurfaceBrush}" Padding="18" CornerRadius="10" Margin="0,0,0,14">
                         <StackPanel>
                             <TextBlock Text="Sincronización cifrada (casa y trabajo)" FontSize="18" FontWeight="SemiBold" Margin="0,0,0,6"/>
-                            <TextBlock Text="Transfiere tus favoritos e historial entre tus computadoras de forma segura. Se genera un paquete cifrado con tu clave, sin incluir contraseñas ni URLs de cuentas." TextWrapping="Wrap" FontSize="12" Foreground="{StaticResource TextMutedBrush}" Margin="0,0,0,12"/>
+                            <TextBlock Text="Transfiere tus favoritos e historial entre tus computadoras de forma segura. Se genera un paquete cifrado con tu clave, sin incluir contraseñas ni URLs de cuentas." TextWrapping="Wrap" FontSize="12" Foreground="{DynamicResource TextMutedBrush}" Margin="0,0,0,12"/>
                             <StackPanel Margin="0,0,0,12">
                                 <TextBlock Text="Contraseña de cifrado (mínimo 4 caracteres)" FontSize="12" Margin="0,0,0,4"/>
                                 <PasswordBox x:Name="SyncPasswordBox" MaxWidth="320" HorizontalAlignment="Left" MinHeight="36" AutomationProperties.Name="Contraseña de sincronización"/>
@@ -877,10 +891,10 @@
                                     </StackPanel>
                                 </ui:Button>
                             </WrapPanel>
-                            <TextBlock Text="{Binding SyncStatus}" TextWrapping="Wrap" Foreground="{StaticResource AccentBrush}" FontSize="12" Margin="0,10,0,0" Visibility="{Binding HasSyncStatus, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+                            <TextBlock Text="{Binding SyncStatus}" TextWrapping="Wrap" Foreground="{DynamicResource AccentBrush}" FontSize="12" Margin="0,10,0,0" Visibility="{Binding HasSyncStatus, Converter={StaticResource BooleanToVisibilityConverter}}"/>
                         </StackPanel>
                     </Border>
-                    <Border Background="{StaticResource SurfaceBrush}" Padding="18" CornerRadius="10" Margin="0,0,0,14">
+                    <Border Background="{DynamicResource SurfaceBrush}" Padding="18" CornerRadius="10" Margin="0,0,0,14">
                         <StackPanel>
                             <TextBlock Text="Personalización y atajos de teclado" FontSize="18" FontWeight="SemiBold" Margin="0,0,0,10"/>
                             <WrapPanel VerticalAlignment="Center" Margin="0,0,0,12">
@@ -904,10 +918,10 @@
                             </Expander>
                         </StackPanel>
                     </Border>
-                    <Border Background="{StaticResource SurfaceBrush}" Padding="18" CornerRadius="10" Margin="0,0,0,14">
+                    <Border Background="{DynamicResource SurfaceBrush}" Padding="18" CornerRadius="10" Margin="0,0,0,14">
                         <StackPanel>
                             <TextBlock Text="Control parental (protección con PIN)" FontSize="18" FontWeight="SemiBold" Margin="0,0,0,6"/>
-                            <TextBlock Text="Protege y oculta categorías para adultos (18+ / Adultos) en TV en vivo, películas y series mediante un PIN numérico seguro de 4 dígitos." TextWrapping="Wrap" FontSize="12" Foreground="{StaticResource TextMutedBrush}" Margin="0,0,0,12"/>
+                            <TextBlock Text="Protege y oculta categorías para adultos (18+ / Adultos) en TV en vivo, películas y series mediante un PIN numérico seguro de 4 dígitos." TextWrapping="Wrap" FontSize="12" Foreground="{DynamicResource TextMutedBrush}" Margin="0,0,0,12"/>
                             <StackPanel Margin="0,0,0,12">
                                 <TextBlock Text="PIN de 4 a 8 dígitos" FontSize="12" Margin="0,0,0,4"/>
                                 <PasswordBox x:Name="ParentalPasswordBox" MaxWidth="220" HorizontalAlignment="Left" MinHeight="36" AutomationProperties.Name="PIN parental"/>
@@ -933,10 +947,10 @@
                                 </ui:Button>
                                 <ui:Button Content="Desactivar control" Click="DisableParental_Click"/>
                             </WrapPanel>
-                            <TextBlock Text="{Binding ParentalStatus}" TextWrapping="Wrap" Foreground="{StaticResource AccentBrush}" FontSize="12" Margin="0,10,0,0" Visibility="{Binding HasParentalStatus, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+                            <TextBlock Text="{Binding ParentalStatus}" TextWrapping="Wrap" Foreground="{DynamicResource AccentBrush}" FontSize="12" Margin="0,10,0,0" Visibility="{Binding HasParentalStatus, Converter={StaticResource BooleanToVisibilityConverter}}"/>
                         </StackPanel>
                     </Border>
-                    <Border Background="{StaticResource SurfaceBrush}" Padding="18" CornerRadius="10" Margin="0,0,0,14">
+                    <Border Background="{DynamicResource SurfaceBrush}" Padding="18" CornerRadius="10" Margin="0,0,0,14">
                         <StackPanel>
                             <TextBlock Text="Preferencias de reproducción" FontSize="18" FontWeight="SemiBold" Margin="0,0,0,10"/>
                             <CheckBox x:Name="AutoPlayCheckBox" Content="Al abrir la app, reproducir automáticamente el último canal visto" IsChecked="{Binding AutoPlayLast, Mode=OneWay}" Click="AutoPlay_Click" IsEnabled="{Binding CanFavorite}" Margin="0,0,0,12"/>
@@ -945,10 +959,11 @@
                                 <ComboBox Width="220" ItemsSource="{Binding Displays, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" SelectedItem="{Binding SelectedDisplay, RelativeSource={RelativeSource AncestorType={x:Type Window}}, Mode=TwoWay}" DisplayMemberPath="Name" AutomationProperties.Name="Monitor para pantalla completa" Margin="0,0,16,6"/>
                                 <CheckBox Content="Modo video compatible (software)" IsChecked="{Binding SoftwareDecoding}" VerticalAlignment="Center" Margin="0,0,16,6"/>
                                 <TextBlock Text="Estabilidad (ms):" VerticalAlignment="Center" Margin="0,0,6,6"/>
-                                <TextBox Width="76" Text="{Binding BufferMilliseconds, ValidatesOnExceptions=True}" ToolTip="Tiempo de búfer (ej. 1500 ms)" AutomationProperties.Name="Búfer en milisegundos" Margin="0,0,16,6"/>
+                                <TextBox Width="76" Text="{Binding BufferMilliseconds, ValidatesOnExceptions=True}" ToolTip="Tiempo de búfer anticongelamiento (250 a 10000 ms)" AutomationProperties.Name="Búfer en milisegundos" Margin="0,0,8,6"/>
+                                <ui:Button Click="CycleStability_Click" Content="{Binding StabilityLabel}" ToolTip="Cambiar nivel de estabilidad para canales en vivo" AutomationProperties.Name="Nivel de estabilidad en vivo" Padding="10,4" Margin="0,0,16,6"/>
                                 <TextBlock Text="Amplificación:" VerticalAlignment="Center" Margin="0,0,8,6"/>
                                 <Slider x:Name="AmplificationSlider" Width="96" Minimum="0" Maximum="6" Value="{Binding AmplificationDb, Mode=TwoWay}" TickFrequency="1" IsSnapToTickEnabled="True" VerticalAlignment="Center" Margin="0,0,8,6" ToolTip="Amplificación segura con preamplificador nativo (0 dB normal, hasta +6 dB)" AutomationProperties.Name="Amplificación de audio en decibelios"/>
-                                <TextBlock x:Name="AmplificationValueText" Text="{Binding AmplificationLabel}" VerticalAlignment="Center" MinWidth="84" Foreground="{StaticResource AccentBrush}" FontSize="12" Margin="0,0,0,6"/>
+                                <TextBlock x:Name="AmplificationValueText" Text="{Binding AmplificationLabel}" VerticalAlignment="Center" MinWidth="84" Foreground="{DynamicResource AccentBrush}" FontSize="12" Margin="0,0,0,6"/>
                             </WrapPanel>
                         </StackPanel>
                     </Border>
@@ -984,7 +999,7 @@
                     </Expander>
                 </StackPanel>
             </ScrollViewer>
-            <Border x:Name="StatusBar" Grid.Row="1" Padding="10" Background="{StaticResource SurfaceBrush}" CornerRadius="8" Margin="0,12,0,0">
+            <Border x:Name="StatusBar" Grid.Row="1" Padding="10" Background="{DynamicResource SurfaceBrush}" CornerRadius="8" Margin="0,12,0,0">
                 <TextBlock Text="{Binding FooterStatus}" TextWrapping="Wrap" FontSize="12" AutomationProperties.LiveSetting="Polite"/>
             </Border>
         </Grid>

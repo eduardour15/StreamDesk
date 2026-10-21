@@ -20,7 +20,7 @@ internal static class ViewerMigration
         CREATE TABLE ProfilePreferences (
             ProfileId TEXT PRIMARY KEY NOT NULL REFERENCES Profiles(Id) ON DELETE CASCADE,
             AutoPlayLast INTEGER NOT NULL DEFAULT 0 CHECK(AutoPlayLast IN (0,1)),
-            AmplificationDb INTEGER NOT NULL DEFAULT 0 CHECK(AmplificationDb BETWEEN 0 AND 6));
+            AmplificationDb INTEGER NOT NULL DEFAULT 0 CHECK(AmplificationDb BETWEEN 0 AND 20));
         CREATE TABLE AppPreferences (
             Id INTEGER PRIMARY KEY CHECK(Id=1), LastProfileId TEXT REFERENCES Profiles(Id) ON DELETE SET NULL);
         UPDATE SchemaVersion SET Version=3;

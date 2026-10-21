@@ -25,6 +25,7 @@ public interface IPlaybackService : IDisposable, IAsyncDisposable
 
 public enum PlaybackSignalKind { Playing, Buffering, Paused, Failed, Ended }
 public sealed record PlaybackSignal(long AttemptId, PlaybackSignalKind Kind, PlaybackFailure Failure = PlaybackFailure.None, float BufferPercent = 0);
+public sealed record PlaybackProgress(long PositionMilliseconds, long VideoFrames, long AudioBlocks, long LengthMilliseconds = 0);
 
 public interface IPlaybackBackend : IAsyncDisposable
 {
@@ -38,6 +39,7 @@ public interface IPlaybackBackend : IAsyncDisposable
     Task ResumeAsync() => Task.CompletedTask;
     Task SetAudioAsync(int volume, bool muted);
     Task SetAmplificationAsync(int amplificationDb) => Task.CompletedTask;
+    Task<PlaybackProgress?> ReadProgressAsync(CancellationToken cancellationToken) => Task.FromResult<PlaybackProgress?>(null);
     Task<MediaPlaybackDetails> ReadDetailsAsync(CancellationToken cancellationToken) => Task.FromResult(MediaPlaybackDetails.Empty);
     Task<bool> SeekAsync(long milliseconds, CancellationToken cancellationToken) => Task.FromResult(false);
     Task<bool> SelectTrackAsync(bool subtitles, int id, CancellationToken cancellationToken) => Task.FromResult(false);
@@ -45,5 +47,11 @@ public interface IPlaybackBackend : IAsyncDisposable
 
 public sealed record PlaybackPolicy(TimeSpan StartupTimeout, TimeSpan RetryDelay)
 {
+    public TimeSpan ProgressInterval { get; init; } = TimeSpan.FromSeconds(1);
+    public TimeSpan StallThreshold { get; init; } = TimeSpan.FromSeconds(4);
+    public TimeSpan StallTimeout { get; init; } = TimeSpan.FromSeconds(5);
+    public TimeSpan StableResetThreshold { get; init; } = TimeSpan.FromSeconds(60);
+    public int MaxRetries { get; init; } = 2;
+    public int RetryBufferStepMilliseconds { get; init; } = 1500;
     public static PlaybackPolicy Default { get; } = new(TimeSpan.FromSeconds(15), TimeSpan.FromSeconds(1));
 }

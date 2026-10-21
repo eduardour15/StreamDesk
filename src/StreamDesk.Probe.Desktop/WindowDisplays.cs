@@ -92,9 +92,27 @@ public sealed class WindowDisplays
 
     private void RestorePicturePlacement(Window window, nint handle)
     {
-        window.WindowStyle = _pictureStyle; window.ResizeMode = _pictureResize;
-        window.MinWidth = _minimumWidth; window.MinHeight = _minimumHeight; window.Topmost = _previousTopmost;
-        if (!SetWindowPlacement(handle, ref _pictureRestore)) throw new Win32Exception();
+        window.WindowStyle = _pictureStyle;
+        window.ResizeMode = _pictureResize;
+        window.MinWidth = _minimumWidth > 0 ? _minimumWidth : 760;
+        window.MinHeight = _minimumHeight > 0 ? _minimumHeight : 540;
+        window.Topmost = _previousTopmost;
+        if (_pictureRestore.Length != Marshal.SizeOf<Placement>())
+            _pictureRestore.Length = Marshal.SizeOf<Placement>();
+        if (_pictureRestore.ShowCommand is not (1 or 2 or 3))
+            _pictureRestore.ShowCommand = 1;
+        if (!SetWindowPlacement(handle, ref _pictureRestore))
+        {
+            window.WindowState = WindowState.Normal;
+        }
+        else if (_pictureRestore.ShowCommand == 3)
+        {
+            window.WindowState = WindowState.Maximized;
+        }
+        else
+        {
+            window.WindowState = WindowState.Normal;
+        }
     }
     [StructLayout(LayoutKind.Sequential)] private struct NativeRect { public int Left, Top, Right, Bottom; }
     [StructLayout(LayoutKind.Sequential)] private struct NativePoint { public int X, Y; }

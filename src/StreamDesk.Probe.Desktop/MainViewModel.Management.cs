@@ -1,4 +1,4 @@
-﻿using System.Collections.ObjectModel;
+using System.Collections.ObjectModel;
 using System.Security.Cryptography;
 using StreamDesk.Application;
 using StreamDesk.Probe.Core;
@@ -345,6 +345,12 @@ public sealed partial class MainViewModel
             _selectedTheme = settings.Theme;
             _selectedUiScale = settings.UiScale;
             _selectedLanguage = settings.Language;
+            var clampedBuffer = Math.Clamp(settings.BufferMilliseconds, 250, 10000);
+            var targetHardware = settings.SoftwareDecoding ? HardwareDecoding.Software : HardwareDecoding.Automatic;
+            _playbackService.Options = (_playbackService.Options with { BufferMilliseconds = clampedBuffer, Hardware = targetHardware }).Validate();
+            OnPropertyChanged(nameof(BufferMilliseconds));
+            OnPropertyChanged(nameof(StabilityLabel));
+            OnPropertyChanged(nameof(SoftwareDecoding));
             OnPropertyChanged(nameof(SelectedTheme));
             OnPropertyChanged(nameof(SelectedUiScale));
             OnPropertyChanged(nameof(SelectedLanguage));
@@ -366,7 +372,7 @@ public sealed partial class MainViewModel
 
     private async Task SavePreferencesAsync()
     {
-        if (_settingsService is null) return;
+        if (_settingsService is null || _disposed) return;
         try
         {
             var existing = await _settingsService.GetAppSettingsAsync(_shutdown.Token);
@@ -374,7 +380,9 @@ public sealed partial class MainViewModel
             {
                 Theme = SelectedTheme,
                 UiScale = SelectedUiScale,
-                Language = SelectedLanguage
+                Language = SelectedLanguage,
+                BufferMilliseconds = Math.Clamp(BufferMilliseconds, 250, 10000),
+                SoftwareDecoding = SoftwareDecoding
             };
             await _settingsService.SaveAppSettingsAsync(updated, _shutdown.Token);
         }

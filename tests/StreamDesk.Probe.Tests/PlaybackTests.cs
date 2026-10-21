@@ -167,6 +167,11 @@ public sealed class PlaybackTests
 
 internal sealed class ControlledBackend : IPlaybackBackend
 {
+    public PlaybackProgress? Progress { get; set; }
+    public TaskCompletionSource? ProgressGate { get; set; }
+    public int ProgressReads { get; private set; }
+    public async Task<PlaybackProgress?> ReadProgressAsync(CancellationToken token)
+    { token.ThrowIfCancellationRequested(); ProgressReads++; if (ProgressGate is { } gate) await gate.Task; return Progress; }
     public MediaPlaybackDetails Details { get; set; } = MediaPlaybackDetails.Empty;
     public long? Sought { get; private set; }
     public (bool Subtitles, int Id)? ChosenTrack { get; private set; }
@@ -182,6 +187,8 @@ internal sealed class ControlledBackend : IPlaybackBackend
     public int OpeningDelay { get; init; }
     public int Disposals { get; private set; }
     public (int, bool) Audio { get; private set; }
+    public TaskCompletionSource? AudioGate { get; set; }
+    public int AudioWrites { get; private set; }
     public int AmplificationDb { get; private set; }
     public object? PlayerHandle => _ready ? this : null;
     public bool IsReady => _ready;
@@ -195,7 +202,7 @@ internal sealed class ControlledBackend : IPlaybackBackend
         if (OpeningDelay > 0) await Task.Delay(OpeningDelay, token);
     }
     public Task StopAsync() { Interlocked.Exchange(ref _active, 0); return Task.CompletedTask; }
-    public Task SetAudioAsync(int volume, bool muted) { Audio = (volume, muted); return Task.CompletedTask; }
+    public async Task SetAudioAsync(int volume, bool muted) { AudioWrites++; if (AudioGate is { } gate) await gate.Task; Audio = (volume, muted); }
     public Task SetAmplificationAsync(int amplificationDb) { AmplificationDb = amplificationDb; return Task.CompletedTask; }
     public void Emit(PlaybackSignal value) => Signal?.Invoke(this, value);
     public ValueTask DisposeAsync() { Disposals++; _ready = false; Interlocked.Exchange(ref _active, 0); return ValueTask.CompletedTask; }

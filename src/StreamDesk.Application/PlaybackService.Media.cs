@@ -18,7 +18,15 @@ public sealed partial class PlaybackService
         {
             if (session is null || !Current(session) || !Snapshot.IsActive) return false;
             var details = await _backend.ReadDetailsAsync(cancellationToken).ConfigureAwait(false);
-            return details.CanSeek && details.LengthMilliseconds > 0 && await _backend.SeekAsync(Math.Clamp(milliseconds, 0, details.LengthMilliseconds), cancellationToken).ConfigureAwait(false);
+            if (!details.CanSeek || details.LengthMilliseconds <= 0) return false;
+            var sought = await _backend.SeekAsync(Math.Clamp(milliseconds, 0, details.LengthMilliseconds), cancellationToken).ConfigureAwait(false);
+            if (sought)
+            {
+                var wasStalled = session.SilentStall;
+                session.ResetProgress();
+                if (wasStalled) { session.CancelTimeout(); Publish(PlaybackState.Playing, session: session); }
+            }
+            return sought;
         }
         finally { _serial.Release(); }
     }

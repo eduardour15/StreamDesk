@@ -8,7 +8,7 @@ namespace StreamDesk.Probe.Playback;
 
 public sealed class LibVlcBackend : IPlaybackBackend
 {
-    public const int MaxAmplificationDb = 6;
+    public const int MaxAmplificationDb = 12;
     private static readonly object CoreSync = new();
     private Equalizer? _equalizer;
     private int _amplificationDb;
@@ -61,6 +61,17 @@ public sealed class LibVlcBackend : IPlaybackBackend
         media.AddOption(":network-caching=" + options.BufferMilliseconds);
         media.AddOption(":live-caching=" + options.BufferMilliseconds);
         media.AddOption(":file-caching=" + options.BufferMilliseconds);
+        if (!options.OnDemand)
+        {
+            media.AddOption(":clock-jitter=5000");
+            media.AddOption(":no-drop-late-frames");
+            media.AddOption(":no-skip-frames");
+            if (source.Scheme is "http" or "https")
+            {
+                media.AddOption(":http-reconnect");
+            }
+        }
+        media.AddOption(":avcodec-threads=0");
         media.AddOption(options.Hardware == HardwareDecoding.Software ? ":avcodec-hw=none" : ":avcodec-hw=d3d11va");
         if (options.OnDemand && options.StartPositionMilliseconds > 0)
             media.AddOption(":start-time=" + (options.StartPositionMilliseconds / 1000d).ToString(System.Globalization.CultureInfo.InvariantCulture));
@@ -112,6 +123,16 @@ public sealed class LibVlcBackend : IPlaybackBackend
     private void Buffering(object? sender, MediaPlayerBufferingEventArgs args) => Emit(PlaybackSignalKind.Buffering, percent: args.Cache);
     private void Failed(object? sender, EventArgs args) => Emit(PlaybackSignalKind.Failed, (PlaybackFailure)Volatile.Read(ref _failure));
     private void Ended(object? sender, EventArgs args) => Emit(PlaybackSignalKind.Ended);
+    public Task<PlaybackProgress?> ReadProgressAsync(CancellationToken token) => Task.Run<PlaybackProgress?>(() =>
+    {
+        token.ThrowIfCancellationRequested();
+        if (_player is null || _media is null || _disposed) return null;
+        var stats = _media.Statistics;
+        var videoFrames = stats.DisplayedPictures > 0 ? stats.DisplayedPictures : stats.DecodedVideo;
+        var audioBlocks = stats.PlayedAudioBuffers > 0 ? stats.PlayedAudioBuffers : stats.DecodedAudio;
+        var position = _player.Time > 0 ? _player.Time : (stats.DemuxReadBytes > 0 ? stats.DemuxReadBytes : _player.Time);
+        return new PlaybackProgress(position, videoFrames, audioBlocks, _player.Length);
+    }, token);
     public Task<MediaPlaybackDetails> ReadDetailsAsync(CancellationToken token) => Task.Run(() =>
     {
         token.ThrowIfCancellationRequested();

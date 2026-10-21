@@ -49,6 +49,7 @@ Ejecuta PLAY-UX-T02
 | Documento | Alcance | Invocación |
 |---|---|---|
 | [Reproductor inmersivo y series aleatorias](prompts/REPRODUCTOR_INMERSIVO_Y_SERIES_ALEATORIAS.md) | Modo inmersivo, episodios aleatorios, audio amplificado seguro e indicador de carga | `Ejecuta el prompt de reproductor inmersivo` |
+| [Optimización de fluidez y UX/UI](prompts/OPTIMIZACION_FLUIDEZ_UX_UI.md) | Análisis y optimización de búsquedas, reproducción, loaders, controles y recursos de las funciones existentes, sin añadir funciones | `Lee y ejecuta docs/prompts/OPTIMIZACION_FLUIDEZ_UX_UI.md` |
 
 ## Flujo recomendado
 

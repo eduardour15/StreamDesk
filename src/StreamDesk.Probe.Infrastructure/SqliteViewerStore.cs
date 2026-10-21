@@ -67,7 +67,7 @@ public sealed class SqliteViewerStore(string path, bool pooling = true) : IViewe
     public Task SetAmplificationAsync(string profileId, int amplificationDb, CancellationToken cancellationToken = default) => Task.Run(() =>
     {
         cancellationToken.ThrowIfCancellationRequested();
-        var clamped = Math.Clamp(amplificationDb, 0, 6);
+        var clamped = Math.Clamp(amplificationDb, 0, 12);
         using var connection = Open();
         EnsureAmplificationColumn(connection, transaction: null);
         using var command = connection.CreateCommand();
@@ -82,7 +82,7 @@ public sealed class SqliteViewerStore(string path, bool pooling = true) : IViewe
         using var reader = command.ExecuteReader();
         if (!reader.Read()) return (false, 0);
         var autoPlay = !reader.IsDBNull(0) && reader.GetInt64(0) == 1;
-        var amp = reader.FieldCount > 1 && !reader.IsDBNull(1) ? Math.Clamp(reader.GetInt32(1), 0, 6) : 0;
+        var amp = reader.FieldCount > 1 && !reader.IsDBNull(1) ? Math.Clamp(reader.GetInt32(1), 0, 12) : 0;
         return (autoPlay, amp);
     }
 
@@ -90,24 +90,30 @@ public sealed class SqliteViewerStore(string path, bool pooling = true) : IViewe
     {
         using var check = connection.CreateCommand();
         check.Transaction = transaction;
-        check.CommandText = "PRAGMA table_info(ProfilePreferences);";
-        var hasAmplificationDb = false;
-        using (var reader = check.ExecuteReader())
+        check.CommandText = "SELECT sql FROM sqlite_master WHERE type='table' AND name='ProfilePreferences';";
+        var sql = check.ExecuteScalar() as string ?? string.Empty;
+        if (sql.Contains("BETWEEN 0 AND 6", StringComparison.OrdinalIgnoreCase))
         {
-            while (reader.Read())
-            {
-                if (string.Equals(reader.GetString(1), "AmplificationDb", StringComparison.OrdinalIgnoreCase))
-                {
-                    hasAmplificationDb = true;
-                    break;
-                }
-            }
+            using var migrate = connection.CreateCommand();
+            migrate.Transaction = transaction;
+            migrate.CommandText = """
+                CREATE TABLE IF NOT EXISTS ProfilePreferences_new (
+                    ProfileId TEXT PRIMARY KEY NOT NULL REFERENCES Profiles(Id) ON DELETE CASCADE,
+                    AutoPlayLast INTEGER NOT NULL DEFAULT 0 CHECK(AutoPlayLast IN (0,1)),
+                    AmplificationDb INTEGER NOT NULL DEFAULT 0 CHECK(AmplificationDb BETWEEN 0 AND 20)
+                );
+                INSERT INTO ProfilePreferences_new (ProfileId, AutoPlayLast, AmplificationDb)
+                    SELECT ProfileId, AutoPlayLast, AmplificationDb FROM ProfilePreferences;
+                DROP TABLE ProfilePreferences;
+                ALTER TABLE ProfilePreferences_new RENAME TO ProfilePreferences;
+                """;
+            migrate.ExecuteNonQuery();
         }
-        if (!hasAmplificationDb)
+        else if (!sql.Contains("AmplificationDb", StringComparison.OrdinalIgnoreCase))
         {
             using var alter = connection.CreateCommand();
             alter.Transaction = transaction;
-            alter.CommandText = "ALTER TABLE ProfilePreferences ADD COLUMN AmplificationDb INTEGER NOT NULL DEFAULT 0 CHECK(AmplificationDb BETWEEN 0 AND 6);";
+            alter.CommandText = "ALTER TABLE ProfilePreferences ADD COLUMN AmplificationDb INTEGER NOT NULL DEFAULT 0 CHECK(AmplificationDb BETWEEN 0 AND 20);";
             alter.ExecuteNonQuery();
         }
     }

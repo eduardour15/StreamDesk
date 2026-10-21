@@ -14,6 +14,7 @@ public sealed class ShortcutTests
     [InlineData(Key.F, PlaybackShortcut.Fullscreen)]
     [InlineData(Key.M, PlaybackShortcut.Mute)]
     [InlineData(Key.P, PlaybackShortcut.PictureInPicture)]
+    [InlineData(Key.B, PlaybackShortcut.CycleBooster)]
     public void ShortcutsRespectEditingModifiersAndOtherPages(Key key, PlaybackShortcut expected)
     {
         Assert.Equal(expected, PlaybackShortcuts.Resolve(key, ModifierKeys.None, false, false, true));

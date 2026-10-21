@@ -7,6 +7,8 @@ public sealed partial class MainViewModel
 {
     private readonly IContentStore? _contentStore;
     private MediaCatalog? _movies, _series, _episodes;
+    private MediaCatalogSearch? _movieIndex, _seriesIndex;
+    private bool _isMediaFiltering;
     private MediaItem? _selectedMedia, _selectedEpisode, _selectedDetails;
     private XtreamCategory? _mediaCategory, _season;
     private string _mediaSearch = "", _mediaCategorySearch = "", _contentStatus = "Explora películas y series de tu cuenta.", _epgStatus = "Elige un canal para ver su programación.";
@@ -75,7 +77,15 @@ public sealed partial class MainViewModel
     public string HeaderSummary => ShowLiveCatalog ? CatalogSummary : ShowContinueWatching ? $"{ContinueWatching.Count} en curso" : $"{MediaItems.Count} títulos";
     public bool HasMovies => _movies?.Items.Count > 0;
     public bool HasSeries => _series?.Items.Count > 0;
-    public bool HasNoMediaItems => ShowMediaBrowse && MediaItems.Count == 0 && !ContentBusy;
+    public bool HasNoMediaItems => ShowMediaBrowse && MediaItems.Count == 0 && !ContentBusy && !IsMediaFiltering;
+    public string MediaEmptyMessage => HasMediaSearch || !string.IsNullOrEmpty(MediaCategory?.Id)
+        ? "No encontramos títulos con estos filtros. Prueba otro nombre o selecciona Ver todos."
+        : "No hay títulos guardados. Usa Películas/Series para cargar el catálogo de tu cuenta.";
+    public bool IsMediaFiltering
+    {
+        get => _isMediaFiltering;
+        private set { if (SetProperty(ref _isMediaFiltering, value)) OnPropertyChanged(nameof(HasNoMediaItems)); }
+    }
     public bool ContentBusy { get => _contentBusy; private set { if (SetProperty(ref _contentBusy, value)) { OnPropertyChanged(nameof(IsWorking)); OnPropertyChanged(nameof(HasNoMediaItems)); OnPropertyChanged(nameof(CanPlayRandomEpisode)); } } }
     public string ContentStatus
     {
@@ -154,6 +164,7 @@ public sealed partial class MainViewModel
             if (SetProperty(ref _mediaSearch, value))
             {
                 OnPropertyChanged(nameof(HasMediaSearch));
+                OnPropertyChanged(nameof(MediaEmptyMessage));
                 _ = FilterMediaAsync(true);
             }
         }
@@ -231,24 +242,31 @@ public sealed partial class MainViewModel
     {
         if (_disposed) return;
         _mediaFilter?.Cancel(); using var request = CancellationTokenSource.CreateLinkedTokenSource(_shutdown.Token, _session.Token); _mediaFilter = request;
-        var catalog = CurrentTabIndex == 6 ? _series : _movies; var query = CatalogSearch.Normalize(MediaSearch); var category = MediaCategory?.Id;
+        var tab = CurrentTabIndex; var version = _sessionVersion;
+        var catalog = tab == 6 ? _series : _movies; var query = MediaSearch; var category = MediaCategory?.Id;
+        var index = tab == 6 ? _seriesIndex : _movieIndex;
         var restrictedCatIds = _parentalControl?.IsLocked == true
             ? (catalog?.Categories ?? []).Where(c => _parentalControl.IsRestrictedCategory(c.Name)).Select(c => c.Id).ToHashSet(StringComparer.OrdinalIgnoreCase)
             : null;
         try
         {
-            if (debounce) await Task.Delay(180, request.Token);
-            var matches = await Task.Run(() => (catalog?.Items ?? []).Where(item =>
+            IsMediaFiltering = ShowMediaCatalog;
+            if (debounce) await Task.Delay(120, request.Token);
+            var matches = await Task.Run(() =>
             {
-                request.Token.ThrowIfCancellationRequested();
-                if (restrictedCatIds is not null && restrictedCatIds.Contains(item.CategoryId ?? "")) return false;
-                return (string.IsNullOrEmpty(category) || item.CategoryId == category) && CatalogSearch.Normalize(item.Name).Contains(query, StringComparison.Ordinal);
-            }).ToArray(), request.Token);
-            if (!ReferenceEquals(_mediaFilter, request) || _disposed) return;
+                if (catalog is null) return (IReadOnlyList<MediaItem>)Array.Empty<MediaItem>();
+                if (!ReferenceEquals(index?.Catalog, catalog)) index = new MediaCatalogSearch(catalog, request.Token);
+                return index!.Filter(query, category, restrictedCatIds, request.Token);
+            }, request.Token);
+            request.Token.ThrowIfCancellationRequested();
+            if (!ReferenceEquals(_mediaFilter, request) || _disposed || version != _sessionVersion || tab != CurrentTabIndex) return;
+            if (tab == 6) _seriesIndex = index; else _movieIndex = index;
+            OnPropertyChanged(nameof(MediaEmptyMessage));
             MediaItems = matches; OnPropertyChanged(nameof(MediaItems)); OnPropertyChanged(nameof(HasNoMediaItems)); OnPropertyChanged(nameof(HeaderSummary));
         }
         catch (OperationCanceledException) { }
-        finally { if (ReferenceEquals(_mediaFilter, request)) _mediaFilter = null; }
+        catch (Exception error) { _logger.LogError("content_filter", error); }
+        finally { if (ReferenceEquals(_mediaFilter, request)) { _mediaFilter = null; IsMediaFiltering = false; } }
     }
 
     private async Task LoadMediaDetailsAsync(MediaItem? item)
@@ -405,16 +423,25 @@ public sealed partial class MainViewModel
         catch (Exception error) { _logger.LogError("content_position", error); }
         finally { _mediaCapture.Release(); }
     }
-    public async Task RefreshPlaybackDetailsAsync()
+    public async Task RefreshPlaybackDetailsAsync(bool periodicTimer = false)
     {
         UpdateEpgLabels();
         if (_disposed || !_playbackService.HasActiveMedia) return;
         if (_mediaWatch is not null) { await CaptureMediaAsync(); return; }
+        var activeWatch = _watch;
+        if (periodicTimer && activeWatch is not null && activeWatch.LiveDetailsLoaded && _playback.State == PlaybackState.Playing)
+            return;
         var version = _sessionVersion; var channel = _playingChannelId;
         try
         {
             var details = await _playbackService.ReadDetailsAsync(_session.Token);
-            if (!_disposed && version == _sessionVersion && channel == _playingChannelId && _mediaWatch is null) { _mediaDetails = details; NotifyMediaDetails(); }
+            if (!_disposed && version == _sessionVersion && channel == _playingChannelId && _mediaWatch is null)
+            {
+                _mediaDetails = details;
+                if (activeWatch is not null && _playback.State == PlaybackState.Playing && details.AudioTracks.Count > 0)
+                    activeWatch.LiveDetailsLoaded = true;
+                NotifyMediaDetails();
+            }
         }
         catch (OperationCanceledException) { }
         catch (Exception error) { _logger.LogError("playback_details", error); }
@@ -462,11 +489,34 @@ public sealed partial class MainViewModel
         catch (OperationCanceledException) { }
         catch (Exception error) { _logger.LogError("media_track", error); ContentStatus = "No se pudo cambiar el idioma o subtítulo."; }
     }
+    private MediaPlaybackDetails _notifiedMediaDetails = MediaPlaybackDetails.Empty;
     private void NotifyMediaDetails()
     {
-        SelectedAudioTrack = AudioTracks.FirstOrDefault(item => item.Id == _mediaDetails.AudioTrack);
-        SelectedSubtitleTrack = SubtitleTracks.FirstOrDefault(item => item.Id == _mediaDetails.SubtitleTrack);
-        foreach (var name in new[] { nameof(AudioTracks), nameof(SubtitleTracks), nameof(SelectedAudioTrack), nameof(SelectedSubtitleTrack), nameof(CanSeek), nameof(DurationSeconds), nameof(PositionSeconds), nameof(PositionLabel) }) OnPropertyChanged(name);
+        var previous = _notifiedMediaDetails;
+        var audioChanged = !previous.AudioTracks.SequenceEqual(_mediaDetails.AudioTracks);
+        var subtitlesChanged = !previous.SubtitleTracks.SequenceEqual(_mediaDetails.SubtitleTracks);
+        _mediaDetails = _mediaDetails with
+        {
+            AudioTracks = audioChanged ? _mediaDetails.AudioTracks : previous.AudioTracks,
+            SubtitleTracks = subtitlesChanged ? _mediaDetails.SubtitleTracks : previous.SubtitleTracks
+        };
+        if (audioChanged) OnPropertyChanged(nameof(AudioTracks));
+        if (subtitlesChanged) OnPropertyChanged(nameof(SubtitleTracks));
+        if (audioChanged || previous.AudioTrack != _mediaDetails.AudioTrack)
+        {
+            SelectedAudioTrack = AudioTracks.FirstOrDefault(item => item.Id == _mediaDetails.AudioTrack);
+            OnPropertyChanged(nameof(SelectedAudioTrack));
+        }
+        if (subtitlesChanged || previous.SubtitleTrack != _mediaDetails.SubtitleTrack)
+        {
+            SelectedSubtitleTrack = SubtitleTracks.FirstOrDefault(item => item.Id == _mediaDetails.SubtitleTrack);
+            OnPropertyChanged(nameof(SelectedSubtitleTrack));
+        }
+        OnPropertyChanged(nameof(CanSeek));
+        if (previous.LengthMilliseconds != _mediaDetails.LengthMilliseconds) OnPropertyChanged(nameof(DurationSeconds));
+        if (previous.TimeMilliseconds != _mediaDetails.TimeMilliseconds) OnPropertyChanged(nameof(PositionSeconds));
+        if (previous.TimeMilliseconds != _mediaDetails.TimeMilliseconds || previous.LengthMilliseconds != _mediaDetails.LengthMilliseconds) OnPropertyChanged(nameof(PositionLabel));
+        _notifiedMediaDetails = _mediaDetails;
     }
     private void NotifyContent()
     {
@@ -477,6 +527,7 @@ public sealed partial class MainViewModel
     {
         _detailRequest?.Cancel(); _mediaFilter?.Cancel(); _epgRequest?.Cancel();
         _movies = _series = _episodes = null; _progress = []; _selectedMedia = _selectedEpisode = _selectedDetails = null; _season = _mediaCategory = null; _isImmersiveMode = false; _randomCyclePlayedKeys.Clear();
+        _movieIndex = _seriesIndex = null; IsMediaFiltering = false;
         MediaItems = []; _mediaDetails = MediaPlaybackDetails.Empty;
         ContentStatus = "Explora películas y series de tu cuenta."; EpgStatus = "Elige un canal para ver su programación.";
         NotifyContent(); NotifyMediaDetails(); OnPropertyChanged(nameof(MediaItems)); OnPropertyChanged(nameof(HasNoMediaItems)); OnPropertyChanged(nameof(SelectedMedia)); OnPropertyChanged(nameof(MediaDescription)); OnPropertyChanged(nameof(MediaPosterUrl)); OnPropertyChanged(nameof(MediaCategoryLabel)); OnPropertyChanged(nameof(SeriesSummary)); OnPropertyChanged(nameof(Seasons)); OnPropertyChanged(nameof(Episodes));

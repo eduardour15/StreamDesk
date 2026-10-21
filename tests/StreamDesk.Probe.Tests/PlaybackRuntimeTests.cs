@@ -60,7 +60,8 @@ public sealed class PlaybackRuntimeTests
         var memory = Marshal.AllocHGlobal(16 * 16 * 4 + 31);
         var aligned = new nint((memory.ToInt64() + 31) & ~31L);
         var frames = 0; var pixelValue = 0;
-        var service = new PlaybackService(new LibVlcBackend()) { Options = new(250, HardwareDecoding.Software), Volume = 0 };
+        var nativeBackend = new LibVlcBackend();
+        var service = new PlaybackService(nativeBackend) { Options = new(250, HardwareDecoding.Software), Volume = 0 };
         try
         {
             await service.InitializeAsync();
@@ -76,6 +77,15 @@ public sealed class PlaybackRuntimeTests
                 await PlaybackTests.UntilAsync(() => Volatile.Read(ref frames) > previous);
                 Assert.Equal(32 | (192 << 8) | ((64 + index) << 16), Volatile.Read(ref pixelValue) & 0x00FFFFFF);
                 Assert.Same(player, service.PlayerHandle);
+                if (index == 0)
+                {
+                    // Some input modules (including still images) do not publish media stats.
+                    // Their running media clock remains usable without comparing picture pixels.
+                    await PlaybackTests.UntilAsync(() => player.Time > 0);
+                    var progress = await nativeBackend.ReadProgressAsync(CancellationToken.None);
+                    Assert.NotNull(progress);
+                    Assert.True(progress!.PositionMilliseconds > 0);
+                }
             }
             await service.StopAsync(); Assert.False(service.HasActiveMedia);
             await service.DisposeAsync(); Assert.Null(service.PlayerHandle);

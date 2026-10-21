@@ -142,28 +142,58 @@ public sealed class SqliteSettingsService : ISettingsService
             await command.ExecuteNonQueryAsync(cancellationToken);
         }
         await EnsureAmplificationColumnAsync(command, cancellationToken);
+        await EnsurePlaybackSettingsColumnsAsync(command, cancellationToken);
         await transaction.CommitAsync(cancellationToken);
+    }
+
+    private static async Task EnsurePlaybackSettingsColumnsAsync(SqliteCommand command, CancellationToken cancellationToken)
+    {
+        var hasBuffer = false;
+        var hasSoftware = false;
+        command.CommandText = "PRAGMA table_info(AppSettings);";
+        await using (var reader = await command.ExecuteReaderAsync(cancellationToken))
+        {
+            while (await reader.ReadAsync(cancellationToken))
+            {
+                var col = reader.GetString(1);
+                if (string.Equals(col, "BufferMilliseconds", StringComparison.OrdinalIgnoreCase)) hasBuffer = true;
+                else if (string.Equals(col, "SoftwareDecoding", StringComparison.OrdinalIgnoreCase)) hasSoftware = true;
+            }
+        }
+        if (!hasBuffer)
+        {
+            command.CommandText = "ALTER TABLE AppSettings ADD COLUMN BufferMilliseconds INTEGER NOT NULL DEFAULT 3500;";
+            await command.ExecuteNonQueryAsync(cancellationToken);
+        }
+        if (!hasSoftware)
+        {
+            command.CommandText = "ALTER TABLE AppSettings ADD COLUMN SoftwareDecoding INTEGER NOT NULL DEFAULT 0;";
+            await command.ExecuteNonQueryAsync(cancellationToken);
+        }
     }
 
     private static async Task EnsureAmplificationColumnAsync(SqliteCommand command, CancellationToken cancellationToken)
     {
-        var hasAmplificationDb = false;
-        command.CommandText = "PRAGMA table_info(ProfilePreferences);";
-        await using (var prefReader = await command.ExecuteReaderAsync(cancellationToken))
+        command.CommandText = "SELECT sql FROM sqlite_master WHERE type='table' AND name='ProfilePreferences';";
+        var sql = await command.ExecuteScalarAsync(cancellationToken) as string ?? string.Empty;
+        if (sql.Contains("BETWEEN 0 AND 6", StringComparison.OrdinalIgnoreCase))
         {
-            while (await prefReader.ReadAsync(cancellationToken))
-            {
-                if (string.Equals(prefReader.GetString(1), "AmplificationDb", StringComparison.OrdinalIgnoreCase))
-                {
-                    hasAmplificationDb = true;
-                    break;
-                }
-            }
+            command.CommandText = """
+                CREATE TABLE IF NOT EXISTS ProfilePreferences_new (
+                    ProfileId TEXT PRIMARY KEY NOT NULL REFERENCES Profiles(Id) ON DELETE CASCADE,
+                    AutoPlayLast INTEGER NOT NULL DEFAULT 0 CHECK(AutoPlayLast IN (0,1)),
+                    AmplificationDb INTEGER NOT NULL DEFAULT 0 CHECK(AmplificationDb BETWEEN 0 AND 20)
+                );
+                INSERT INTO ProfilePreferences_new (ProfileId, AutoPlayLast, AmplificationDb)
+                    SELECT ProfileId, AutoPlayLast, AmplificationDb FROM ProfilePreferences;
+                DROP TABLE ProfilePreferences;
+                ALTER TABLE ProfilePreferences_new RENAME TO ProfilePreferences;
+                """;
+            await command.ExecuteNonQueryAsync(cancellationToken);
         }
-
-        if (!hasAmplificationDb)
+        else if (!sql.Contains("AmplificationDb", StringComparison.OrdinalIgnoreCase))
         {
-            command.CommandText = "ALTER TABLE ProfilePreferences ADD COLUMN AmplificationDb INTEGER NOT NULL DEFAULT 0 CHECK(AmplificationDb BETWEEN 0 AND 6);";
+            command.CommandText = "ALTER TABLE ProfilePreferences ADD COLUMN AmplificationDb INTEGER NOT NULL DEFAULT 0 CHECK(AmplificationDb BETWEEN 0 AND 20);";
             await command.ExecuteNonQueryAsync(cancellationToken);
         }
     }
@@ -233,17 +263,22 @@ public sealed class SqliteSettingsService : ISettingsService
         await using var connection = new SqliteConnection(_connectionString);
         await connection.OpenAsync(cancellationToken);
         await using var command = connection.CreateCommand();
-        command.CommandText = "SELECT Theme, UiScale, Language, ParentalControlEnabled, ParentalPinHash, ParentalPinSalt FROM AppSettings WHERE Id = 1;";
+        command.CommandText = "SELECT Theme, UiScale, Language, ParentalControlEnabled, ParentalPinHash, ParentalPinSalt, BufferMilliseconds, SoftwareDecoding FROM AppSettings WHERE Id = 1;";
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
         if (await reader.ReadAsync(cancellationToken))
         {
+            var rawBuffer = reader.FieldCount > 6 && !reader.IsDBNull(6) ? reader.GetInt32(6) : 3500;
+            var clampedBuffer = Math.Clamp(rawBuffer, 250, 10000);
+            var software = reader.FieldCount > 7 && !reader.IsDBNull(7) && reader.GetInt32(7) == 1;
             return new AppSettings(
                 Theme: reader.GetString(0),
                 UiScale: reader.GetString(1),
                 Language: reader.GetString(2),
                 ParentalControlEnabled: reader.GetInt32(3) == 1,
                 ParentalPinHash: reader.IsDBNull(4) ? null : reader.GetString(4),
-                ParentalPinSalt: reader.IsDBNull(5) ? null : reader.GetString(5));
+                ParentalPinSalt: reader.IsDBNull(5) ? null : reader.GetString(5),
+                BufferMilliseconds: clampedBuffer,
+                SoftwareDecoding: software);
         }
         return new AppSettings();
     }
@@ -254,15 +289,17 @@ public sealed class SqliteSettingsService : ISettingsService
         await connection.OpenAsync(cancellationToken);
         await using var command = connection.CreateCommand();
         command.CommandText = """
-            INSERT INTO AppSettings (Id, Theme, UiScale, Language, ParentalControlEnabled, ParentalPinHash, ParentalPinSalt)
-            VALUES (1, $theme, $scale, $lang, $parental, $pinHash, $pinSalt)
+            INSERT INTO AppSettings (Id, Theme, UiScale, Language, ParentalControlEnabled, ParentalPinHash, ParentalPinSalt, BufferMilliseconds, SoftwareDecoding)
+            VALUES (1, $theme, $scale, $lang, $parental, $pinHash, $pinSalt, $buffer, $software)
             ON CONFLICT(Id) DO UPDATE SET
                 Theme = excluded.Theme,
                 UiScale = excluded.UiScale,
                 Language = excluded.Language,
                 ParentalControlEnabled = excluded.ParentalControlEnabled,
                 ParentalPinHash = excluded.ParentalPinHash,
-                ParentalPinSalt = excluded.ParentalPinSalt;
+                ParentalPinSalt = excluded.ParentalPinSalt,
+                BufferMilliseconds = excluded.BufferMilliseconds,
+                SoftwareDecoding = excluded.SoftwareDecoding;
             """;
         command.Parameters.AddWithValue("$theme", settings.Theme);
         command.Parameters.AddWithValue("$scale", settings.UiScale);
@@ -270,6 +307,8 @@ public sealed class SqliteSettingsService : ISettingsService
         command.Parameters.AddWithValue("$parental", settings.ParentalControlEnabled ? 1 : 0);
         command.Parameters.AddWithValue("$pinHash", (object?)settings.ParentalPinHash ?? DBNull.Value);
         command.Parameters.AddWithValue("$pinSalt", (object?)settings.ParentalPinSalt ?? DBNull.Value);
+        command.Parameters.AddWithValue("$buffer", Math.Clamp(settings.BufferMilliseconds, 250, 10000));
+        command.Parameters.AddWithValue("$software", settings.SoftwareDecoding ? 1 : 0);
         await command.ExecuteNonQueryAsync(cancellationToken);
     }
 }

@@ -156,6 +156,7 @@ public sealed partial class CatalogUiTests
             await VerifyNativeControlPlacementAsync(logos);
             await VerifyContentUiAsync(directory, logos);
             await VerifyPictureInPictureAsync(directory, logos);
+            await VerifyFluidityAsync(directory, logos);
         }
         finally { window.Close(); await WaitAsync(() => !window.IsVisible); }
     }
@@ -295,7 +296,7 @@ public sealed partial class CatalogUiTests
             vm.AmplificationDb = 4;
             await WaitAsync(() => nativeBackend.IsEqualizerEnabled && Math.Abs(nativeBackend.ActivePreampDb - 4f) < 0.05f);
             vm.AmplificationDb = 25;
-            await WaitAsync(() => nativeBackend.ActiveAmplificationDb == 6 && Math.Abs(nativeBackend.ActivePreampDb - 6f) < 0.05f);
+            await WaitAsync(() => nativeBackend.ActiveAmplificationDb == 12 && Math.Abs(nativeBackend.ActivePreampDb - 12f) < 0.05f);
             vm.AmplificationDb = 0;
             await WaitAsync(() => !nativeBackend.IsEqualizerEnabled && nativeBackend.ActiveAmplificationDb == 0);
             await VerifyNativePictureInPictureAsync(window, vm, player, db.Root);
@@ -360,7 +361,7 @@ public sealed partial class CatalogUiTests
             search.RaiseEvent(new KeyEventArgs(Keyboard.PrimaryDevice, PresentationSource.FromVisual(window), 0, Key.M) { RoutedEvent = Keyboard.PreviewKeyDownEvent });
             Assert.Equal(muted, vm.IsMuted);
             var controls = (FrameworkElement)window.FindName("PlayerControls");
-            await WaitAsync(() => controls.Visibility == Visibility.Collapsed);
+            await WaitAsync(() => controls.Visibility == Visibility.Hidden);
             ((UIElement)window.FindName("PlayerPane")).RaiseEvent(new MouseEventArgs(Mouse.PrimaryDevice, 0) { RoutedEvent = Mouse.MouseMoveEvent });
             Assert.Equal(Visibility.Visible, controls.Visibility);
             backend.Emit(new(backend.Opens.Last().Id, PlaybackSignalKind.Failed, PlaybackFailure.Forbidden));

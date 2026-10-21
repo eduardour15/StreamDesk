@@ -57,9 +57,10 @@ public sealed partial class MainViewModel
     public void UpdateEpgLabels()
     {
         var now = DateTimeOffset.UtcNow;
-        EpgNow = _epgPrograms.LastOrDefault(item => item.StartUtc <= now && item.EndUtc > now)?.Label ?? "Sin programación actual.";
-        EpgNext = _epgPrograms.FirstOrDefault(item => item.StartUtc > now)?.Label ?? "Sin programación siguiente.";
-        OnPropertyChanged(nameof(EpgNow)); OnPropertyChanged(nameof(EpgNext));
+        var current = _epgPrograms.LastOrDefault(item => item.StartUtc <= now && item.EndUtc > now)?.Label ?? "Sin programación actual.";
+        var next = _epgPrograms.FirstOrDefault(item => item.StartUtc > now)?.Label ?? "Sin programación siguiente.";
+        if (EpgNow != current) { EpgNow = current; OnPropertyChanged(nameof(EpgNow)); }
+        if (EpgNext != next) { EpgNext = next; OnPropertyChanged(nameof(EpgNext)); }
     }
 
     private void ClearEpgForPlaylist()

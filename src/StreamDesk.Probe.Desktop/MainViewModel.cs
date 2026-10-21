@@ -217,7 +217,9 @@ public sealed partial class MainViewModel : INotifyPropertyChanged, IDisposable,
     public Task PlaySelectedAsync() => ShowMediaCatalog || ShowContinueWatching ? PlayMediaAsync() : PlayChannelAsync(SelectedChannel);
     public Task RetryPlaybackAsync() => !CanRetryPlayback ? Task.CompletedTask : _mediaWatch is { } media ? PlayMediaItemAsync(media.Item) : PlayChannelAsync(_watch?.Channel);
 
-    private async Task PlayChannelAsync(XtreamChannel? channel)
+    private Task PlayChannelAsync(XtreamChannel? channel) => PlayChannelCoreAsync(channel, preserveAlternateFlag: false);
+
+    private async Task PlayChannelCoreAsync(XtreamChannel? channel, bool preserveAlternateFlag)
     {
         if (IsBusy || IsCatalogLoading || _disposed) return;
         if (channel is null) { StatusMessage = "Haz clic en un canal para reproducir."; return; }
@@ -255,7 +257,10 @@ public sealed partial class MainViewModel : INotifyPropertyChanged, IDisposable,
             _mediaDetails = MediaPlaybackDetails.Empty; NotifyMediaDetails();
             _playbackService.Options = _playbackService.Options with { OnDemand = false, StartPositionMilliseconds = 0 };
             _playingChannelId = channel.Id;
-            _watch = new WatchRequest(isPlaylistChannel ? null : _connectedProfileId, channel, version, _playbackService.Snapshot.Sequence);
+            _watch = new WatchRequest(isPlaylistChannel ? null : _connectedProfileId, channel, version, _playbackService.Snapshot.Sequence)
+            {
+                TriedAlternateFormat = preserveAlternateFlag
+            };
             OnPropertyChanged(nameof(PlayingChannelId));
             OnPropertyChanged(nameof(NowPlaying));
             IsImmersiveMode = true;

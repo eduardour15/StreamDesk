@@ -547,14 +547,17 @@ public sealed class UxOptimizationTests
             Assert.Equal("0 dB (Normal)", vm.AmplificationLabel);
             Assert.False(vm.IsAmplified);
 
-            // Nominal volume stays strictly 0..100
+            // Unified volume supports 0..400%
             vm.Volume = 150;
-            Assert.Equal(100, vm.Volume);
-            Assert.Equal("100%", vm.VolumeLabel);
+            Assert.Equal(150, vm.Volume);
+            Assert.Equal("150%", vm.VolumeLabel);
+            Assert.Equal(4, vm.AmplificationDb);
+            vm.Volume = 500;
+            Assert.Equal(400, vm.Volume);
             vm.Volume = -20;
             Assert.Equal(0, vm.Volume);
 
-            // Amplification clamps to 0..6 dB
+            // Amplification clamps to 0..12 dB
             vm.AmplificationDb = 4;
             Assert.Equal(4, vm.AmplificationDb);
             Assert.True(vm.IsAmplified);
@@ -562,8 +565,8 @@ public sealed class UxOptimizationTests
             await PlaybackTests.UntilAsync(() => backend.AmplificationDb == 4);
 
             vm.AmplificationDb = 99;
-            Assert.Equal(6, vm.AmplificationDb);
-            await PlaybackTests.UntilAsync(() => backend.AmplificationDb == 6);
+            Assert.Equal(12, vm.AmplificationDb);
+            await PlaybackTests.UntilAsync(() => backend.AmplificationDb == 12);
 
             vm.AmplificationDb = -5;
             Assert.Equal(0, vm.AmplificationDb);

@@ -11,6 +11,8 @@ public sealed partial class MainViewModel
     private CancellationTokenSource? _channelSwitchCts;
     private string _osdText = string.Empty;
     private bool _showOsd;
+    public static IReadOnlyList<int> BufferPresets { get; } = [1000, 2500, 3500, 5000, 8000, 10000];
+    public IReadOnlyList<int> AvailableBufferPresets => BufferPresets;
     public string? PlayingChannelId => _playingChannelId;
     public string OsdText { get => _osdText; private set => SetProperty(ref _osdText, value); }
     public bool ShowOsd { get => _showOsd; set => SetProperty(ref _showOsd, value); }
@@ -29,13 +31,14 @@ public sealed partial class MainViewModel
     public bool CanRetryPlayback => _playback.State == PlaybackState.Failed && !_playback.WillRetry;
     public bool IsPlaying => _playback.State == PlaybackState.Playing;
     public bool IsPaused => _playback.State == PlaybackState.Paused;
-    public bool CanStopPlayback => _playback.IsActive;
-    public bool IsVideoLoading => !_disposed && _playback.State is PlaybackState.Loading or PlaybackState.Buffering;
+    public bool CanStopPlayback => _playback.IsActive || _playback.WillRetry;
+    public bool IsVideoLoading => !_disposed && (_playback.State is PlaybackState.Loading or PlaybackState.Buffering || _playback.WillRetry);
     public bool HasVideoBufferPercent => _playback.State == PlaybackState.Buffering && _playback.BufferPercent is > 0f and < 100f;
     public int VideoBufferPercent => HasVideoBufferPercent ? (int)Math.Round(Math.Clamp(_playback.BufferPercent, 1f, 99f)) : 0;
     public bool IsVideoLoadingIndeterminate => IsVideoLoading && !HasVideoBufferPercent;
     public string VideoLoadingMessage => !IsVideoLoading
         ? string.Empty
+        : _playback.WillRetry ? "Esperando para recuperar la reproducción…"
         : _playback.State == PlaybackState.Loading
             ? "Abriendo transmisión…"
             : HasVideoBufferPercent
@@ -48,16 +51,17 @@ public sealed partial class MainViewModel
     private string CurrentPlaybackPrompt => ShowSeriesDetails
         ? SelectedEpisode?.Name ?? SelectedMedia?.Name ?? "Elige un episodio"
         : SelectedMedia?.Name ?? "Elige un título";
-    public string PlayPauseIcon => IsPlaying ? "⏸" : "▶";
-    public Wpf.Ui.Controls.SymbolRegular PlayPauseSymbol => IsPlaying ? Wpf.Ui.Controls.SymbolRegular.Pause24 : Wpf.Ui.Controls.SymbolRegular.Play24;
-    public string PlayPauseAction => IsPlaying ? "Pausar" : IsPaused ? "Reanudar" : "Reproducir";
-    public string PlayPauseToolTip => IsPlaying ? "Pausar (Espacio)" : IsPaused ? "Reanudar (Espacio)" : "Reproducir (Espacio)";
+    private bool CanPausePlayback => _playback.State is PlaybackState.Playing or PlaybackState.Buffering;
+    public string PlayPauseIcon => CanPausePlayback ? "⏸" : "▶";
+    public Wpf.Ui.Controls.SymbolRegular PlayPauseSymbol => CanPausePlayback ? Wpf.Ui.Controls.SymbolRegular.Pause24 : Wpf.Ui.Controls.SymbolRegular.Play24;
+    public string PlayPauseAction => CanPausePlayback ? "Pausar" : IsPaused ? "Reanudar" : "Reproducir";
+    public string PlayPauseToolTip => CanPausePlayback ? "Pausar (Espacio)" : IsPaused ? "Reanudar (Espacio)" : "Reproducir (Espacio)";
     public string PlayActionIcon => _playback.IsActive ? "⏹" : "▶";
     public string PlayAction => _playback.IsActive ? "Detener" : "Reproducir";
 
     public async Task TogglePlayPauseAsync()
     {
-        if (IsPlaying) { await _playbackService.PauseAsync(); TriggerOsd("En pausa"); }
+        if (CanPausePlayback) { await _playbackService.PauseAsync(); TriggerOsd("En pausa"); }
         else if (IsPaused) { await _playbackService.ResumeAsync(); TriggerOsd("Reproduciendo"); }
         else if (ShowMediaBrowse || ShowMovieDetails || ShowSeriesDetails) await PlayMediaAsync();
         else await PlaySelectedAsync();
@@ -68,10 +72,20 @@ public sealed partial class MainViewModel
         get => _playbackService.Volume;
         set
         {
-            _playbackService.Volume = value;
+            var clamped = Math.Clamp(value, 0, PlaybackService.MaxVolume);
+            var changed = _playbackService.Volume != clamped;
+            _playbackService.Volume = clamped;
             OnPropertyChanged();
             OnPropertyChanged(nameof(VolumeLabel));
-            TriggerOsd($"Volumen: {_playbackService.Volume}%");
+            NotifyAmplificationState();
+            var osd = clamped > 100
+                ? $"Volumen: {clamped}% (Booster: +{AmplificationDb} dB)"
+                : $"Volumen: {clamped}%";
+            TriggerOsd(osd);
+            if (changed)
+            {
+                QueueAmplificationSave(AmplificationDb);
+            }
         }
     }
     public bool IsMuted
@@ -95,21 +109,26 @@ public sealed partial class MainViewModel
             var clamped = Math.Clamp(value, 0, PlaybackService.MaxAmplificationDb);
             var changed = _playbackService.AmplificationDb != clamped;
             _playbackService.AmplificationDb = clamped;
+            OnPropertyChanged(nameof(Volume));
+            OnPropertyChanged(nameof(VolumeLabel));
             NotifyAmplificationState();
             if (changed)
             {
-                TriggerOsd(clamped == 0 ? "Amplificación: 0 dB (Normal)" : $"Amplificación: +{clamped} dB");
+                TriggerOsd(clamped == 0 ? "Amplificación: 0 dB (Normal)" : $"Amplificación: +{clamped} dB ({Volume}%)");
                 QueueAmplificationSave(clamped);
             }
         }
     }
-    public bool IsAmplified => AmplificationDb > 0;
+    public bool IsAmplified => AmplificationDb > 0 || Volume > 100;
     public string AmplificationLabel => AmplificationDb <= 0 ? "0 dB (Normal)" : $"+{AmplificationDb} dB";
-    public string AmplificationShortLabel => $"+{AmplificationDb} dB";
+    public string AmplificationShortLabel => AmplificationDb <= 0 ? "0 dB" : $"+{AmplificationDb} dB";
+    public string AmplificationDetailedLabel => AmplificationDb <= 0 ? "0 dB (Normal / 100%)" : $"+{AmplificationDb} dB ({Volume}%)";
     public void CycleAmplification() => AmplificationDb = AmplificationDb >= PlaybackService.MaxAmplificationDb ? 0 : AmplificationDb + 2;
     private void ApplyProfileAmplification(int amplificationDb)
     {
         _playbackService.AmplificationDb = Math.Clamp(amplificationDb, 0, PlaybackService.MaxAmplificationDb);
+        OnPropertyChanged(nameof(Volume));
+        OnPropertyChanged(nameof(VolumeLabel));
         NotifyAmplificationState();
     }
     private void NotifyAmplificationState()
@@ -118,6 +137,7 @@ public sealed partial class MainViewModel
         OnPropertyChanged(nameof(IsAmplified));
         OnPropertyChanged(nameof(AmplificationLabel));
         OnPropertyChanged(nameof(AmplificationShortLabel));
+        OnPropertyChanged(nameof(AmplificationDetailedLabel));
     }
     private void NotifyPlaybackLoadingState()
     {
@@ -130,12 +150,58 @@ public sealed partial class MainViewModel
     public int BufferMilliseconds
     {
         get => _playbackService.Options.BufferMilliseconds;
-        set { _playbackService.Options = (_playbackService.Options with { BufferMilliseconds = value }).Validate(); OnPropertyChanged(); }
+        set
+        {
+            var previous = _playbackService.Options.BufferMilliseconds;
+            _playbackService.Options = (_playbackService.Options with { BufferMilliseconds = value }).Validate();
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(StabilityLabel));
+            if (previous != value) _ = SavePreferencesAsync();
+        }
+    }
+    public string StabilityLabel => BufferMilliseconds switch
+    {
+        <= 1000 => $"Rápido ({BufferMilliseconds} ms)",
+        <= 2500 => $"Estable ({BufferMilliseconds} ms)",
+        <= 4000 => $"Antitrabas ({BufferMilliseconds} ms)",
+        <= 6000 => $"Antitrabas Plus ({BufferMilliseconds} ms)",
+        _ => $"Antitrabas Máximo ({BufferMilliseconds} ms)"
+    };
+    public async Task CycleStabilityPresetAsync()
+    {
+        var current = BufferMilliseconds;
+        var next = BufferPresets.FirstOrDefault(preset => preset > current);
+        if (next == 0) next = BufferPresets[0];
+        _playbackService.Options = (_playbackService.Options with { BufferMilliseconds = next }).Validate();
+        OnPropertyChanged(nameof(BufferMilliseconds));
+        OnPropertyChanged(nameof(StabilityLabel));
+        await SavePreferencesAsync();
+        TriggerOsd($"Búfer en vivo: {StabilityLabel}");
+        if (_watch is { } activeWatch && _mediaWatch is null && _playback.IsActive)
+        {
+            await PlayChannelCoreAsync(activeWatch.Channel, activeWatch.TriedAlternateFormat);
+        }
+    }
+    public async Task ApplyLiveFormatChangeAsync()
+    {
+        if (string.IsNullOrWhiteSpace(SelectedFormat)) return;
+        TriggerOsd($"Formato en vivo: {SelectedFormat.ToUpperInvariant()}");
+        if (_watch is { } activeWatch && _mediaWatch is null && (_playback.IsActive || _playback.State == PlaybackState.Failed))
+        {
+            await PlayChannelCoreAsync(activeWatch.Channel, preserveAlternateFlag: false);
+        }
     }
     public bool SoftwareDecoding
     {
         get => _playbackService.Options.Hardware == HardwareDecoding.Software;
-        set { _playbackService.Options = _playbackService.Options with { Hardware = value ? HardwareDecoding.Software : HardwareDecoding.Automatic }; OnPropertyChanged(); }
+        set
+        {
+            var target = value ? HardwareDecoding.Software : HardwareDecoding.Automatic;
+            var changed = _playbackService.Options.Hardware != target;
+            _playbackService.Options = _playbackService.Options with { Hardware = target };
+            OnPropertyChanged();
+            if (changed) _ = SavePreferencesAsync();
+        }
     }
 
     public async Task InitializePlaybackAsync()
@@ -166,7 +232,7 @@ public sealed partial class MainViewModel
         _playingChannelId = null;
         _watch = null;
         IsImmersiveMode = false;
-        if (_playback.State is PlaybackState.Loading or PlaybackState.Buffering)
+        if (IsVideoLoading)
         {
             _playback = new(_playback.Sequence, PlaybackState.Stopped);
             NotifyPlaybackLoadingState();
@@ -231,11 +297,27 @@ public sealed partial class MainViewModel
                     }
                 }
             }
-            if (snapshot.State == PlaybackState.Playing && watch is not null && ReferenceEquals(watch, _watch) && snapshot.Sequence > watch.AfterSequence && !watch.Recorded)
+            if (watch is not null && ReferenceEquals(watch, _watch) && snapshot.Sequence > watch.AfterSequence)
             {
-                watch.Recorded = true;
-                watch.PlayedAt = DateTimeOffset.UtcNow;
-                _historyWrites = RecordWatchAsync(_historyWrites, watch);
+                if (snapshot.State == PlaybackState.Playing && !watch.Recorded)
+                {
+                    watch.Recorded = true;
+                    watch.PlayedAt = DateTimeOffset.UtcNow;
+                    _historyWrites = RecordWatchAsync(_historyWrites, watch);
+                }
+                else if (snapshot.State == PlaybackState.Failed && !snapshot.WillRetry &&
+                         snapshot.Failure is PlaybackFailure.Network or PlaybackFailure.Timeout &&
+                         !watch.TriedAlternateFormat && watch.ProfileId is not null && _mediaWatch is null && AvailableFormats.Count > 1)
+                {
+                    var alternate = AvailableFormats.FirstOrDefault(format => !string.Equals(format, SelectedFormat, StringComparison.OrdinalIgnoreCase));
+                    if (!string.IsNullOrWhiteSpace(alternate))
+                    {
+                        watch.TriedAlternateFormat = true;
+                        SelectedFormat = alternate;
+                        TriggerOsd($"Alternando a formato {alternate.ToUpperInvariant()} para estabilizar señal…");
+                        _ = PlayChannelCoreAsync(watch.Channel, preserveAlternateFlag: true);
+                    }
+                }
             }
         }
         if (_ui is not null && SynchronizationContext.Current != _ui) _ui.Post(_ => Apply(), null); else Apply();

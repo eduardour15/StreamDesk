@@ -265,7 +265,7 @@ public sealed partial class MainViewModel
         var recentOrder = _library.Recents.Select((item, order) => (item.ChannelId, order)).ToDictionary(item => item.ChannelId, item => item.order);
         try
         {
-            if (debounce) await Task.Delay(180, filter.Token);
+            if (debounce) await Task.Delay(120, filter.Token);
             var result = await Task.Run(() =>
             {
                 var matches = index.Filter(query, category, favoritesOnly, snapshot?.FavoriteChannelIds, filter.Token);

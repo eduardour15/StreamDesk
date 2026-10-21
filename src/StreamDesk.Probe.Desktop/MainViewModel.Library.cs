@@ -156,6 +156,8 @@ public sealed partial class MainViewModel
         public int Version { get; } = version;
         public long AfterSequence { get; } = afterSequence;
         public bool Recorded { get; set; }
+        public bool TriedAlternateFormat { get; set; }
+        public bool LiveDetailsLoaded { get; set; }
         public DateTimeOffset PlayedAt { get; set; }
     }
 }

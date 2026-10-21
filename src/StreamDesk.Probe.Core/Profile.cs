@@ -16,4 +16,6 @@ public sealed record AppSettings(
     string Language = "es",
     bool ParentalControlEnabled = false,
     string? ParentalPinHash = null,
-    string? ParentalPinSalt = null);
+    string? ParentalPinSalt = null,
+    int BufferMilliseconds = 3500,
+    bool SoftwareDecoding = false);
