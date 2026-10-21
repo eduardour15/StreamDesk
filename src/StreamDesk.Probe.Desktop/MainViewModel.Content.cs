@@ -290,10 +290,11 @@ public sealed partial class MainViewModel
             else
             {
                 var cached = _contentStore is not null && _connectedProfileId is { } profile ? await _contentStore.LoadCatalogAsync(profile, ContentKind.Episode, item.Id, request.Token) : null;
+                if (cached is not null && cached.Items.Count == 0) cached = null;
                 var rawEpisodes = cached ?? await provider.GetEpisodesAsync(item.Id, request.Token);
                 var episodes = rawEpisodes with { Items = rawEpisodes.Items.Where(IsPlayableEpisode).ToArray() };
                 request.Token.ThrowIfCancellationRequested(); if (!ReferenceEquals(_selectedMedia, item) || version != _sessionVersion) return;
-                if (cached is null && _contentStore is not null && _connectedProfileId is { } id) await _contentStore.SaveCatalogAsync(id, ContentKind.Episode, item.Id, episodes, request.Token);
+                if (cached is null && episodes.Items.Count > 0 && _contentStore is not null && _connectedProfileId is { } id) await _contentStore.SaveCatalogAsync(id, ContentKind.Episode, item.Id, episodes, request.Token);
                 if (version != _sessionVersion) return;
                 _episodes = episodes; _randomCyclePlayedKeys.Clear(); Season = Seasons.FirstOrDefault(); OnPropertyChanged(nameof(Seasons)); OnPropertyChanged(nameof(Episodes)); OnPropertyChanged(nameof(SeriesSummary)); OnPropertyChanged(nameof(CanPlayRandomEpisode));
                 SelectedEpisode ??= Episodes.FirstOrDefault();

@@ -28,7 +28,7 @@
     <Authors>eduardour15</Authors>
     <Copyright>Copyright © 2026 eduardour15</Copyright>
     <Product>StreamDesk</Product>
-    <Version>0.5.0-rc.2</Version>
+    <Version>0.5.1</Version>
   </PropertyGroup>
 
   <ItemGroup>

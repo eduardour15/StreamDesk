@@ -23,7 +23,7 @@ public sealed class AppServices : IDisposable
         Recovery = new LocalRecoveryService(localDataDirectory);
         _httpServices = ProviderHttpClients.CreateServices();
         var factory = _httpServices.GetRequiredService<IHttpClientFactory>();
-        ProviderFactory = (url, username, password) => new XtreamApiClient(url, username, password, httpClient: factory.CreateClient("Xtream"));
+        ProviderFactory = (url, username, password) => new XtreamApiClient(url, username, password, requestTimeout: TimeSpan.FromSeconds(60), httpClient: factory.CreateClient("Xtream"));
         Playlists = new M3uPlaylistImporter();
         Logos = new ChannelLogoLoader(factory.CreateClient("Logos"));
         Playback = new PlaybackService(new LibVlcBackend()) { Options = new(3500) };

@@ -40,20 +40,62 @@ public sealed partial class XtreamApiClient
         if (root.TryGetProperty("seasons", out var seasonList) && seasonList.ValueKind == JsonValueKind.Array)
             foreach (var season in seasonList.EnumerateArray())
                 if (season.ValueKind == JsonValueKind.Object && ReadInt(season, "season_number") is int number && number >= 0) seasons.Add(number);
-        if (root.TryGetProperty("episodes", out var episodes) && episodes.ValueKind == JsonValueKind.Object)
-            foreach (var season in episodes.EnumerateObject())
+        if (root.TryGetProperty("episodes", out var episodes))
+        {
+            if (episodes.ValueKind == JsonValueKind.Object)
             {
-                if (season.Value.ValueKind != JsonValueKind.Array) throw new XtreamApiException(XtreamFailureKind.UnsupportedResponse);
-                if (!int.TryParse(season.Name, NumberStyles.None, CultureInfo.InvariantCulture, out var seasonNumber)) throw new XtreamApiException(XtreamFailureKind.UnsupportedResponse);
-                seasons.Add(seasonNumber);
-                foreach (var episode in season.Value.EnumerateArray())
+                foreach (var season in episodes.EnumerateObject())
                 {
-                    cancellationToken.ThrowIfCancellationRequested();
-                    var item = ParseMedia(episode, ContentKind.Episode, seriesId, seasonNumber) with { CategoryId = seasonNumber.ToString(CultureInfo.InvariantCulture) };
-                    if (seen.Add(item.StorageKey)) items.Add(item);
-                    if (items.Count > 20000) throw new XtreamApiException(XtreamFailureKind.UnsupportedResponse);
+                    var seasonNumber = ParseSeasonNumber(season.Name);
+                    seasons.Add(seasonNumber);
+                    var episodeElements = season.Value.ValueKind switch
+                    {
+                        JsonValueKind.Array => season.Value.EnumerateArray(),
+                        JsonValueKind.Object => season.Value.EnumerateObject().Select(p => p.Value),
+                        _ => Enumerable.Empty<JsonElement>()
+                    };
+                    foreach (var episode in episodeElements)
+                    {
+                        cancellationToken.ThrowIfCancellationRequested();
+                        if (episode.ValueKind != JsonValueKind.Object) continue;
+                        var item = ParseMedia(episode, ContentKind.Episode, seriesId, seasonNumber) with { CategoryId = seasonNumber.ToString(CultureInfo.InvariantCulture) };
+                        if (seen.Add(item.StorageKey)) items.Add(item);
+                        if (items.Count > 20000) throw new XtreamApiException(XtreamFailureKind.UnsupportedResponse);
+                    }
                 }
             }
+            else if (episodes.ValueKind == JsonValueKind.Array)
+            {
+                var arrayIndex = 0;
+                foreach (var element in episodes.EnumerateArray())
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    if (element.ValueKind == JsonValueKind.Array)
+                    {
+                        var seasonNumber = arrayIndex;
+                        foreach (var episode in element.EnumerateArray())
+                        {
+                            cancellationToken.ThrowIfCancellationRequested();
+                            if (episode.ValueKind != JsonValueKind.Object) continue;
+                            var epSeason = ReadInt(episode, "season") ?? seasonNumber;
+                            seasons.Add(epSeason);
+                            var item = ParseMedia(episode, ContentKind.Episode, seriesId, epSeason) with { CategoryId = epSeason.ToString(CultureInfo.InvariantCulture) };
+                            if (seen.Add(item.StorageKey)) items.Add(item);
+                            if (items.Count > 20000) throw new XtreamApiException(XtreamFailureKind.UnsupportedResponse);
+                        }
+                    }
+                    else if (element.ValueKind == JsonValueKind.Object)
+                    {
+                        var epSeason = ReadInt(element, "season") ?? (arrayIndex > 0 ? arrayIndex : 1);
+                        seasons.Add(epSeason);
+                        var item = ParseMedia(element, ContentKind.Episode, seriesId, epSeason) with { CategoryId = epSeason.ToString(CultureInfo.InvariantCulture) };
+                        if (seen.Add(item.StorageKey)) items.Add(item);
+                        if (items.Count > 20000) throw new XtreamApiException(XtreamFailureKind.UnsupportedResponse);
+                    }
+                    arrayIndex++;
+                }
+            }
+        }
         return new(seasons.Order().Select(number => new XtreamCategory(number.ToString(CultureInfo.InvariantCulture), $"Temporada {number}")).ToArray(),
             items.OrderBy(item => item.Season).ThenBy(item => item.Episode).ThenBy(item => item.Id, StringComparer.Ordinal).ToArray(), DateTimeOffset.UtcNow);
     }
@@ -84,15 +126,35 @@ public sealed partial class XtreamApiClient
         return new Uri(_baseUri.GetLeftPart(UriPartial.Authority) + path, new UriCreationOptions { DangerousDisablePathAndQueryCanonicalization = true });
     }
 
+    private static int ParseSeasonNumber(string name)
+    {
+        if (int.TryParse(name, NumberStyles.Integer, CultureInfo.InvariantCulture, out var number)) return number;
+        var match = System.Text.RegularExpressions.Regex.Match(name, @"\d+");
+        return match.Success && int.TryParse(match.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var extracted) ? extracted : 0;
+    }
+
     private MediaItem ParseMedia(JsonElement item, ContentKind kind, string? seriesId = null, int season = 0)
     {
         if (item.ValueKind != JsonValueKind.Object) throw new XtreamApiException(XtreamFailureKind.UnsupportedResponse);
         var id = ReadString(item, kind == ContentKind.Series ? "series_id" : kind == ContentKind.Episode ? "id" : "stream_id");
+        if (string.IsNullOrWhiteSpace(id) && kind == ContentKind.Episode) id = ReadString(item, "stream_id") ?? ReadString(item, "episode_id");
+        else if (string.IsNullOrWhiteSpace(id) && kind == ContentKind.Movie) id = ReadString(item, "id");
         var name = SafeText(ReadString(item, "name") ?? ReadString(item, "title"));
+        if (name.Length == 0 && kind == ContentKind.Episode)
+        {
+            var epNum = ReadInt(item, "episode_num") ?? 1;
+            name = $"Episodio {epNum}";
+        }
         if (!MediaMetadata.Identifier(id) || name.Length == 0 || (kind == ContentKind.Episode && !MediaMetadata.Identifier(seriesId))) throw new XtreamApiException(XtreamFailureKind.UnsupportedResponse);
+        var ext = ReadString(item, "container_extension")?.Trim().TrimStart('.').ToLowerInvariant();
+        if (string.IsNullOrWhiteSpace(ext) && item.TryGetProperty("info", out var info) && info.ValueKind == JsonValueKind.Object)
+            ext = ReadString(info, "container_extension")?.Trim().TrimStart('.').ToLowerInvariant();
+        if (string.IsNullOrWhiteSpace(ext) && kind is ContentKind.Movie or ContentKind.Episode)
+            ext = "mp4";
+        var epSeason = ReadInt(item, "season") ?? season;
         return MediaMetadata.Sanitize(new(id.Trim(), name, kind, ReadString(item, "category_id"),
-            ReadString(item, "container_extension")?.Trim().TrimStart('.').ToLowerInvariant(), SafeLogoUrl(ReadString(item, "stream_icon") ?? ReadString(item, "cover")),
-            SafeText(ReadString(item, "plot")), SeriesId: seriesId, Season: season, Episode: ReadInt(item, "episode_num") ?? 0));
+            ext, SafeLogoUrl(ReadString(item, "stream_icon") ?? ReadString(item, "cover")),
+            SafeText(ReadString(item, "plot")), SeriesId: seriesId, Season: epSeason, Episode: ReadInt(item, "episode_num") ?? 0));
     }
     private string SafeText(string? value)
     {

@@ -143,5 +143,42 @@ public sealed class ContentTests
         backend.Emit(new(id, PlaybackSignalKind.Failed, PlaybackFailure.Network)); await PlaybackTests.UntilAsync(() => backend.Opens.Count == 2);
         Assert.Equal(45000, backend.Opens.Last().Options.StartPositionMilliseconds); Assert.Equal(1, backend.Peak);
     }
+    [Fact]
+    public async Task EpisodesSupportArrayFormatAndNonNumericSeasonsAndNestedExtension()
+    {
+        // Tests JSON array format (e.g. PHP 0-indexed array with Season 0) and nested info.container_extension
+        using var arrayProvider = Provider(_ => """
+            {"seasons":[{"season_number":0},{"season_number":1}],"episodes":[
+                [{"id":"101","title":"Piloto","season":0,"episode_num":1,"container_extension":"mkv"}],
+                [{"id":"102","title":"Capitulo 1","season":1,"episode_num":1,"info":{"container_extension":"mp4"}}]
+            ]}
+            """);
+        await arrayProvider.AuthenticateAsync();
+        var arrayCatalog = await arrayProvider.GetEpisodesAsync("series-array");
+        Assert.Equal(2, arrayCatalog.Items.Count);
+        Assert.Equal(2, arrayCatalog.Categories.Count);
+        Assert.Equal("101", arrayCatalog.Items[0].Id);
+        Assert.Equal(0, arrayCatalog.Items[0].Season);
+        Assert.Equal("mkv", arrayCatalog.Items[0].Extension);
+        Assert.Equal("102", arrayCatalog.Items[1].Id);
+        Assert.Equal(1, arrayCatalog.Items[1].Season);
+        Assert.Equal("mp4", arrayCatalog.Items[1].Extension);
+
+        // Tests JSON object format with non-numeric season names ("Season 1", "s2")
+        using var objectProvider = Provider(_ => """
+            {"seasons":[],"episodes":{
+                "Season 1":[{"stream_id":"201","name":"Ep 1","container_extension":"mp4"}],
+                "s2":[{"episode_id":"202","name":"Ep 2"}]
+            }}
+            """);
+        await objectProvider.AuthenticateAsync();
+        var objectCatalog = await objectProvider.GetEpisodesAsync("series-obj");
+        Assert.Equal(2, objectCatalog.Items.Count);
+        Assert.Equal("201", objectCatalog.Items[0].Id);
+        Assert.Equal(1, objectCatalog.Items[0].Season);
+        Assert.Equal("202", objectCatalog.Items[1].Id);
+        Assert.Equal(2, objectCatalog.Items[1].Season);
+        Assert.Equal("mp4", objectCatalog.Items[1].Extension); // Fallback to mp4
+    }
     private sealed class TestClock(DateTimeOffset utc) : TimeProvider { public DateTimeOffset Utc { get; set; } = utc; public override DateTimeOffset GetUtcNow() => Utc; }
 }

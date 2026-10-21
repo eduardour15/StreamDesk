@@ -418,6 +418,29 @@ public partial class MainWindow : FluentWindow
             await _viewModel.PlayMediaAsync();
         }
     }
+    private void Media_MouseUp(object sender, MouseButtonEventArgs e)
+    {
+        if (HasInteractiveOrScrollAncestor(e.OriginalSource as DependencyObject) || FindAncestor<ListBoxItem>(e.OriginalSource as DependencyObject) is not { DataContext: MediaItem media }) return;
+        _viewModel.SelectedMedia = media;
+    }
+    private async void Media_DoubleClick(object sender, MouseButtonEventArgs e)
+    {
+        if (HasInteractiveOrScrollAncestor(e.OriginalSource as DependencyObject) || FindAncestor<ListBoxItem>(e.OriginalSource as DependencyObject) is not { DataContext: MediaItem media }) return;
+        _viewModel.SelectedMedia = media;
+        if (media.Kind == ContentKind.Movie)
+        {
+            await _viewModel.PlayMediaAsync();
+        }
+    }
+    private async void Media_KeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.Enter && _viewModel.SelectedMedia is not null)
+        {
+            e.Handled = true;
+            if (_viewModel.SelectedMedia.Kind == ContentKind.Movie)
+                await _viewModel.PlayMediaAsync();
+        }
+    }
     private void BackToEpisodes_Click(object sender, RoutedEventArgs e)
     {
         _viewModel.ReturnFromImmersive();

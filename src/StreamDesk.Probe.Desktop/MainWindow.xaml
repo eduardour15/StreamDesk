@@ -497,6 +497,7 @@
                                            Padding="14,6" MinHeight="36" VerticalAlignment="Center" ToolTip="Restablecer filtros"/>
                             </Grid>
                             <ListBox Grid.Row="1" x:Name="MediaList" ItemsSource="{Binding MediaItems}" SelectedItem="{Binding SelectedMedia, Mode=TwoWay}" Background="Transparent" BorderThickness="0"
+                                     PreviewMouseLeftButtonUp="Media_MouseUp" MouseDoubleClick="Media_DoubleClick" KeyDown="Media_KeyDown"
                                      VirtualizingPanel.IsVirtualizing="True" VirtualizingPanel.VirtualizationMode="Recycling" ScrollViewer.CanContentScroll="True" AutomationProperties.Name="Películas o series">
                                 <ListBox.ItemContainerStyle><Style TargetType="ListBoxItem" BasedOn="{StaticResource {x:Type ListBoxItem}}"><Setter Property="Height" Value="104"/><Setter Property="HorizontalContentAlignment" Value="Stretch"/><Setter Property="Padding" Value="4"/></Style></ListBox.ItemContainerStyle>
                                 <ListBox.ItemTemplate><DataTemplate>
