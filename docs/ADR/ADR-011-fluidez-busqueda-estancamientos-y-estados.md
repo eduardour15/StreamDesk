@@ -4,6 +4,10 @@
 - Estado: implementación y verificación automatizada local; validación con proveedor y hardware real pendiente.
 - Alcance: `FLUX-T01` a `FLUX-T06` de `docs/prompts/OPTIMIZACION_FLUIDEZ_UX_UI.md`, sin funciones nuevas ni cambios de gates históricos.
 
+**Supervisión, 2026-10-24:** [ADR-013](ADR-013-estabilidad-y-recuperacion-de-tv.md) conserva el muestreo durante avisos nativos de búfer, exige avance para cancelar un estancamiento confirmado y usa la caché efectiva de cada intento. Los avisos de VLC dejan de actualizar por sí solos la marca de progreso.
+
+**Actualización 2026-10-24:** la reserva de altura y el uso de `Hidden` del punto 5 quedan sustituidos por [ADR-012](ADR-012-overlay-reproductor-cursor-y-atajos.md): controles y avisos flotantes en el foreground HWND de LibVLCSharp, con `Collapsed` al ocultarse y viewport estable. Las pruebas comparan coordenadas de pantalla entre ambas fuentes de presentación; ya no exigen cero intersección.
+
 ## Diagnóstico y decisiones
 
 1. **Búsqueda VOD:** el filtrado anterior normalizaba cada nombre en cada consulta. `MediaCatalogSearch` conserva nombres normalizados por catálogo de películas/series y aplica los mismos filtros locales, acentos, categorías y restricciones parentales. Se construye fuera del hilo UI, se reutiliza por identidad del catálogo y se descarta al reiniciar la sesión. Tras medir el coste del índice caliente y comprobar la cancelación de consultas solapadas, el debounce de TV/VOD se reduce de 180 a 120 ms; solo se publica el resultado de la petición, sesión y pestaña vigentes. Se distingue una búsqueda pendiente de un vacío definitivo.

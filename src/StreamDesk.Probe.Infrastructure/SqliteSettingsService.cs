@@ -150,6 +150,8 @@ public sealed class SqliteSettingsService : ISettingsService
     {
         var hasBuffer = false;
         var hasSoftware = false;
+        var hasContinuity = false;
+        var hasQuality = false;
         command.CommandText = "PRAGMA table_info(AppSettings);";
         await using (var reader = await command.ExecuteReaderAsync(cancellationToken))
         {
@@ -158,6 +160,8 @@ public sealed class SqliteSettingsService : ISettingsService
                 var col = reader.GetString(1);
                 if (string.Equals(col, "BufferMilliseconds", StringComparison.OrdinalIgnoreCase)) hasBuffer = true;
                 else if (string.Equals(col, "SoftwareDecoding", StringComparison.OrdinalIgnoreCase)) hasSoftware = true;
+                else if (string.Equals(col, "PrioritizeContinuity", StringComparison.OrdinalIgnoreCase)) hasContinuity = true;
+                else if (string.Equals(col, "LiveQuality", StringComparison.OrdinalIgnoreCase)) hasQuality = true;
             }
         }
         if (!hasBuffer)
@@ -168,6 +172,16 @@ public sealed class SqliteSettingsService : ISettingsService
         if (!hasSoftware)
         {
             command.CommandText = "ALTER TABLE AppSettings ADD COLUMN SoftwareDecoding INTEGER NOT NULL DEFAULT 0;";
+            await command.ExecuteNonQueryAsync(cancellationToken);
+        }
+        if (!hasContinuity)
+        {
+            command.CommandText = "ALTER TABLE AppSettings ADD COLUMN PrioritizeContinuity INTEGER NOT NULL DEFAULT 1;";
+            await command.ExecuteNonQueryAsync(cancellationToken);
+        }
+        if (!hasQuality)
+        {
+            command.CommandText = "ALTER TABLE AppSettings ADD COLUMN LiveQuality INTEGER NOT NULL DEFAULT 0;";
             await command.ExecuteNonQueryAsync(cancellationToken);
         }
     }
@@ -263,7 +277,7 @@ public sealed class SqliteSettingsService : ISettingsService
         await using var connection = new SqliteConnection(_connectionString);
         await connection.OpenAsync(cancellationToken);
         await using var command = connection.CreateCommand();
-        command.CommandText = "SELECT Theme, UiScale, Language, ParentalControlEnabled, ParentalPinHash, ParentalPinSalt, BufferMilliseconds, SoftwareDecoding FROM AppSettings WHERE Id = 1;";
+        command.CommandText = "SELECT Theme, UiScale, Language, ParentalControlEnabled, ParentalPinHash, ParentalPinSalt, BufferMilliseconds, SoftwareDecoding, PrioritizeContinuity, LiveQuality FROM AppSettings WHERE Id = 1;";
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
         if (await reader.ReadAsync(cancellationToken))
         {
@@ -278,7 +292,9 @@ public sealed class SqliteSettingsService : ISettingsService
                 ParentalPinHash: reader.IsDBNull(4) ? null : reader.GetString(4),
                 ParentalPinSalt: reader.IsDBNull(5) ? null : reader.GetString(5),
                 BufferMilliseconds: clampedBuffer,
-                SoftwareDecoding: software);
+                SoftwareDecoding: software,
+                PrioritizeContinuity: reader.GetInt32(8) == 1,
+                LiveQuality: Enum.IsDefined((LiveQualityPreference)reader.GetInt32(9)) ? (LiveQualityPreference)reader.GetInt32(9) : LiveQualityPreference.Automatic);
         }
         return new AppSettings();
     }
@@ -289,8 +305,8 @@ public sealed class SqliteSettingsService : ISettingsService
         await connection.OpenAsync(cancellationToken);
         await using var command = connection.CreateCommand();
         command.CommandText = """
-            INSERT INTO AppSettings (Id, Theme, UiScale, Language, ParentalControlEnabled, ParentalPinHash, ParentalPinSalt, BufferMilliseconds, SoftwareDecoding)
-            VALUES (1, $theme, $scale, $lang, $parental, $pinHash, $pinSalt, $buffer, $software)
+            INSERT INTO AppSettings (Id, Theme, UiScale, Language, ParentalControlEnabled, ParentalPinHash, ParentalPinSalt, BufferMilliseconds, SoftwareDecoding, PrioritizeContinuity, LiveQuality)
+            VALUES (1, $theme, $scale, $lang, $parental, $pinHash, $pinSalt, $buffer, $software, $continuity, $quality)
             ON CONFLICT(Id) DO UPDATE SET
                 Theme = excluded.Theme,
                 UiScale = excluded.UiScale,
@@ -299,7 +315,9 @@ public sealed class SqliteSettingsService : ISettingsService
                 ParentalPinHash = excluded.ParentalPinHash,
                 ParentalPinSalt = excluded.ParentalPinSalt,
                 BufferMilliseconds = excluded.BufferMilliseconds,
-                SoftwareDecoding = excluded.SoftwareDecoding;
+                SoftwareDecoding = excluded.SoftwareDecoding,
+                PrioritizeContinuity = excluded.PrioritizeContinuity,
+                LiveQuality = excluded.LiveQuality;
             """;
         command.Parameters.AddWithValue("$theme", settings.Theme);
         command.Parameters.AddWithValue("$scale", settings.UiScale);
@@ -309,6 +327,8 @@ public sealed class SqliteSettingsService : ISettingsService
         command.Parameters.AddWithValue("$pinSalt", (object?)settings.ParentalPinSalt ?? DBNull.Value);
         command.Parameters.AddWithValue("$buffer", Math.Clamp(settings.BufferMilliseconds, 250, 10000));
         command.Parameters.AddWithValue("$software", settings.SoftwareDecoding ? 1 : 0);
+        command.Parameters.AddWithValue("$continuity", settings.PrioritizeContinuity ? 1 : 0);
+        command.Parameters.AddWithValue("$quality", Enum.IsDefined(settings.LiveQuality) ? (int)settings.LiveQuality : 0);
         await command.ExecuteNonQueryAsync(cancellationToken);
     }
 }

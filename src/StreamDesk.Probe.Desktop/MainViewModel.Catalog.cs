@@ -193,7 +193,9 @@ public sealed partial class MainViewModel
             OnPropertyChanged(nameof(ConnectedProfileId)); OnPropertyChanged(nameof(IsConnected)); OnPropertyChanged(nameof(ActiveConnectionsInfo)); OnPropertyChanged(nameof(AccountExpirationInfo));
             ConnectionSummary = FormatAccount(account);
             foreach (var format in account.AllowedOutputFormats) AvailableFormats.Add(format);
-            SelectedFormat = AvailableFormats.FirstOrDefault();
+            SelectedFormat = _playbackService.Options.PrioritizeContinuity
+                ? AvailableFormats.FirstOrDefault(format => format.Equals("m3u8", StringComparison.OrdinalIgnoreCase)) ?? AvailableFormats.FirstOrDefault()
+                : AvailableFormats.FirstOrDefault();
             StatusMessage = account.HasReachedConnectionLimit
                 ? "Conectado, pero tu cuenta ya está en uso en otro dispositivo."
                 : "Conectado. Elige un canal o actualiza la lista.";

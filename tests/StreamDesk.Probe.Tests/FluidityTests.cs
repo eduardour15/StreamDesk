@@ -128,7 +128,8 @@ public sealed class FluidityTests
         {
             backend.Emit(new(backend.Opens.Last().Id, PlaybackSignalKind.Playing));
             await PlaybackTests.UntilAsync(() => service.Snapshot.State == PlaybackState.Playing);
-            foreach (var (frames, seconds) in new[] { (10, 1), (20, 1), (20, 5) })
+            var stallSeconds = Math.Max(4, backend.Opens.Last().Options.BufferMilliseconds * 2 / 1000) + 1;
+            foreach (var (frames, seconds) in new[] { (10, 1), (20, 1), (20, stallSeconds) })
             {
                 backend.Progress = new(2000, frames, 0); var reads = backend.ProgressReads;
                 clock.Advance(TimeSpan.FromSeconds(seconds));
@@ -238,8 +239,10 @@ public sealed class FluidityTests
         backend.Emit(new(backend.Opens.Last().Id, PlaybackSignalKind.Playing, BufferPercent: 100));
         await PlaybackTests.UntilAsync(() => service.Snapshot.State == PlaybackState.Playing);
 
-        // Frozen frames for > 7 seconds (2x 3500ms base buffer) still trigger SilentStall despite the Buffering flicker
+        // The retry uses 5000ms of cache: allow it to refill before confirming a silent stall.
         await TickProgress(600, 8);
+        Assert.Equal(PlaybackState.Playing, service.Snapshot.State);
+        await TickProgress(600, 2);
         Assert.Equal(PlaybackState.Buffering, service.Snapshot.State);
         Assert.Equal(1, backend.Peak);
     }

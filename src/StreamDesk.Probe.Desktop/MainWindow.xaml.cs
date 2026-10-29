@@ -5,6 +5,7 @@ using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Media;
 using System.Windows.Threading;
+using System.Windows.Data;
 using System.Runtime.InteropServices;
 using System.IO;
 using Microsoft.Win32;
@@ -30,6 +31,8 @@ public partial class MainWindow : FluentWindow
     private DateTime _lastInteraction = DateTime.UtcNow;
     private ScreenPoint _lastCursor;
     private bool _controlsHovered;
+    private bool _keyboardControls;
+    private Window? _overlayWindow;
     private DispatcherOperation? _categoryFocusOperation;
     public IReadOnlyList<DisplayChoice> Displays { get; } = WindowDisplays.Enumerate();
     public DisplayChoice? SelectedDisplay { get; set; }
@@ -60,6 +63,11 @@ public partial class MainWindow : FluentWindow
         LogoLoader = logoLoader;
         SelectedDisplay = Displays.FirstOrDefault();
         InitializeComponent();
+        VideoView.IsVisibleChanged += (_, _) => UpdatePlayerOverlayVisibility();
+        // VideoView moves this content to its own foreground window, outside this visual tree.
+        PlayerOverlay.Resources.MergedDictionaries.Add(Resources);
+        PipTopmost.SetBinding(System.Windows.Controls.Primitives.ToggleButton.IsCheckedProperty,
+            new Binding(nameof(Topmost)) { Source = this, Mode = BindingMode.TwoWay });
         DataContext = _viewModel;
         SourceInitialized += (_, _) => EnsureNativeCaptionButtons();
         Loaded += async (_, _) =>
@@ -75,7 +83,9 @@ public partial class MainWindow : FluentWindow
         Closing += WindowClosing;
         PreviewKeyDown += WindowKeyDown;
         SizeChanged += (_, _) => UpdateLayoutMode();
-        StateChanged += (_, _) => UpdateTimers();
+        StateChanged += (_, _) => { RevealControls(); UpdateTimers(); UpdatePlayerOverlayVisibility(); };
+        Deactivated += PlayerWindow_Deactivated;
+        Activated += (_, _) => RevealControls();
         _controlsTimer.Tick += (_, _) => UpdateControls();
         _osdTimer.Tick += (_, _) =>
         {
@@ -134,6 +144,7 @@ public partial class MainWindow : FluentWindow
 
     private async void PlaySelected_Click(object sender, RoutedEventArgs e) => await _viewModel.PlaySelectedAsync();
     private async void Retry_Click(object sender, RoutedEventArgs e) => await _viewModel.RetryPlaybackAsync();
+    private async void ApplyLivePreferences_Click(object sender, RoutedEventArgs e) => await _viewModel.ApplyLivePreferencesAsync();
     private async void Stop_Click(object sender, RoutedEventArgs e) => await _viewModel.StopPlaybackAsync();
     private async void Previous_Click(object sender, RoutedEventArgs e) => await _viewModel.NavigateChannelAsync(-1);
     private async void Next_Click(object sender, RoutedEventArgs e) => await _viewModel.NavigateChannelAsync(1);
@@ -472,14 +483,28 @@ public partial class MainWindow : FluentWindow
             _videoClickTimer.Start();
         }
     }
+
+    private void Overlay_MouseDown(object sender, MouseButtonEventArgs e)
+    {
+        _keyboardControls = false;
+        RevealControls();
+        if (FindAncestor<ButtonBase>(e.OriginalSource as DependencyObject) is not null ||
+            HasEditingAncestor(e.OriginalSource as DependencyObject)) return;
+        PlayerOverlay.Focus();
+        if (e.ChangedButton == MouseButton.Left)
+        {
+            VideoSurface_MouseDown(sender, e);
+            e.Handled = true;
+        }
+    }
     private void PipHeader_MouseDown(object sender, MouseButtonEventArgs e)
     {
         if (e.OriginalSource is DependencyObject source && HasInteractiveOrScrollAncestor(source)) return;
         if (e.LeftButton == MouseButtonState.Pressed) { try { DragMove(); } catch { } }
     }
 
-    private void VideoSurface_TouchDown(object? sender, TouchEventArgs e) => RevealControls();
-    private void Controls_TouchDown(object? sender, TouchEventArgs e) => RevealControls();
+    private void VideoSurface_TouchDown(object? sender, TouchEventArgs e) { _keyboardControls = false; RevealControls(); }
+    private void Controls_TouchDown(object? sender, TouchEventArgs e) { _keyboardControls = false; RevealControls(); }
     private void CancelCatalog_Click(object sender, RoutedEventArgs e) => _viewModel.CancelCatalog();
 
     private void VideoView_Loaded(object sender, RoutedEventArgs e)
@@ -530,18 +555,29 @@ public partial class MainWindow : FluentWindow
 
     private async void WindowKeyDown(object sender, KeyEventArgs args)
     {
+        if (args.Handled || !IsEnabled || !_viewModel.ShowTv || !_viewModel.ShowPlayerPane) return;
+        var source = args.OriginalSource as DependencyObject ?? Keyboard.FocusedElement as DependencyObject;
+        // Popups and modal dialogs keep their own Escape/navigation semantics.
+        if (AudioTrackBox.IsDropDownOpen || SubtitleTrackBox.IsDropDownOpen || FormatBox.IsDropDownOpen ||
+            (source is not null && Window.GetWindow(source) is { } sourceWindow && sourceWindow != this && sourceWindow != _overlayWindow)) return;
+        _keyboardControls = args.Key == Key.Tab || PlayerChrome.IsKeyboardFocusWithin || PipHeader.IsKeyboardFocusWithin;
         RevealControls();
-        if (args.Key == Key.Escape && _viewModel.IsImmersiveMode && !_displays.IsFullscreen && !_displays.IsPictureInPicture)
+        if (args.Key == Key.Escape && Keyboard.Modifiers == ModifierKeys.None && _viewModel.IsImmersiveMode && !_displays.IsFullscreen && !_displays.IsPictureInPicture)
         {
             args.Handled = true;
+            if (args.IsRepeat) return;
             _viewModel.ReturnFromImmersive();
             UpdateLayoutMode();
             return;
         }
-        if (args.Key is Key.Up or Key.Down && HasListAncestor(args.OriginalSource as DependencyObject)) return;
-        var action = PlaybackShortcuts.Resolve(args.Key, Keyboard.Modifiers, HasEditingAncestor(args.OriginalSource as DependencyObject ?? Keyboard.FocusedElement as DependencyObject), _displays.IsFullscreen, _viewModel.ShowTv, _displays.IsPictureInPicture);
-        if (action == PlaybackShortcut.None || args.IsRepeat) return;
+        if (args.Key != Key.Escape && HasListAncestor(source)) return;
+        var editing = HasEditingAncestor(source);
+        if (FindAncestor<ButtonBase>(source) is not null && args.Key is not (Key.Space or Key.Enter)) editing = false;
+        var action = PlaybackShortcuts.Resolve(args.Key, Keyboard.Modifiers, editing, _displays.IsFullscreen, _viewModel.ShowTv, _displays.IsPictureInPicture);
+        if (action == PlaybackShortcut.None) return;
+        if (action == PlaybackShortcut.Toggle && !_viewModel.CanStopPlayback) return;
         args.Handled = true;
+        if (args.IsRepeat) return;
         switch (action)
         {
             case PlaybackShortcut.Toggle: await _viewModel.TogglePlaybackAsync(); break;
@@ -549,8 +585,10 @@ public partial class MainWindow : FluentWindow
             case PlaybackShortcut.Next: await _viewModel.NavigateChannelAsync(1); break;
             case PlaybackShortcut.SeekBackward: await _viewModel.SeekRelativeAsync(-10); break;
             case PlaybackShortcut.SeekForward: await _viewModel.SeekRelativeAsync(10); break;
-            case PlaybackShortcut.VolumeUp: _viewModel.Volume += 5; break;
-            case PlaybackShortcut.VolumeDown: _viewModel.Volume -= 5; break;
+            case PlaybackShortcut.SeekShortBackward: await _viewModel.SeekRelativeAsync(-5); break;
+            case PlaybackShortcut.SeekShortForward: await _viewModel.SeekRelativeAsync(5); break;
+            case PlaybackShortcut.VolumeUp: _viewModel.Volume = Math.Clamp(_viewModel.Volume + 5, 0, 100); break;
+            case PlaybackShortcut.VolumeDown: _viewModel.Volume = Math.Clamp(_viewModel.Volume - 5, 0, 100); break;
             case PlaybackShortcut.Mute: _viewModel.IsMuted = !_viewModel.IsMuted; break;
             case PlaybackShortcut.Fullscreen: case PlaybackShortcut.ExitFullscreen: ToggleFullscreen_Click(this, new RoutedEventArgs()); break;
             case PlaybackShortcut.PictureInPicture: case PlaybackShortcut.ExitPictureInPicture: TogglePictureInPicture_Click(this, new RoutedEventArgs()); break;
@@ -622,10 +660,12 @@ public partial class MainWindow : FluentWindow
 
 
 
-        PlayerPane.Visibility = _viewModel.ShowPlayerPane ? Visibility.Visible : Visibility.Collapsed;
+        PlayerPane.Visibility = _viewModel.ShowTv && _viewModel.ShowPlayerPane ? Visibility.Visible : Visibility.Collapsed;
         PlaybackCaption.MaxHeight = picture ? 36 : double.PositiveInfinity;
         PlayerControls.Padding = new Thickness(picture ? 4 : 10, picture ? 2 : 6, picture ? 4 : 10, picture ? 2 : 6);
-        PlayerControls.Margin = new Thickness(0, picture ? 0 : 4, 0, 0);
+        PlayerControls.Margin = new Thickness(0, 4, 0, 0);
+        PlayerChrome.Margin = new Thickness(picture ? 6 : 12);
+        UpdatePlayerOverlayVisibility();
         UpdateTimers();
     }
     private void EnsureNativeCaptionButtons()
@@ -648,17 +688,78 @@ public partial class MainWindow : FluentWindow
     [DllImport("user32.dll", EntryPoint = "GetWindowLongW", SetLastError = true)] private static extern int GetWindowLong(nint handle, int index);
     [DllImport("user32.dll", EntryPoint = "SetWindowLongW", SetLastError = true)] private static extern int SetWindowLong(nint handle, int index, int value);
     [DllImport("user32.dll", SetLastError = true)] [return: MarshalAs(UnmanagedType.Bool)] private static extern bool SetWindowPos(nint handle, nint insertAfter, int x, int y, int width, int height, uint flags);
-    private void RevealControls() { _lastInteraction = DateTime.UtcNow; PlayerControls.Visibility = Visibility.Visible; if (_displays.IsPictureInPicture) PipHeader.Visibility = Visibility.Visible; }
+    private void PlayerOverlay_Loaded(object sender, RoutedEventArgs e)
+    {
+        var overlay = Window.GetWindow(PlayerOverlay);
+        if (overlay == _overlayWindow) { UpdatePlayerOverlayVisibility(); return; }
+        if (_overlayWindow is not null)
+        {
+            _overlayWindow.Deactivated -= PlayerWindow_Deactivated;
+            _overlayWindow.Activated -= PlayerWindow_Activated;
+        }
+        _overlayWindow = overlay;
+        if (_overlayWindow is not null)
+        {
+            _overlayWindow.Deactivated += PlayerWindow_Deactivated;
+            _overlayWindow.Activated += PlayerWindow_Activated;
+        }
+        UpdatePlayerOverlayVisibility();
+    }
+
+    private void UpdatePlayerOverlayVisibility()
+    {
+        if (_overlayWindow is null || _closing) return;
+        // The foreground is a separate top-level HWND: Collapsed on TvPage doesn't hide it.
+        var visible = _viewModel.ShowTv && _viewModel.ShowPlayerPane && VideoView.IsVisible && WindowState != WindowState.Minimized;
+        if (!visible)
+        {
+            PlayerOverlay.Cursor = Cursors.Arrow;
+            _videoClickTimer.Stop();
+            _controlsHovered = _keyboardControls = false;
+            if (_overlayWindow.IsVisible) _overlayWindow.Hide();
+        }
+        else if (!_overlayWindow.IsVisible)
+        {
+            var showActivated = _overlayWindow.ShowActivated;
+            _overlayWindow.ShowActivated = false;
+            try { _overlayWindow.Show(); }
+            finally { _overlayWindow.ShowActivated = showActivated; }
+        }
+    }
+
+    private void PlayerWindow_Activated(object? sender, EventArgs e) => RevealControls();
+
+    private void PlayerWindow_Deactivated(object? sender, EventArgs e)
+    {
+        // Focus can move between the owner and LibVLCSharp's foreground window.
+        _ = Dispatcher.BeginInvoke(new Action(() =>
+        {
+            if (!IsActive && _overlayWindow?.IsActive != true)
+            {
+                _videoClickTimer.Stop();
+                RevealControls();
+            }
+        }));
+    }
+
+    private void RevealControls()
+    {
+        _lastInteraction = DateTime.UtcNow;
+        PlayerOverlay.Cursor = Cursors.Arrow;
+        PlayerChrome.Visibility = PlayerControls.Visibility = Visibility.Visible;
+        if (_displays.IsPictureInPicture) PipHeader.Visibility = Visibility.Visible;
+    }
     private void Player_MouseMove(object sender, MouseEventArgs e) => RevealControls();
     private void Player_MouseLeave(object sender, MouseEventArgs e)
     {
         _controlsHovered = false;
+        PlayerOverlay.Cursor = Cursors.Arrow;
     }
     private void Controls_MouseEnter(object sender, MouseEventArgs e) { _controlsHovered = true; RevealControls(); }
     private void Controls_MouseLeave(object sender, MouseEventArgs e) { _controlsHovered = false; RevealControls(); }
     private void UpdateControls()
     {
-        // Poll the cursor because native video owns mouse messages inside its HWND.
+        // Compare physical coordinates as well as overlay events, including when leaving its HWND.
         var isCursorInsidePlayer = false;
         if (_viewModel.ShowTv && GetCursorPos(out var cursor))
         {
@@ -666,8 +767,8 @@ public partial class MainWindow : FluentWindow
             {
                 try
                 {
-                    var point = PlayerPane.PointFromScreen(new Point(cursor.X, cursor.Y));
-                    isCursorInsidePlayer = point.X >= 0 && point.Y >= 0 && point.X < PlayerPane.ActualWidth && point.Y < PlayerPane.ActualHeight;
+                    var point = PlayerOverlay.PointFromScreen(new Point(cursor.X, cursor.Y));
+                    isCursorInsidePlayer = point.X >= 0 && point.Y >= 0 && point.X < PlayerOverlay.ActualWidth && point.Y < PlayerOverlay.ActualHeight;
                 }
                 catch { }
             }
@@ -677,24 +778,22 @@ public partial class MainWindow : FluentWindow
             }
             _lastCursor = cursor;
         }
-        if (!_viewModel.CanHideControls || _controlsHovered || PlayerControls.IsKeyboardFocusWithin ||
-            PlayerControls.IsMouseCaptureWithin || PlayerControls.AreAnyTouchesCapturedWithin || AudioTrackBox.IsDropDownOpen || SubtitleTrackBox.IsDropDownOpen)
+        var interacting = _controlsHovered || PlayerChrome.IsMouseOver || PipHeader.IsMouseOver ||
+            (_keyboardControls && (PlayerChrome.IsKeyboardFocusWithin || PipHeader.IsKeyboardFocusWithin)) ||
+            PlayerOverlay.IsMouseCaptureWithin || PlayerOverlay.AreAnyTouchesCapturedWithin ||
+            AudioTrackBox.IsDropDownOpen || SubtitleTrackBox.IsDropDownOpen || FormatBox.IsDropDownOpen;
+        if (!_viewModel.CanHideControls || interacting || !IsEnabled || WindowState == WindowState.Minimized ||
+            (!IsActive && _overlayWindow?.IsActive != true))
         {
-            PlayerControls.Visibility = Visibility.Visible;
-            if (_displays.IsPictureInPicture) PipHeader.Visibility = Visibility.Visible;
+            RevealControls();
             return;
         }
-        if (DateTime.UtcNow - _lastInteraction > TimeSpan.FromSeconds(2.5) || (_displays.IsPictureInPicture && !isCursorInsidePlayer && DateTime.UtcNow - _lastInteraction > TimeSpan.FromSeconds(1.0)))
+        if (!isCursorInsidePlayer) PlayerOverlay.Cursor = Cursors.Arrow;
+        if (DateTime.UtcNow - _lastInteraction >= TimeSpan.FromSeconds(2.5))
         {
-            if (_displays.IsPictureInPicture)
-            { 
-                PlayerControls.Visibility = Visibility.Collapsed;
-                PipHeader.Visibility = Visibility.Collapsed;
-            }
-            else
-            {
-                PlayerControls.Visibility = Visibility.Hidden;
-            }
+            PlayerChrome.Visibility = PlayerControls.Visibility = Visibility.Collapsed;
+            PipHeader.Visibility = Visibility.Collapsed;
+            PlayerOverlay.Cursor = isCursorInsidePlayer ? Cursors.None : Cursors.Arrow;
         }
     }
     private void UpdateTimers()
@@ -716,6 +815,7 @@ public partial class MainWindow : FluentWindow
         args.Cancel = true;
         if (_closing) return;
         _closing = true;
+        PlayerOverlay.Cursor = Cursors.Arrow;
         _controlsTimer.Stop();
         _mediaTimer.Stop();
         _osdTimer.Stop();
@@ -733,6 +833,11 @@ public partial class MainWindow : FluentWindow
 
     protected override void OnClosed(EventArgs e)
     {
+        if (_overlayWindow is not null)
+        {
+            _overlayWindow.Deactivated -= PlayerWindow_Deactivated;
+            _overlayWindow.Activated -= PlayerWindow_Activated;
+        }
         VideoView.MediaPlayer = null;
         VideoView.Dispose();
         base.OnClosed(e);

@@ -104,12 +104,12 @@ public sealed partial class CatalogUiTests
         Assert.Equal(Visibility.Visible, ((UIElement)window.FindName("PipHeader")).Visibility);
         Assert.Equal(Visibility.Collapsed, ((UIElement)window.FindName("StandardControls")).Visibility);
         var video = (FrameworkElement)window.FindName("VideoView");
-        var videoBounds = video.TransformToAncestor(window).TransformBounds(new Rect(video.RenderSize));
+        var videoBounds = BoundsIn(video, window);
         foreach (var name in new[] { "PipHeader", "PipControls" })
         {
             var control = (FrameworkElement)window.FindName(name);
-            Assert.True(control.IsVisible); var bounds = control.TransformToAncestor(window).TransformBounds(new Rect(control.RenderSize));
-            Assert.False(videoBounds.IntersectsWith(bounds));
+            Assert.True(control.IsVisible); var bounds = BoundsIn(control, window);
+            Assert.True(videoBounds.Contains(bounds));
             Assert.True(bounds.Left >= 0 && bounds.Top >= 0 && bounds.Right <= window.ActualWidth + 1 && bounds.Bottom <= window.ActualHeight + 1, name + " exceeds compact layout.");
         }
     }
@@ -120,5 +120,10 @@ public sealed partial class CatalogUiTests
     }
     private static void Click(MainWindow window, string name) => ((ButtonBase)window.FindName(name)).RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
     private static void Press(MainWindow window, Key key) => window.RaiseEvent(new KeyEventArgs(Keyboard.PrimaryDevice, PresentationSource.FromVisual(window), 0, key) { RoutedEvent = Keyboard.PreviewKeyDownEvent });
-    private static async Task SettleAsync(MainWindow window) { await Dispatcher.Yield(DispatcherPriority.ApplicationIdle); window.UpdateLayout(); }
+    private static async Task SettleAsync(MainWindow window)
+    {
+        await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+        window.UpdateLayout();
+        Window.GetWindow((DependencyObject)window.FindName("PlayerOverlay"))?.UpdateLayout();
+    }
 }

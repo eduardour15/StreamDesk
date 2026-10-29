@@ -426,6 +426,7 @@ public sealed partial class MainViewModel
     }
     public async Task RefreshPlaybackDetailsAsync(bool periodicTimer = false)
     {
+        RefreshPlaybackDiagnostics();
         UpdateEpgLabels();
         if (_disposed || !_playbackService.HasActiveMedia) return;
         if (_mediaWatch is not null) { await CaptureMediaAsync(); return; }

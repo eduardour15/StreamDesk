@@ -2,6 +2,8 @@
 
 Fecha: 2026-10-19. Estado: aceptada para implementación F7-T01; validación física pendiente.
 
+**Actualización 2026-10-24:** [ADR-012](ADR-012-overlay-reproductor-cursor-y-atajos.md) sustituye los controles adyacentes originales por controles superpuestos también en PiP. Se conserva la misma ventana principal, `VideoView`, HWND de vídeo, `MediaPlayer`, sesión y restauración de posición/Topmost. El overlay es propiedad de la ventana principal y se dispone con `VideoView`.
+
 El usuario solicita trabajar la siguiente fase después de F5/F6. Se elige únicamente F7-T01, conforme al prompt de mejoras opcionales. Se adelanta este incremento sin aprobar F6 ni declarar una versión 1.0: sus pruebas físicas y la revisión completa de licencias nativas siguen pendientes. No se agregan las otras funciones opcionales.
 
 PiP cambia la presentación de la ventana principal: tamaño compacto, controles adyacentes al video y Topmost activado con opción de desmarcarlo. Conserva el mismo VideoView, HWND de video, MediaPlayer y sesión; entrar/salir no autentica, detiene ni abre medios. El caption nativo permite mover, redimensionar, minimizar y cerrar. Cerrar termina la aplicación y libera el reproductor; Volver/Esc restaura la ventana previa sin detenerlo.

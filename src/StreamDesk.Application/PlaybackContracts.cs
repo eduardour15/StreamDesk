@@ -8,6 +8,7 @@ public interface IPlaybackService : IDisposable, IAsyncDisposable
     bool IsReady { get; }
     bool HasActiveMedia { get; }
     PlaybackSnapshot Snapshot { get; }
+    PlaybackDiagnostics Diagnostics => PlaybackDiagnostics.Empty;
     PlaybackOptions Options { get; set; }
     int Volume { get; set; }
     bool IsMuted { get; set; }
@@ -25,7 +26,8 @@ public interface IPlaybackService : IDisposable, IAsyncDisposable
 
 public enum PlaybackSignalKind { Playing, Buffering, Paused, Failed, Ended }
 public sealed record PlaybackSignal(long AttemptId, PlaybackSignalKind Kind, PlaybackFailure Failure = PlaybackFailure.None, float BufferPercent = 0);
-public sealed record PlaybackProgress(long PositionMilliseconds, long VideoFrames, long AudioBlocks, long LengthMilliseconds = 0);
+public sealed record PlaybackProgress(long PositionMilliseconds, long VideoFrames, long AudioBlocks, long LengthMilliseconds = 0,
+    long? ReceivedBytes = null, long LostVideoFrames = 0);
 
 public interface IPlaybackBackend : IAsyncDisposable
 {

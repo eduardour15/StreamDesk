@@ -157,6 +157,7 @@ public sealed class UxOptimizationTests
         // UX-OPT-T04: Movies/Series tabs accessible & HasNoMediaItems true initially
         vm.CurrentTabIndex = 5;
         Assert.True(vm.ShowMovieBrowse);
+        await PlaybackTests.UntilAsync(() => !vm.IsMediaFiltering);
         Assert.True(vm.HasNoMediaItems);
 
         // UX-OPT-T08: ConnectedProfileId tracks connected profile

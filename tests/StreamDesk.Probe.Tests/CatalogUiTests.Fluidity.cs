@@ -114,11 +114,11 @@ public sealed partial class CatalogUiTests
             var initialBounds = video.TransformToAncestor(window).TransformBounds(new Rect(video.RenderSize));
             var indicator = (FrameworkElement)window.FindName("VideoLoadingIndicator");
             Assert.Equal(Visibility.Visible, indicator.Visibility);
-            Assert.False(initialBounds.IntersectsWith(indicator.TransformToAncestor(window).TransformBounds(new Rect(indicator.RenderSize))));
+            Assert.True(initialBounds.Contains(BoundsIn(indicator, window)));
             backend.Emit(new(backend.Opens.Last().Id, PlaybackSignalKind.Playing)); await WaitAsync(() => vm.IsPlaying); await SettleAsync(window);
             Assert.Equal(initialBounds, video.TransformToAncestor(window).TransformBounds(new Rect(video.RenderSize)));
             var controls = (FrameworkElement)window.FindName("PlayerControls");
-            controls.Visibility = Visibility.Hidden; await SettleAsync(window);
+            controls.Visibility = Visibility.Collapsed; await SettleAsync(window);
             Assert.Equal(initialBounds, video.TransformToAncestor(window).TransformBounds(new Rect(video.RenderSize)));
             controls.Visibility = Visibility.Visible;
             backend.Emit(new(backend.Opens.Last().Id, PlaybackSignalKind.Buffering, BufferPercent: 35)); await WaitAsync(() => vm.IsVideoLoading); await SettleAsync(window);

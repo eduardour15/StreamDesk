@@ -7,8 +7,11 @@ public sealed class ShortcutTests
 {
     [Theory]
     [InlineData(Key.Space, PlaybackShortcut.Toggle)]
-    [InlineData(Key.Left, PlaybackShortcut.Previous)]
-    [InlineData(Key.Right, PlaybackShortcut.Next)]
+    [InlineData(Key.K, PlaybackShortcut.Toggle)]
+    [InlineData(Key.Left, PlaybackShortcut.SeekShortBackward)]
+    [InlineData(Key.Right, PlaybackShortcut.SeekShortForward)]
+    [InlineData(Key.J, PlaybackShortcut.SeekBackward)]
+    [InlineData(Key.L, PlaybackShortcut.SeekForward)]
     [InlineData(Key.Up, PlaybackShortcut.VolumeUp)]
     [InlineData(Key.Down, PlaybackShortcut.VolumeDown)]
     [InlineData(Key.F, PlaybackShortcut.Fullscreen)]
@@ -32,5 +35,16 @@ public sealed class ShortcutTests
     public void EscapeRestoresPictureInPictureEvenWithControlFocused()
     {
         Assert.Equal(PlaybackShortcut.ExitPictureInPicture, PlaybackShortcuts.Resolve(Key.Escape, ModifierKeys.None, true, false, true, pictureInPicture: true));
+    }
+
+    [Theory]
+    [InlineData(Key.P, PlaybackShortcut.Previous)]
+    [InlineData(Key.N, PlaybackShortcut.Next)]
+    public void ChannelNavigationUsesShiftWithoutStealingSeekOrEditing(Key key, PlaybackShortcut expected)
+    {
+        Assert.Equal(expected, PlaybackShortcuts.Resolve(key, ModifierKeys.Shift, false, false, true));
+        Assert.Equal(PlaybackShortcut.None, PlaybackShortcuts.Resolve(key, ModifierKeys.Shift, true, false, true));
+        Assert.Equal(PlaybackShortcut.None, PlaybackShortcuts.Resolve(key, ModifierKeys.Control | ModifierKeys.Shift, false, false, true));
+        Assert.Equal(PlaybackShortcut.None, PlaybackShortcuts.Resolve(key, ModifierKeys.Shift, false, false, false));
     }
 }

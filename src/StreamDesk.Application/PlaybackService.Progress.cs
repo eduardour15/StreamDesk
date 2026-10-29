@@ -16,19 +16,15 @@ public sealed partial class PlaybackService
                 {
                     if (!Current(session)) return;
                     if (session.Attempt == 0 && !Snapshot.WillRetry) return;
-                    if (Snapshot.State == PlaybackState.Buffering && !session.SilentStall)
-                    {
-                        // Preserve Progress and ProgressObserved across native Buffering events so a stream
-                        // that exits Buffering(100%) with frozen frames is still detected as stalled.
-                        session.LastProgressAt = _clock.GetTimestamp();
-                        session.ContinuousProgressSince = 0;
-                        continue;
-                    }
-                    if (Snapshot.State != PlaybackState.Playing && !session.SilentStall)
+                    if (Snapshot.State is not (PlaybackState.Playing or PlaybackState.Buffering) && !session.SilentStall)
                     { session.ResetProgress(); continue; }
+                    // Native Buffering/Playing events are not proof of output progress. Keep sampling
+                    // after the first Playing event even if VLC repeatedly changes its status.
+                    if (!session.HasPlayed) continue;
                     var sample = await _backend.ReadProgressAsync(session.Token).ConfigureAwait(false);
                     // Stop/Play can retire the session while the native read is in flight.
                     if (!Current(session) || session.Token.IsCancellationRequested) return;
+                    ObserveProgress(session, sample);
                     // Missing clocks/statistics are unknown, never evidence of a frozen stream.
                     if (sample is null || (sample.PositionMilliseconds <= 0 && sample.VideoFrames <= 0 && sample.AudioBlocks <= 0))
                     { session.Progress = null; session.ProgressObserved = false; session.ContinuousProgressSince = 0; continue; }
@@ -48,7 +44,7 @@ public sealed partial class PlaybackService
                         if (!session.ProgressObserved || session.SilentStall || session.ContinuousProgressSince == 0)
                             session.ContinuousProgressSince = now;
                         session.LastProgressAt = now; session.ProgressObserved = true;
-                        if (session.SilentStall)
+                        if (session.SilentStall || Snapshot.State == PlaybackState.Buffering)
                         {
                             session.SilentStall = false; session.CancelTimeout();
                             Publish(PlaybackState.Playing, session: session);
@@ -62,8 +58,10 @@ public sealed partial class PlaybackService
                         }
                         continue;
                     }
+                    session.ContinuousProgressSince = 0;
                     // Allow both the configured cache and short scheduling/network pauses.
-                    var tolerance = TimeSpan.FromMilliseconds(Math.Max(_policy.StallThreshold.TotalMilliseconds, session.Options.BufferMilliseconds * 2L));
+                    var tolerance = TimeSpan.FromMilliseconds(Math.Max(_policy.StallThreshold.TotalMilliseconds,
+                        Math.Max(session.EffectiveBufferMilliseconds * 2L, AdaptiveDelay(session))));
                     if (!session.ProgressObserved || session.SilentStall || _clock.GetElapsedTime(session.LastProgressAt, now) < tolerance) continue;
                     // Natural VOD completion belongs to Ended; do not reconnect near its end.
                     if (session.Options.OnDemand && sample.LengthMilliseconds > 0 && sample.PositionMilliseconds >= sample.LengthMilliseconds - 1000) continue;

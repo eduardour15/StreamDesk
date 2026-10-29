@@ -151,8 +151,8 @@ La separación puede simplificarse si el MVP se vuelve innecesariamente complejo
 - [x] **F4-T03** Implementar favoritos con persistencia por perfil y acceso directo.
 - [x] **F4-T04** Implementar recientes, último canal visto y opción de reproducirlo al iniciar (apagada por defecto).
 - [x] **F4-T05** Implementar búsqueda instantánea y accesos a categorías frecuentes.
-- [x] **F4-T06** Añadir atajos de teclado: espacio, Esc, flechas, F, M; evitar conflictos en campos de texto.
-- [x] **F4-T07** Diseñar controles de reproducción con autocultamiento, verificando la solución elegida para airspace.
+- [x] **F4-T06** Añadir atajos de teclado: espacio, Esc, flechas, F, M; evitar conflictos en campos de texto. Corrección 2026-10-24: Espacio/K, seek ←/→ ±5 s y J/L ±10 s condicional, canales Shift+P/N, volumen por teclado 0–100 y foco de overlay.
+- [x] **F4-T07** Diseñar controles de reproducción con autocultamiento, verificando la solución elegida para airspace. Corrección 2026-10-24: foreground de VideoView.Content, sin franja reservada; controles y cursor tras 2,5 s; vídeo AVI local y entrada de escritorio verificados (ADR-012). Proveedor/DPI físicos pendientes en sus IDs.
 - [x] **F4-T08** Implementar estados de skeleton/placeholder, red lenta, sin resultados, timeout, expiración y sin conexión.
 - [ ] **F4-T09** Validar escalado 100–200 %, resoluciones y ventanas pequeñas; navegación por teclado y contraste. PARCIAL: escala simulada/layout/contraste probados; faltan DPI físicos y dos monitores.
 - [ ] **F4-T10** Realizar evaluación UX: alta de cuenta, localizar canal, reproducir, añadir favorito y volver al último canal. PARCIAL: recorrido WPF automatizado pasa; evaluación humana/IPTV pendiente.

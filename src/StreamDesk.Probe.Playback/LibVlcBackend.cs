@@ -35,7 +35,8 @@ public sealed class LibVlcBackend : IPlaybackBackend
         if (!File.Exists(Path.Combine(directory, "libvlc.dll")) || !File.Exists(Path.Combine(directory, "libvlccore.dll")))
             throw new PlaybackException(PlaybackFailure.Unavailable);
         lock (CoreSync) LibVLCSharp.Shared.Core.Initialize(directory);
-        var lib = new LibVLC("--no-video-title-show", "--avcodec-hw=d3d11va");
+        // Let VLC select a supported decoder and catch up after short CPU/GPU stalls.
+        var lib = new LibVLC("--no-video-title-show", "--avcodec-hw=any", "--drop-late-frames", "--skip-frames");
         try
         {
             // Subscribing replaces VLC's default logger. Raw messages are classified
@@ -58,21 +59,25 @@ public sealed class LibVlcBackend : IPlaybackBackend
         if (_media is not null) throw new InvalidOperationException("El medio anterior debe detenerse antes de abrir otro.");
         Volatile.Write(ref _failure, (int)PlaybackFailure.None); Interlocked.Exchange(ref _attempt, attemptId);
         var media = new Media(_libVlc, source);
-        media.AddOption(":network-caching=" + options.BufferMilliseconds);
+        var httpLive = !options.OnDemand && source.Scheme is "http" or "https";
+        media.AddOption(":network-caching=" + (httpLive ? options.LiveBufferMilliseconds : options.BufferMilliseconds));
         media.AddOption(":live-caching=" + options.BufferMilliseconds);
         media.AddOption(":file-caching=" + options.BufferMilliseconds);
-        if (!options.OnDemand)
+        if (httpLive)
         {
-            media.AddOption(":clock-jitter=5000");
-            media.AddOption(":no-drop-late-frames");
-            media.AddOption(":no-skip-frames");
-            if (source.Scheme is "http" or "https")
+            media.AddOption(":http-reconnect");
+            // These options are consumed only when VLC selects its adaptive demux (HLS/DASH).
+            // A single rendition stays at its original quality; no second stream is probed.
+            media.AddOption(options.LiveQuality == LiveQualityPreference.DataSaver ? ":adaptive-logic=lowest" : ":adaptive-logic=nearoptimal");
+            if (options.PrioritizeContinuity)
             {
-                media.AddOption(":http-reconnect");
+                media.AddOption(":adaptive-livedelay=" + options.AdaptiveLiveDelayMilliseconds);
+                media.AddOption(":adaptive-maxbuffer=30000");
+                media.AddOption(":adaptive-lowlatency=0");
             }
         }
         media.AddOption(":avcodec-threads=0");
-        media.AddOption(options.Hardware == HardwareDecoding.Software ? ":avcodec-hw=none" : ":avcodec-hw=d3d11va");
+        media.AddOption(options.Hardware == HardwareDecoding.Software ? ":avcodec-hw=none" : ":avcodec-hw=any");
         if (options.OnDemand && options.StartPositionMilliseconds > 0)
             media.AddOption(":start-time=" + (options.StartPositionMilliseconds / 1000d).ToString(System.Globalization.CultureInfo.InvariantCulture));
         try
@@ -130,8 +135,9 @@ public sealed class LibVlcBackend : IPlaybackBackend
         var stats = _media.Statistics;
         var videoFrames = stats.DisplayedPictures > 0 ? stats.DisplayedPictures : stats.DecodedVideo;
         var audioBlocks = stats.PlayedAudioBuffers > 0 ? stats.PlayedAudioBuffers : stats.DecodedAudio;
-        var position = _player.Time > 0 ? _player.Time : (stats.DemuxReadBytes > 0 ? stats.DemuxReadBytes : _player.Time);
-        return new PlaybackProgress(position, videoFrames, audioBlocks, _player.Length);
+        // Received bytes are not playback progress and must never be reported as milliseconds.
+        return new PlaybackProgress(_player.Time, videoFrames, audioBlocks, _player.Length,
+            stats.ReadBytes > 0 ? stats.ReadBytes : null, Math.Max(0, stats.LostPictures));
     }, token);
     public Task<MediaPlaybackDetails> ReadDetailsAsync(CancellationToken token) => Task.Run(() =>
     {

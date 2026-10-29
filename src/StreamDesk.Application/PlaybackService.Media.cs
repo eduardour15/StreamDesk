@@ -24,6 +24,7 @@ public sealed partial class PlaybackService
             {
                 var wasStalled = session.SilentStall;
                 session.ResetProgress();
+                session.MetricsSample = null; EndWaiting(session);
                 if (wasStalled) { session.CancelTimeout(); Publish(PlaybackState.Playing, session: session); }
             }
             return sought;

@@ -3,6 +3,8 @@
 - Fecha: 2026-10-18
 - Estado: aceptada para implementación F3; aceptación multimedia real pendiente.
 
+**Actualización 2026-10-24:** [ADR-013](ADR-013-estabilidad-y-recuperacion-de-tv.md) precisa el búfer adaptativo por sesión, la supervisión por avance y la selección automática de decodificador. Se conserva la preferencia de aplicación de 3500 ms introducida posteriormente y el presupuesto de recuperación acotado.
+
 El usuario solicita culminar F3 expresamente después de informar que los gates F0/F1/F2 necesitan revalidación real. Se implementa F3 bajo esa instrucción, sin aprobar los gates anteriores. El riesgo es que una regresión multimedia real aún no detectada afecte la aceptación final.
 
 Application coordina estados, cancelación, timeout y presupuesto de recuperación detrás de IPlaybackService. Playback implementa IPlaybackBackend con una instancia LibVLC y un MediaPlayer. Se espera Stop antes de abrir el medio siguiente; las operaciones nativas se ejecutan fuera del hilo WPF. Cada intento tiene un identificador: eventos antiguos no cambian el canal vigente. Cerrar, cambiar perfil o suspender cancela apertura, timeout y reconexión. Reanudar Windows no inicia video automáticamente.

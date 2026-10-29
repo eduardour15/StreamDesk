@@ -3,12 +3,16 @@ namespace StreamDesk.Probe.Core;
 public enum PlaybackState { Idle, Loading, Playing, Buffering, Paused, Failed, Stopped }
 public enum PlaybackFailure { None, Cancelled, InvalidSource, Unauthorized, Forbidden, NotFound, Expired, ConnectionLimit, Network, Timeout, HardwareDecoder, UnsupportedFormat, Unavailable, Unknown }
 public enum HardwareDecoding { Automatic, Software }
+public enum LiveQualityPreference { Automatic, DataSaver }
 
-public sealed record PlaybackOptions(int BufferMilliseconds = 1000, HardwareDecoding Hardware = HardwareDecoding.Automatic, bool OnDemand = false, long StartPositionMilliseconds = 0)
+public sealed record PlaybackOptions(int BufferMilliseconds = 1000, HardwareDecoding Hardware = HardwareDecoding.Automatic, bool OnDemand = false, long StartPositionMilliseconds = 0,
+    bool PrioritizeContinuity = false, LiveQualityPreference LiveQuality = LiveQualityPreference.Automatic)
 {
+    public int LiveBufferMilliseconds => PrioritizeContinuity && !OnDemand ? Math.Max(5000, BufferMilliseconds) : BufferMilliseconds;
+    public int AdaptiveLiveDelayMilliseconds => PrioritizeContinuity && !OnDemand ? Math.Clamp(BufferMilliseconds * 3, 20000, 30000) : 0;
     public PlaybackOptions Validate()
     {
-        if (BufferMilliseconds is < 250 or > 10000 || !Enum.IsDefined(Hardware) || StartPositionMilliseconds < 0)
+        if (BufferMilliseconds is < 250 or > 10000 || !Enum.IsDefined(Hardware) || !Enum.IsDefined(LiveQuality) || StartPositionMilliseconds < 0)
             throw new ArgumentOutOfRangeException(nameof(BufferMilliseconds));
         return this;
     }

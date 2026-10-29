@@ -3,6 +3,8 @@
 - **Fecha:** 2026-10-20
 - **Estado:** Aceptada e implementada (incremento post-F7).
 
+**Actualización 2026-10-24:** [ADR-012](ADR-012-overlay-reproductor-cursor-y-atajos.md) sustituye la ubicación adyacente original del indicador de carga de `PLAY-UX-T04` por el foreground HWND de `VideoView.Content`. El loader y los estados comparten el overlay de los controles; no consumen altura del vídeo. El resto de las decisiones se conserva, con las ampliaciones de audio posteriores ya existentes en el código.
+
 ---
 
 ## Contexto

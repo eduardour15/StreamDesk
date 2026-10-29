@@ -347,10 +347,13 @@ public sealed partial class MainViewModel
             _selectedLanguage = settings.Language;
             var clampedBuffer = Math.Clamp(settings.BufferMilliseconds, 250, 10000);
             var targetHardware = settings.SoftwareDecoding ? HardwareDecoding.Software : HardwareDecoding.Automatic;
-            _playbackService.Options = (_playbackService.Options with { BufferMilliseconds = clampedBuffer, Hardware = targetHardware }).Validate();
+            _playbackService.Options = (_playbackService.Options with
+            { BufferMilliseconds = clampedBuffer, Hardware = targetHardware, PrioritizeContinuity = settings.PrioritizeContinuity, LiveQuality = settings.LiveQuality }).Validate();
             OnPropertyChanged(nameof(BufferMilliseconds));
             OnPropertyChanged(nameof(StabilityLabel));
             OnPropertyChanged(nameof(SoftwareDecoding));
+            OnPropertyChanged(nameof(PrioritizeContinuity));
+            OnPropertyChanged(nameof(LiveQuality));
             OnPropertyChanged(nameof(SelectedTheme));
             OnPropertyChanged(nameof(SelectedUiScale));
             OnPropertyChanged(nameof(SelectedLanguage));
@@ -370,8 +373,11 @@ public sealed partial class MainViewModel
         }
     }
 
-    private async Task SavePreferencesAsync()
+    private Task SavePreferencesAsync() => _preferenceWrites = SavePreferencesCoreAsync(_preferenceWrites);
+
+    private async Task SavePreferencesCoreAsync(Task previous)
     {
+        try { await previous; } catch { }
         if (_settingsService is null || _disposed) return;
         try
         {
@@ -382,7 +388,9 @@ public sealed partial class MainViewModel
                 UiScale = SelectedUiScale,
                 Language = SelectedLanguage,
                 BufferMilliseconds = Math.Clamp(BufferMilliseconds, 250, 10000),
-                SoftwareDecoding = SoftwareDecoding
+                SoftwareDecoding = SoftwareDecoding,
+                PrioritizeContinuity = PrioritizeContinuity,
+                LiveQuality = LiveQuality
             };
             await _settingsService.SaveAppSettingsAsync(updated, _shutdown.Token);
         }

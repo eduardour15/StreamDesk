@@ -55,7 +55,7 @@ public sealed partial class MainViewModel
     public string PlayPauseIcon => CanPausePlayback ? "⏸" : "▶";
     public Wpf.Ui.Controls.SymbolRegular PlayPauseSymbol => CanPausePlayback ? Wpf.Ui.Controls.SymbolRegular.Pause24 : Wpf.Ui.Controls.SymbolRegular.Play24;
     public string PlayPauseAction => CanPausePlayback ? "Pausar" : IsPaused ? "Reanudar" : "Reproducir";
-    public string PlayPauseToolTip => CanPausePlayback ? "Pausar (Espacio)" : IsPaused ? "Reanudar (Espacio)" : "Reproducir (Espacio)";
+    public string PlayPauseToolTip => CanPausePlayback ? "Pausar (Espacio / K)" : IsPaused ? "Reanudar (Espacio / K)" : "Reproducir (Espacio / K)";
     public string PlayActionIcon => _playback.IsActive ? "⏹" : "▶";
     public string PlayAction => _playback.IsActive ? "Detener" : "Reproducir";
 
@@ -277,6 +277,7 @@ public sealed partial class MainViewModel
                 if ((watch is not null && !ReferenceEquals(watch, _watch)) || (media is not null && !ReferenceEquals(media, _mediaWatch))) return;
             }
             _playback = snapshot;
+            RefreshPlaybackDiagnostics();
             NotifyPlaybackLoadingState();
             StatusMessage = PlaybackStatus;
             OnPropertyChanged(nameof(PlaybackStatus)); OnPropertyChanged(nameof(ShowPlaybackPlaceholder)); OnPropertyChanged(nameof(ShowPlaybackCaption)); OnPropertyChanged(nameof(CanRetryPlayback));

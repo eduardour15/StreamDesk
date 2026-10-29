@@ -153,10 +153,11 @@ public sealed partial class CatalogUiTests
             await VerifyStaleCredentialReadDoesNotClearNewProfileAsync();
             await VerifyProfileChangeDoesNotUnlockProfileSaveAsync();
             await VerifyMvpUxAsync(directory, logos);
-            await VerifyNativeControlPlacementAsync(logos);
+            await VerifyNativeControlPlacementAsync(directory, logos);
             await VerifyContentUiAsync(directory, logos);
             await VerifyPictureInPictureAsync(directory, logos);
             await VerifyFluidityAsync(directory, logos);
+            await VerifyContinuityPreferencesAsync(directory, logos);
         }
         finally { window.Close(); await WaitAsync(() => !window.IsVisible); }
     }
@@ -216,6 +217,7 @@ public sealed partial class CatalogUiTests
             Assert.Equal(1, backend.Active);
             Assert.Equal(Visibility.Visible, ((FrameworkElement)window.FindName("MovieDetailsPane")).Visibility);
             await vm.RefreshPlaybackDetailsAsync(); Assert.True(vm.CanSeek);
+            await VerifyPlayerKeyboardAsync(window, vm, backend);
             await vm.SeekToAsync(70); Assert.Equal(70000, backend.Sought);
             vm.SelectedAudioTrack = vm.AudioTracks.Single(track => track.Id == 4); await vm.SelectTrackAsync(false); Assert.Equal((false, 4), backend.ChosenTrack);
             await vm.StopPlaybackAsync(); Assert.Equal(60000, Assert.Single(await content.LoadProgressAsync("first")).PositionMilliseconds);
@@ -265,13 +267,11 @@ public sealed partial class CatalogUiTests
         public void Dispose() { }
     }
 
-    private static async Task VerifyNativeControlPlacementAsync(ChannelLogoLoader logos)
+    private static async Task VerifyNativeControlPlacementAsync(string artifacts, ChannelLogoLoader logos)
     {
         using var db = new TestDatabase(); await db.Settings.InitializeAsync();
-        var imagePath = Path.Combine(db.Root, "local-fixture.bmp");
-        var encoder = new BmpBitmapEncoder();
-        encoder.Frames.Add(BitmapFrame.Create(BitmapSource.Create(16, 16, 96, 96, PixelFormats.Bgr24, null, Enumerable.Repeat((byte)180, 16 * 16 * 3).ToArray(), 16 * 3)));
-        using (var file = File.Create(imagePath)) encoder.Save(file);
+        var imagePath = Path.Combine(db.Root, "local-fixture.avi");
+        NativeVideoFixture.Write(imagePath);
         var credentials = new FixtureCredentials(); var nativeBackend = new LibVlcBackend(); var playback = new PlaybackService(nativeBackend);
         var vm = new MainViewModel((_, _, _) => new LocalFixtureProvider(new Uri(imagePath)), playback,
             new ProfileService(db.Settings, credentials), new FixtureLogger(), new CatalogService(db.Store), credentials);
@@ -279,6 +279,10 @@ public sealed partial class CatalogUiTests
         try
         {
             window.Show(); await WaitAsync(() => vm.IsPlaybackReady && !vm.IsWorking);
+            await SettleAsync(window);
+            var initialRoot = (FrameworkElement)window.FindName("PlayerOverlay");
+            Assert.False(initialRoot.IsVisible);
+            Assert.True(Window.GetWindow(initialRoot)?.IsVisible != true, "The native overlay must stay hidden on the initial Home page.");
             vm.CurrentTabIndex = 1; await vm.ConnectAsync("https://provider.invalid", "fixture-user", "fixture-password");
             await vm.LoadCatalogAsync(); vm.SelectedChannel = vm.Channels[0]; await vm.PlaySelectedAsync();
             await WaitAsync(() => vm.IsPlaying);
@@ -287,10 +291,15 @@ public sealed partial class CatalogUiTests
             var player = Assert.IsType<LibVLCSharp.Shared.MediaPlayer>(vm.PlayerHandle);
             Assert.NotEqual(nint.Zero, player.Hwnd);
             var controls = (FrameworkElement)window.FindName("PlayerControls");
-            var videoBounds = video.TransformToAncestor(window).TransformBounds(new Rect(video.RenderSize));
-            var controlsBounds = controls.TransformToAncestor(window).TransformBounds(new Rect(controls.RenderSize));
-            Assert.False(videoBounds.IntersectsWith(controlsBounds));
-            Assert.NotNull(window.InputHitTest(controlsBounds.TopLeft + new Vector(12, 12)));
+            var videoBounds = BoundsIn(video, window);
+            var controlsBounds = BoundsIn(controls, window);
+            Assert.True(videoBounds.Contains(controlsBounds));
+            var overlayWindow = Window.GetWindow(controls);
+            Assert.NotSame(window, overlayWindow);
+            Assert.Same(window, overlayWindow.Owner);
+            Assert.True(overlayWindow.AllowsTransparency);
+            Assert.NotSame(PresentationSource.FromVisual(video), PresentationSource.FromVisual(controls));
+            Assert.NotNull(overlayWindow.InputHitTest(overlayWindow.PointFromScreen(controls.PointToScreen(new Point(12, 12)))));
             var loadingBanner = (FrameworkElement)window.FindName("VideoLoadingIndicator");
             Assert.Equal(Visibility.Collapsed, loadingBanner.Visibility);
             vm.AmplificationDb = 4;
@@ -299,6 +308,8 @@ public sealed partial class CatalogUiTests
             await WaitAsync(() => nativeBackend.ActiveAmplificationDb == 12 && Math.Abs(nativeBackend.ActivePreampDb - 12f) < 0.05f);
             vm.AmplificationDb = 0;
             await WaitAsync(() => !nativeBackend.IsEqualizerEnabled && nativeBackend.ActiveAmplificationDb == 0);
+            await VerifyNativeOverlayInteractionAsync(artifacts, window, vm, player);
+            await VerifyOverlayNavigationAsync(artifacts, window, vm, player);
             await VerifyNativePictureInPictureAsync(window, vm, player, db.Root);
             var stop = Descendants<ButtonBase>(controls).Single(button => button.IsVisible && button.Content as string == "⏹");
             Assert.Equal("Detener", System.Windows.Automation.AutomationProperties.GetName(stop));
@@ -361,7 +372,8 @@ public sealed partial class CatalogUiTests
             search.RaiseEvent(new KeyEventArgs(Keyboard.PrimaryDevice, PresentationSource.FromVisual(window), 0, Key.M) { RoutedEvent = Keyboard.PreviewKeyDownEvent });
             Assert.Equal(muted, vm.IsMuted);
             var controls = (FrameworkElement)window.FindName("PlayerControls");
-            await WaitAsync(() => controls.Visibility == Visibility.Hidden);
+            window.Activate();
+            await WaitAsync(() => controls.Visibility == Visibility.Collapsed);
             ((UIElement)window.FindName("PlayerPane")).RaiseEvent(new MouseEventArgs(Mouse.PrimaryDevice, 0) { RoutedEvent = Mouse.MouseMoveEvent });
             Assert.Equal(Visibility.Visible, controls.Visibility);
             backend.Emit(new(backend.Opens.Last().Id, PlaybackSignalKind.Failed, PlaybackFailure.Forbidden));
@@ -382,7 +394,7 @@ public sealed partial class CatalogUiTests
                 await Dispatcher.Yield(DispatcherPriority.ApplicationIdle); window.UpdateLayout();
                 var player = (FrameworkElement)window.FindName("PlayerPane");
                 Assert.True(player.ActualWidth > 180); Assert.True(player.ActualHeight > 100);
-                var bounds = controls.TransformToAncestor(shell).TransformBounds(new Rect(controls.RenderSize));
+                var bounds = BoundsIn(controls, shell);
                 Assert.True(bounds.Right <= shell.ActualWidth + 2 && bounds.Bottom <= shell.ActualHeight + 2, $"Controls exceed available layout space: scale={scale}, bounds={bounds}, shell={shell.RenderSize}.");
             }
             shell.LayoutTransform = Transform.Identity; window.Width = 1360; window.Height = 850;
@@ -422,6 +434,11 @@ public sealed partial class CatalogUiTests
             foreach (var descendant in Descendants<T>(child)) yield return descendant;
         }
     }
+
+    // Overlay controls live in a separate presentation source, so TransformToAncestor is invalid.
+    private static Rect BoundsIn(FrameworkElement element, Visual relativeTo) => new(
+        relativeTo.PointFromScreen(element.PointToScreen(new Point())),
+        relativeTo.PointFromScreen(element.PointToScreen(new Point(element.ActualWidth, element.ActualHeight))));
     private static double Contrast(Color foreground, Color background)
     {
         static double Channel(byte value) { var c = value / 255d; return c <= 0.04045 ? c / 12.92 : Math.Pow((c + 0.055) / 1.055, 2.4); }

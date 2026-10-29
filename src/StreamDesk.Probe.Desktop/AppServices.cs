@@ -26,7 +26,7 @@ public sealed class AppServices : IDisposable
         ProviderFactory = (url, username, password) => new XtreamApiClient(url, username, password, requestTimeout: TimeSpan.FromSeconds(60), httpClient: factory.CreateClient("Xtream"));
         Playlists = new M3uPlaylistImporter();
         Logos = new ChannelLogoLoader(factory.CreateClient("Logos"));
-        Playback = new PlaybackService(new LibVlcBackend()) { Options = new(3500) };
+        Playback = new PlaybackService(new LibVlcBackend()) { Options = new(3500, PrioritizeContinuity: true) };
         Sync = new EncryptedSyncService(Viewer);
         ParentalControl = new ParentalControlService(Settings);
     }

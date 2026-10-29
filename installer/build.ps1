@@ -11,8 +11,13 @@ $InstallerDir = Join-Path $Root "artifacts\installer"
 $ProjectFile = Join-Path $Root "src\StreamDesk.Probe.Desktop\StreamDesk.Probe.Desktop.csproj"
 $IssFile = Join-Path $PSScriptRoot "StreamDesk.iss"
 
-Write-Host "==> 1. Publicando StreamDesk en modo autocontenido (win-x64)..." -ForegroundColor Cyan
-dotnet publish $ProjectFile -c $Configuration -r win-x64 --self-contained true -o $PublishDir
+# Obtener versión desde el proyecto
+[xml]$projXml = Get-Content $ProjectFile
+$Version = ($projXml.Project.PropertyGroup | Where-Object { $_.Version }).Version
+if (-not $Version) { $Version = "0.5.2" }
+
+Write-Host "==> 1. Publicando StreamDesk v$Version en modo autocontenido (win-x64)..." -ForegroundColor Cyan
+dotnet publish $ProjectFile -c $Configuration -r win-x64 --self-contained true -p:VlcWindowsX64Enabled=true -p:VlcWindowsX86Enabled=false -p:VlcWindowsArm64Enabled=false -o $PublishDir
 
 Write-Host "==> 2. Buscando compilador de Inno Setup (ISCC.exe)..." -ForegroundColor Cyan
 $Iscc = @(
@@ -29,5 +34,8 @@ Write-Host "Usando compilador: $Iscc" -ForegroundColor Gray
 Write-Host "==> 3. Generando instalador ejecutable..." -ForegroundColor Cyan
 & $Iscc $IssFile
 
-Write-Host "==> ¡Instalador generado con éxito en: $InstallerDir!" -ForegroundColor Green
+$VersionedInstaller = Join-Path $InstallerDir "StreamDesk_Actualizacion_v$Version.exe"
+Copy-Item (Join-Path $InstallerDir "StreamDesk_Installer.exe") $VersionedInstaller -Force
+
+Write-Host "==> ¡Instaladores generados con éxito en: $InstallerDir!" -ForegroundColor Green
 Get-Item "$InstallerDir\*.exe" | Select-Object Name, @{Name="SizeMB"; Expression={[math]::Round($_.Length / 1MB, 2)}}, LastWriteTime | Format-Table -AutoSize

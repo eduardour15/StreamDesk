@@ -27,7 +27,8 @@ public sealed partial class PlaybackService : IPlaybackService
     public PlaybackService(IPlaybackBackend backend, PlaybackPolicy? policy = null, TimeProvider? clock = null)
     {
         _backend = backend; _policy = policy ?? PlaybackPolicy.Default; _clock = clock ?? TimeProvider.System;
-        if (_policy.StartupTimeout <= TimeSpan.Zero || _policy.RetryDelay < TimeSpan.Zero || _policy.ProgressInterval <= TimeSpan.Zero || _policy.StallThreshold <= TimeSpan.Zero || _policy.StallTimeout <= TimeSpan.Zero)
+        if (_policy.StartupTimeout <= TimeSpan.Zero || _policy.RetryDelay < TimeSpan.Zero || _policy.ProgressInterval <= TimeSpan.Zero || _policy.StallThreshold <= TimeSpan.Zero || _policy.StallTimeout <= TimeSpan.Zero
+            || _policy.StableResetThreshold <= TimeSpan.Zero || _policy.MaxRetries < 0 || _policy.RetryBufferStepMilliseconds < 0)
             throw new ArgumentOutOfRangeException(nameof(policy));
         _backend.Signal += BackendSignal;
     }
@@ -173,20 +174,19 @@ public sealed partial class PlaybackService : IPlaybackService
         session.HasPlayed = false;
         session.UserPaused = false;
         session.ResetProgress();
+        session.MetricsSample = null;
+        if (!session.PlayedOnce) Volatile.Write(ref _diagnostics, PlaybackDiagnostics.Empty);
         session.Attempt = ++_attempt;
         Publish(PlaybackState.Loading, session: session);
         await _backend.SetAudioAsync(Math.Clamp(Volume, 0, 100), IsMuted).ConfigureAwait(false);
         await _backend.SetAmplificationAsync(AmplificationDb).ConfigureAwait(false);
-        var effectiveBuffer = !session.Options.OnDemand && session.Retries > 0
-            ? Math.Clamp(session.Options.BufferMilliseconds + (session.Retries * _policy.RetryBufferStepMilliseconds), 250, 10000)
-            : session.Options.BufferMilliseconds;
         await _backend.OpenAsync(session.Source, session.Options with
         {
-            BufferMilliseconds = effectiveBuffer,
+            BufferMilliseconds = session.EffectiveBufferMilliseconds,
             Hardware = session.Software ? HardwareDecoding.Software : session.Options.Hardware,
             StartPositionMilliseconds = session.ResumePosition
         }, session.Attempt, session.Token).ConfigureAwait(false);
-        ArmTimeout(session, _policy.StartupTimeout);
+        ArmTimeout(session, NativeBufferTimeout(session));
         if (!session.MonitorStarted) { session.MonitorStarted = true; _progressMonitors = Task.WhenAll(_progressMonitors, MonitorProgressAsync(session)); }
     }
 
@@ -202,16 +202,20 @@ public sealed partial class PlaybackService : IPlaybackService
             switch (signal.Kind)
             {
                 case PlaybackSignalKind.Playing:
-                    if (session.UserPaused) break;
+                    if (session.UserPaused || session.SilentStall) break;
                     if (!session.HasPlayed) session.ResetProgress();
-                    else session.LastProgressAt = _clock.GetTimestamp();
                     session.HasPlayed = true; session.CancelTimeout(); Publish(PlaybackState.Playing, session: session); break;
                 case PlaybackSignalKind.Paused:
                     session.ResetProgress(); session.CancelTimeout(); Publish(PlaybackState.Paused, session: session); break;
                 case PlaybackSignalKind.Buffering:
                     if (Snapshot.State == PlaybackState.Paused || session.SilentStall) break;
-                    if (signal.BufferPercent >= 100) { if (session.HasPlayed) { session.LastProgressAt = _clock.GetTimestamp(); session.CancelTimeout(); Publish(PlaybackState.Playing, session: session); } else Publish(PlaybackState.Loading, session: session); }
-                    else { if (Snapshot.State == PlaybackState.Playing) ArmTimeout(session, _policy.StartupTimeout); Publish(PlaybackState.Buffering, session: session, percent: signal.BufferPercent); }
+                    if (signal.BufferPercent >= 100) { if (session.HasPlayed) { session.CancelTimeout(); Publish(PlaybackState.Playing, session: session); } else Publish(PlaybackState.Loading, session: session); }
+                    else
+                    {
+                        session.ContinuousProgressSince = 0;
+                        if (Snapshot.State == PlaybackState.Playing) ArmTimeout(session, NativeBufferTimeout(session));
+                        Publish(PlaybackState.Buffering, session: session, percent: signal.BufferPercent);
+                    }
                     break;
                 case PlaybackSignalKind.Ended:
                     if (session.Options.OnDemand)
@@ -249,7 +253,13 @@ public sealed partial class PlaybackService : IPlaybackService
         var hardwareFallback = failure == PlaybackFailure.HardwareDecoder && !session.Software && session.Options.Hardware == HardwareDecoding.Automatic;
         var retry = failure is PlaybackFailure.Network or PlaybackFailure.Timeout && session.Retries < _policy.MaxRetries;
         if (hardwareFallback) session.Software = true;
-        else if (retry) session.Retries++;
+        else if (retry)
+        {
+            session.Retries++;
+            // Keep the cache learned by this live session even when the retry budget resets.
+            if (!session.Options.OnDemand)
+                session.EffectiveBufferMilliseconds = (int)Math.Clamp((long)session.EffectiveBufferMilliseconds + _policy.RetryBufferStepMilliseconds, 250, 10000);
+        }
         Publish(PlaybackState.Failed, failure, session, willRetry: hardwareFallback || retry);
         if (hardwareFallback) await OpenAsync(session).ConfigureAwait(false);
         else if (retry) _ = RecoverAsync(session, _policy.RetryDelay * session.Retries);
@@ -341,6 +351,7 @@ public sealed partial class PlaybackService : IPlaybackService
     private static PlaybackFailure SafeFailure(Exception error) => error is PlaybackException playback ? playback.Failure : PlaybackFailure.Unknown;
     private void Publish(PlaybackState state, PlaybackFailure failure = PlaybackFailure.None, Session? session = null, float percent = 0, bool willRetry = false, bool ended = false)
     {
+        ObservePlaybackState(session ?? _session, state, willRetry);
         var value = new PlaybackSnapshot(++_sequence, state, failure, session?.Retries ?? 0, Math.Clamp(percent, 0, 100), session?.Software == true || session?.Options.Hardware == HardwareDecoding.Software, willRetry, ended);
         Volatile.Write(ref _snapshot, value); StateChanged?.Invoke(this, value);
     }
@@ -376,6 +387,7 @@ public sealed partial class PlaybackService : IPlaybackService
         public PlaybackOptions Options { get; }
         public long Attempt;
         public int Retries;
+        public int EffectiveBufferMilliseconds;
         public bool Software;
         public bool HasPlayed;
         public long ResumePosition;
@@ -383,9 +395,15 @@ public sealed partial class PlaybackService : IPlaybackService
         public PlaybackProgress? Progress;
         public long LastProgressAt;
         public long ContinuousProgressSince;
+        public bool PlayedOnce;
+        public long? WaitingSince;
+        public double WaitingSeconds;
+        public int RebufferCount;
+        public PlaybackProgress? MetricsSample;
+        public long MetricsSampleAt;
         public void ResetProgress() { Progress = null; ProgressObserved = false; SilentStall = false; ContinuousProgressSince = 0; }
         public Session(long version, Uri source, PlaybackOptions options, CancellationToken token)
-        { Version = version; Source = source; Options = options; ResumePosition = options.StartPositionMilliseconds; _cancel = CancellationTokenSource.CreateLinkedTokenSource(token); Token = _cancel.Token; }
+        { Version = version; Source = source; Options = options; EffectiveBufferMilliseconds = !options.OnDemand && source.Scheme is "http" or "https" ? options.LiveBufferMilliseconds : options.BufferMilliseconds; ResumePosition = options.StartPositionMilliseconds; _cancel = CancellationTokenSource.CreateLinkedTokenSource(token); Token = _cancel.Token; }
         public CancellationToken? RestartTimeout()
         {
             lock (_timerSync)

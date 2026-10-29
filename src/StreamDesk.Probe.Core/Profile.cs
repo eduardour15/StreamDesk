@@ -18,4 +18,6 @@ public sealed record AppSettings(
     string? ParentalPinHash = null,
     string? ParentalPinSalt = null,
     int BufferMilliseconds = 3500,
-    bool SoftwareDecoding = false);
+    bool SoftwareDecoding = false,
+    bool PrioritizeContinuity = true,
+    LiveQualityPreference LiveQuality = LiveQualityPreference.Automatic);

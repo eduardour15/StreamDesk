@@ -3,6 +3,8 @@
 - Fecha: 2026-10-18
 - Estado: aceptada para implementación F4.
 
+**Actualización 2026-10-24:** la decisión original de controles adyacentes descrita abajo queda sustituida por [ADR-012](ADR-012-overlay-reproductor-cursor-y-atajos.md). Los controles, el estado y la carga se alojan en el foreground HWND de `VideoView.Content`, sin reservar una franja. Las decisiones de biblioteca y persistencia se conservan.
+
 El usuario solicita cerrar F3 y avanzar a F4. Se registra esa decisión sin atribuir resultados a las mediciones IPTV ni a las pruebas físicas pendientes. F4 puede evaluarse con datos ficticios; el gate técnico conserva esas limitaciones.
 
 SQLite v3 mantiene favoritos e historial por perfil/tipo/ID remoto. El historial registra únicamente el primer estado Playing de una solicitud, conserva los últimos 50 canales distintos por tipo y elimina referencias a canales retirados. La migración consolida duplicados y conserva la fecha más reciente. No se guarda ninguna URL de reproducción. La preferencia de autoplay es por perfil, apagada por defecto; solo se evalúa una vez al arrancar, nunca al cambiar perfil o reanudar Windows. Se recuerda el último perfil seleccionado. La reproducción manual autentica con DPAPI cuando sea necesario.
