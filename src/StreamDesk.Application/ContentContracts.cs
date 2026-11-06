@@ -13,11 +13,14 @@ public interface IContentProvider
 public interface IContentStore
 {
     Task<MediaCatalog?> LoadCatalogAsync(string profileId, ContentKind kind, string scope = "", CancellationToken cancellationToken = default);
+    Task<MediaCatalog?> LoadCatalogAsync(string profileId, ContentKind kind, string scope, bool allowStale, CancellationToken cancellationToken = default);
     Task SaveCatalogAsync(string profileId, ContentKind kind, string scope, MediaCatalog catalog, CancellationToken cancellationToken = default);
     Task<IReadOnlyList<MediaProgress>> LoadProgressAsync(string profileId, CancellationToken cancellationToken = default);
     Task SaveProgressAsync(string profileId, MediaProgress progress, CancellationToken cancellationToken = default);
     Task<IReadOnlyList<EpgProgram>?> LoadEpgAsync(string profileId, string channelId, CancellationToken cancellationToken = default);
     Task SaveEpgAsync(string profileId, string channelId, IReadOnlyList<EpgProgram> programs, CancellationToken cancellationToken = default);
+    Task<MediaTrackPreference?> LoadTrackPreferenceAsync(string profileId, string contentId, ContentKind kind, CancellationToken cancellationToken = default);
+    Task SaveTrackPreferenceAsync(string profileId, MediaTrackPreference preference, CancellationToken cancellationToken = default);
 }
 public interface IEpgImporter
 {

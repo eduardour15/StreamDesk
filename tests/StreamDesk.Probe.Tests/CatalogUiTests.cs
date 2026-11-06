@@ -300,6 +300,18 @@ public sealed partial class CatalogUiTests
             Assert.True(overlayWindow.AllowsTransparency);
             Assert.NotSame(PresentationSource.FromVisual(video), PresentationSource.FromVisual(controls));
             Assert.NotNull(overlayWindow.InputHitTest(overlayWindow.PointFromScreen(controls.PointToScreen(new Point(12, 12)))));
+            Assert.NotNull(window.SelectedDisplay);
+            Assert.Equal(0, window.SelectedDisplay.Handle);
+            Assert.Equal("Pantalla actual (predeterminada)", window.SelectedDisplay.Name);
+            var audioBox = (ComboBox)window.FindName("AudioTrackBox");
+            var subBox = (ComboBox)window.FindName("SubtitleTrackBox");
+            Assert.Equal(System.Windows.Data.BindingMode.TwoWay, System.Windows.Data.BindingOperations.GetBinding(audioBox, ComboBox.SelectedItemProperty)?.Mode);
+            Assert.Equal(System.Windows.Data.BindingMode.TwoWay, System.Windows.Data.BindingOperations.GetBinding(subBox, ComboBox.SelectedItemProperty)?.Mode);
+            var overlayRoot = (UIElement)window.FindName("PlayerOverlay");
+            var sampleItem = new ComboBoxItem { Content = "Sample Audio" };
+            var mouseCheck = new MouseButtonEventArgs(Mouse.PrimaryDevice, 0, MouseButton.Left) { RoutedEvent = UIElement.PreviewMouseDownEvent, Source = sampleItem };
+            overlayRoot.RaiseEvent(mouseCheck);
+            Assert.False(mouseCheck.Handled);
             var loadingBanner = (FrameworkElement)window.FindName("VideoLoadingIndicator");
             Assert.Equal(Visibility.Collapsed, loadingBanner.Visibility);
             vm.AmplificationDb = 4;

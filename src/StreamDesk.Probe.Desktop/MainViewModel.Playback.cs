@@ -223,6 +223,11 @@ public sealed partial class MainViewModel
 
     public async Task StopPlaybackAsync()
     {
+        CancelNextEpisodeAutoPlay();
+        CloseAudioSubtitles();
+        ClosePlaybackStats();
+        CloseEpisodesDrawer();
+        OnPropertyChanged(nameof(CanBrowseEpisodes));
         _channelSwitchCts?.Cancel();
         _channelSwitchCts?.Dispose();
         _channelSwitchCts = null;
@@ -284,6 +289,7 @@ public sealed partial class MainViewModel
             OnPropertyChanged(nameof(IsPlaying)); OnPropertyChanged(nameof(IsPaused)); OnPropertyChanged(nameof(CanStopPlayback)); OnPropertyChanged(nameof(CanHideControls));
             OnPropertyChanged(nameof(PlayPauseIcon)); OnPropertyChanged(nameof(PlayPauseSymbol)); OnPropertyChanged(nameof(PlayPauseAction)); OnPropertyChanged(nameof(PlayPauseToolTip));
             OnPropertyChanged(nameof(PlayAction)); OnPropertyChanged(nameof(PlayActionIcon));
+            OnPropertyChanged(nameof(IsLivePlayback));
             if (media is not null && ReferenceEquals(media, _mediaWatch) && snapshot.Sequence > media.AfterSequence)
             {
                 if (snapshot.State == PlaybackState.Playing) media.Played = true;
@@ -295,6 +301,10 @@ public sealed partial class MainViewModel
                     {
                         media.RandomAdvanceTriggered = true;
                         _autoAdvanceTask = AdvanceRandomEpisodeOnEndedAsync(media);
+                    }
+                    else if (!AutoRandomNextEpisode && media.Item.Kind == ContentKind.Episode && !media.AutoPlayTriggered && media.Version == _sessionVersion)
+                    {
+                        _autoAdvanceTask = TriggerNextEpisodeCountdownAsync(media);
                     }
                 }
             }

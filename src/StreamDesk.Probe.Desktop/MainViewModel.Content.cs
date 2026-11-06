@@ -70,8 +70,34 @@ public sealed partial class MainViewModel
         MediaMetadata.SafeExtension(item.Extension);
     private IReadOnlyList<MediaItem> GetPlayableEpisodes() => (_episodes?.Items ?? []).Where(IsPlayableEpisode).ToArray();
     public bool ShowMediaBrowse => ShowMovieBrowse || ShowSeriesBrowse;
-    public bool ShowPlayerPane => !ShowMediaBrowse || IsImmersiveMode;
+    public bool ShowPlayerPane => (!ShowMediaBrowse || IsImmersiveMode) && (!ShowContinueWatching || _playback.IsActive || _mediaWatch is not null);
     public bool ShowContinueWatching => CurrentTabIndex == 7;
+    public bool HasContinueWatching => ContinueWatching.Count > 0;
+
+    private bool _isMediaGridView = true;
+    public bool IsMediaGridView
+    {
+        get => _isMediaGridView;
+        set => SetProperty(ref _isMediaGridView, value);
+    }
+
+    public enum MediaSortOrder { Default, TitleAsc, TitleDesc }
+    private MediaSortOrder _selectedSortOrder = MediaSortOrder.Default;
+    public MediaSortOrder SelectedSortOrder
+    {
+        get => _selectedSortOrder;
+        set { if (SetProperty(ref _selectedSortOrder, value)) _ = FilterMediaAsync(); }
+    }
+
+    public async Task RemoveFromContinueWatchingAsync(MediaProgress? progress)
+    {
+        if (progress is null || _disposed || _connectedProfileId is null || _contentStore is null) return;
+        var updated = progress with { Completed = true, UpdatedAt = DateTimeOffset.UtcNow };
+        await _contentStore.SaveProgressAsync(_connectedProfileId, updated);
+        _progress = _progress.Where(p => p.Item.StorageKey != progress.Item.StorageKey).ToList();
+        OnPropertyChanged(nameof(ContinueWatching));
+        OnPropertyChanged(nameof(HasContinueWatching));
+    }
     public string VersionLabel => typeof(MainViewModel).Assembly.GetCustomAttributes(typeof(System.Reflection.AssemblyInformationalVersionAttribute), false)
         .OfType<System.Reflection.AssemblyInformationalVersionAttribute>().FirstOrDefault()?.InformationalVersion.Split('+')[0] ?? "Candidato";
     public string HeaderSummary => ShowLiveCatalog ? CatalogSummary : ShowContinueWatching ? $"{ContinueWatching.Count} en curso" : $"{MediaItems.Count} títulos";
@@ -186,52 +212,115 @@ public sealed partial class MainViewModel
     public MediaTrack? SelectedAudioTrack { get; set; }
     public MediaTrack? SelectedSubtitleTrack { get; set; }
     public bool CanSeek => _mediaWatch is not null && _mediaDetails.CanSeek && _mediaDetails.LengthMilliseconds > 0;
+    public bool IsLivePlayback => (_playback.IsActive || _playback.State is PlaybackState.Playing or PlaybackState.Buffering or PlaybackState.Loading)
+                                  && _watch is not null
+                                  && _mediaWatch is null;
     public double DurationSeconds => _mediaDetails.LengthMilliseconds / 1000d;
     public double PositionSeconds => _mediaDetails.TimeMilliseconds / 1000d;
     public string PositionLabel => $"{TimeSpan.FromMilliseconds(_mediaDetails.TimeMilliseconds):hh\\:mm\\:ss} / {TimeSpan.FromMilliseconds(_mediaDetails.LengthMilliseconds):hh\\:mm\\:ss}";
 
-    public async Task ProbeContentAsync()
+    private readonly SemaphoreSlim _syncGate = new(1, 1);
+    private bool _isCatalogSyncing;
+    public bool IsCatalogSyncing { get => _isCatalogSyncing; private set { if (SetProperty(ref _isCatalogSyncing, value)) OnPropertyChanged(nameof(IsWorking)); } }
+    private string? _catalogSyncStatus;
+    public string? CatalogSyncStatus { get => _catalogSyncStatus; private set => SetProperty(ref _catalogSyncStatus, value); }
+
+    public async Task<bool> AutoSyncCatalogAsync(bool force = false)
     {
-        if (_disposed || ContentBusy || !CanConnect) return;
+        if (_disposed || ActiveProfile is null || ActiveProfile.ProviderType == "m3u" || !CanConnect) return false;
+        if (!_syncGate.Wait(0)) return false;
         var version = _sessionVersion;
-        ContentBusy = true;
         CancellationTokenSource? operation = null;
-        var failed = false;
         try
         {
+            if (!force && _movies is not null && _movies.Items.Count > 0 && _series is not null && _series.Items.Count > 0)
+            {
+                var latestSync = _movies.SyncedAt > _series.SyncedAt ? _movies.SyncedAt : _series.SyncedAt;
+                if (DateTimeOffset.UtcNow - latestSync < TimeSpan.FromHours(24))
+                {
+                    return true;
+                }
+            }
+
+            IsCatalogSyncing = true;
+            CatalogSyncStatus = "Sincronizando catálogo en segundo plano…";
+            ContentBusy = true;
+
             if (_client is null) await ConnectProfileAsync();
-            if (version != _sessionVersion || _disposed) return;
-            if (_client is not IContentProvider provider) { ContentStatus = "Tu cuenta no incluye películas ni series."; return; }
+            if (version != _sessionVersion || _disposed) return false;
+            if (_client is not IContentProvider provider)
+            {
+                CatalogSyncStatus = "Tu cuenta no incluye películas ni series.";
+                ContentStatus = CatalogSyncStatus;
+                return false;
+            }
+
             operation = CancellationTokenSource.CreateLinkedTokenSource(_shutdown.Token, _session.Token);
             _operation = operation;
+            var failed = false;
+
             foreach (var kind in new[] { ContentKind.Movie, ContentKind.Series })
             {
                 try
                 {
-                    ContentStatus = kind == ContentKind.Movie ? "Cargando películas…" : "Cargando series…";
+                    CatalogSyncStatus = kind == ContentKind.Movie ? "Actualizando películas…" : "Actualizando series…";
+                    ContentStatus = CatalogSyncStatus;
                     var catalog = await provider.GetMediaCatalogAsync(kind, operation.Token);
-                    operation.Token.ThrowIfCancellationRequested(); if (version != _sessionVersion) return;
-                    if (_connectedProfileId is { } id && _contentStore is not null) await _contentStore.SaveCatalogAsync(id, kind, "", catalog, operation.Token);
-                    if (version != _sessionVersion) return;
+                    operation.Token.ThrowIfCancellationRequested();
+                    if (version != _sessionVersion) return false;
+                    if (_connectedProfileId is { } id && _contentStore is not null)
+                    {
+                        await _contentStore.SaveCatalogAsync(id, kind, "", catalog, operation.Token);
+                    }
+                    if (version != _sessionVersion) return false;
                     if (kind == ContentKind.Movie) _movies = catalog; else _series = catalog;
+                    NotifyContent();
                 }
                 catch (OperationCanceledException) { throw; }
-                catch (Exception error) { failed = true; _logger.LogError("content_catalog", error); }
+                catch (Exception error) { failed = true; _logger.LogError("content_auto_sync", error); }
             }
-            if (version != _sessionVersion || _disposed) return;
-            ContentStatus = $"Películas: {_movies?.Items.Count ?? 0} · Series: {_series?.Items.Count ?? 0}" + (failed ? " · Se conserva la lista guardada." : "");
-            NotifyContent(); await FilterMediaAsync();
+
+            if (version == _sessionVersion && !_disposed)
+            {
+                ContentStatus = $"Películas: {_movies?.Items.Count ?? 0} · Series: {_series?.Items.Count ?? 0}" + (failed ? " · Se conserva la lista guardada." : "");
+                CatalogSyncStatus = failed ? "Sincronización parcial: catálogo guardado disponible." : "Catálogo actualizado.";
+                NotifyContent();
+                await FilterMediaAsync();
+            }
+
+            return !failed;
         }
-        catch (OperationCanceledException) { if (version == _sessionVersion) ContentStatus = "Carga cancelada."; }
-        catch (Exception error) { _logger.LogError("content_probe", error); if (version == _sessionVersion) ContentStatus = "No se pudo actualizar el catálogo."; }
-        finally { if (ReferenceEquals(_operation, operation)) _operation = null; operation?.Dispose(); ContentBusy = false; }
+        catch (OperationCanceledException)
+        {
+            if (version == _sessionVersion) CatalogSyncStatus = "Sincronización cancelada.";
+            return false;
+        }
+        catch (Exception error)
+        {
+            _logger.LogError("auto_sync_catalog", error);
+            if (version == _sessionVersion) CatalogSyncStatus = "No se pudo actualizar el catálogo.";
+            return false;
+        }
+        finally
+        {
+            if (ReferenceEquals(_operation, operation)) _operation = null;
+            operation?.Dispose();
+            ContentBusy = false;
+            IsCatalogSyncing = false;
+            _syncGate.Release();
+        }
+    }
+
+    public async Task ProbeContentAsync()
+    {
+        await AutoSyncCatalogAsync(true);
     }
 
     private async Task LoadContentCacheAsync(string? profile, int version, CancellationToken token)
     {
         if (profile is null || _contentStore is null) return;
-        var movies = await _contentStore.LoadCatalogAsync(profile, ContentKind.Movie, cancellationToken: token);
-        var series = await _contentStore.LoadCatalogAsync(profile, ContentKind.Series, cancellationToken: token);
+        var movies = await _contentStore.LoadCatalogAsync(profile, ContentKind.Movie, "", true, token);
+        var series = await _contentStore.LoadCatalogAsync(profile, ContentKind.Series, "", true, token);
         var progress = await _contentStore.LoadProgressAsync(profile, token);
         if (version != _sessionVersion || _disposed) return;
         ContentStatus = $"Películas: {movies?.Items.Count ?? 0} · Series: {series?.Items.Count ?? 0}";
@@ -262,6 +351,10 @@ public sealed partial class MainViewModel
             if (!ReferenceEquals(_mediaFilter, request) || _disposed || version != _sessionVersion || tab != CurrentTabIndex) return;
             if (tab == 6) _seriesIndex = index; else _movieIndex = index;
             OnPropertyChanged(nameof(MediaEmptyMessage));
+            if (SelectedSortOrder == MediaSortOrder.TitleAsc)
+                matches = matches.OrderBy(m => m.Name, StringComparer.CurrentCultureIgnoreCase).ToArray();
+            else if (SelectedSortOrder == MediaSortOrder.TitleDesc)
+                matches = matches.OrderByDescending(m => m.Name, StringComparer.CurrentCultureIgnoreCase).ToArray();
             MediaItems = matches; OnPropertyChanged(nameof(MediaItems)); OnPropertyChanged(nameof(HasNoMediaItems)); OnPropertyChanged(nameof(HeaderSummary));
         }
         catch (OperationCanceledException) { }
@@ -306,10 +399,18 @@ public sealed partial class MainViewModel
         finally { if (ReferenceEquals(_detailRequest, request)) _detailRequest = null; }
     }
 
-    public Task PlayMediaAsync(bool restart = false) => PlayMediaItemAsync(ShowContinueWatching ? SelectedProgress?.Item : SelectedMedia?.Kind == ContentKind.Series ? SelectedEpisode : _selectedDetails ?? SelectedMedia, restart);
+    public Task PlayMediaAsync(bool restart = false) => PlayMediaItemAsync(
+        ShowContinueWatching
+            ? SelectedProgress?.Item
+            : (SelectedMedia?.Kind == ContentKind.Series || (SelectedMedia is null && SelectedEpisode is not null))
+                ? SelectedEpisode
+                : _selectedDetails ?? SelectedMedia,
+        restart);
     private async Task PlayMediaItemAsync(MediaItem? item, bool restart = false)
     {
         if (item is null || _disposed || IsBusy || IsCatalogLoading) { if (item is null) ContentStatus = "Elige una película o episodio."; return; }
+        CancelNextEpisodeAutoPlay();
+        CloseAudioSubtitles();
         var version = _sessionVersion;
         try
         {
@@ -327,10 +428,25 @@ public sealed partial class MainViewModel
             OnPropertyChanged(nameof(PlayingChannelId));
             _mediaDetails = MediaPlaybackDetails.Empty; NotifyMediaDetails();
             _mediaWatch = new(item, _connectedProfileId, version, _playbackService.Snapshot.Sequence) { Position = position, Length = resume?.DurationMilliseconds ?? 0 };
+
+            if (_contentStore is not null && _connectedProfileId is not null)
+            {
+                var contentKey = item.Kind == ContentKind.Episode ? (item.SeriesId ?? item.CategoryId ?? item.Id) : item.Id;
+                _mediaWatch.ContentTrackPreference = await _contentStore.LoadTrackPreferenceAsync(_connectedProfileId, contentKey, item.Kind, _session.Token);
+            }
+
+            if (item.Kind == ContentKind.Episode && !string.IsNullOrWhiteSpace(item.SeriesId) &&
+                (_episodes is null || !_episodes.Items.Any(e => e.SeriesId == item.SeriesId)))
+            {
+                _ = EnsureEpisodesLoadedForSeriesAsync(item.SeriesId);
+            }
+
             _playbackService.Options = _playbackService.Options with { OnDemand = true, StartPositionMilliseconds = position };
             if (item.Kind == ContentKind.Episode) _randomCyclePlayedKeys.Add(item.StorageKey);
             IsImmersiveMode = true;
             OnPropertyChanged(nameof(NowPlaying)); OnPropertyChanged(nameof(IsEpisodePlayerFocus)); OnPropertyChanged(nameof(IsImmersiveMode)); OnPropertyChanged(nameof(ImmersiveReturnLabel));
+            OnPropertyChanged(nameof(CanBrowseEpisodes));
+            if (IsEpisodesDrawerOpen) RefreshDrawerEpisodes();
             await _playbackService.PlayAsync(uri, _session.Token);
             OnPropertyChanged(nameof(PlayerHandle));
         }
@@ -515,10 +631,20 @@ public sealed partial class MainViewModel
             OnPropertyChanged(nameof(SelectedSubtitleTrack));
         }
         OnPropertyChanged(nameof(CanSeek));
+        OnPropertyChanged(nameof(IsLivePlayback));
         if (previous.LengthMilliseconds != _mediaDetails.LengthMilliseconds) OnPropertyChanged(nameof(DurationSeconds));
         if (previous.TimeMilliseconds != _mediaDetails.TimeMilliseconds) OnPropertyChanged(nameof(PositionSeconds));
         if (previous.TimeMilliseconds != _mediaDetails.TimeMilliseconds || previous.LengthMilliseconds != _mediaDetails.LengthMilliseconds) OnPropertyChanged(nameof(PositionLabel));
         _notifiedMediaDetails = _mediaDetails;
+
+        UpdateFormattedTracks();
+
+        var watch = _mediaWatch;
+        if (watch is not null && !watch.TrackPreferenceApplied && (_mediaDetails.AudioTracks.Count > 0 || _mediaDetails.SubtitleTracks.Count > 0))
+        {
+            watch.TrackPreferenceApplied = true;
+            _ = ApplyTrackPreferencesOnPlaybackStartedAsync(watch);
+        }
     }
     private void NotifyContent()
     {
@@ -540,6 +666,8 @@ public sealed partial class MainViewModel
     {
         public MediaItem Item { get; } = item; public string? ProfileId { get; } = profileId; public int Version { get; } = version;
         public long AfterSequence { get; } = afterSequence;
-        public bool Played, Completed, RandomAdvanceTriggered; public long Position, Length; public DateTimeOffset LastSaved;
+        public bool Played, Completed, RandomAdvanceTriggered, AutoPlayTriggered, TrackPreferenceApplied;
+        public long Position, Length; public DateTimeOffset LastSaved;
+        public MediaTrackPreference? ContentTrackPreference;
     }
 }

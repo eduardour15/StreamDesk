@@ -41,6 +41,32 @@ public sealed partial class MainViewModel
 
     private string _playbackDiagnosticsText = "Diagnóstico disponible al reproducir una señal.";
     public string PlaybackDiagnosticsText => _playbackDiagnosticsText;
+
+    private bool _isPlaybackStatsOpen;
+    public bool IsPlaybackStatsOpen
+    {
+        get => _isPlaybackStatsOpen;
+        set => SetProperty(ref _isPlaybackStatsOpen, value);
+    }
+
+    public void TogglePlaybackStats()
+    {
+        IsPlaybackStatsOpen = !IsPlaybackStatsOpen;
+        if (IsPlaybackStatsOpen)
+        {
+            IsAudioSubtitlesOpen = false;
+            CloseEpisodesDrawer();
+        }
+    }
+    public void ClosePlaybackStats() => IsPlaybackStatsOpen = false;
+
+    public string StatsBitrateText => _playbackService.Diagnostics.ReceivedMegabitsPerSecond is { } rate ? $"{rate:0.00} Mb/s" : "Sin datos";
+    public string StatsFpsText => _playbackService.Diagnostics.VideoFramesPerSecond is { } fps ? $"{fps:0.0} fps" : "Sin datos";
+    public string StatsBufferText => $"{_playbackService.Diagnostics.EffectiveBufferMilliseconds / 1000d:0.0} s ({_playbackService.Diagnostics.EffectiveBufferMilliseconds} ms)";
+    public string StatsRebufferText => $"{_playbackService.Diagnostics.RebufferCount} ({_playbackService.Diagnostics.WaitingSeconds:0} s)";
+    public string StatsDecoderText => SoftwareDecoding ? "Software (CPU)" : "Hardware (GPU)";
+    public string StatsFormatText => string.IsNullOrWhiteSpace(SelectedFormat) ? "Automático" : SelectedFormat.ToUpperInvariant();
+
     private void RefreshPlaybackDiagnostics()
     {
         var value = _playbackService.Diagnostics;
@@ -50,7 +76,16 @@ public sealed partial class MainViewModel
             + $"Búfer: {value.EffectiveBufferMilliseconds / 1000d:0.0} s · Recargas: {value.RebufferCount} ({value.WaitingSeconds:0} s)"
             + (value.AdaptiveLiveDelayMilliseconds > 0 ? $" · Margen HLS solicitado: {value.AdaptiveLiveDelayMilliseconds / 1000} s" : "")
             + (value.Observation == PlaybackObservation.DataWithoutVideoProgress ? " · Llegan datos sin avance de imagen" : "");
-        if (_playbackDiagnosticsText == text) return;
-        _playbackDiagnosticsText = text; OnPropertyChanged(nameof(PlaybackDiagnosticsText));
+        if (_playbackDiagnosticsText != text)
+        {
+            _playbackDiagnosticsText = text;
+            OnPropertyChanged(nameof(PlaybackDiagnosticsText));
+        }
+        OnPropertyChanged(nameof(StatsBitrateText));
+        OnPropertyChanged(nameof(StatsFpsText));
+        OnPropertyChanged(nameof(StatsBufferText));
+        OnPropertyChanged(nameof(StatsRebufferText));
+        OnPropertyChanged(nameof(StatsDecoderText));
+        OnPropertyChanged(nameof(StatsFormatText));
     }
 }

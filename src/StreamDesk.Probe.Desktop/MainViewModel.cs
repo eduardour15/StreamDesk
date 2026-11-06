@@ -254,6 +254,8 @@ public sealed partial class MainViewModel : INotifyPropertyChanged, IDisposable,
             if (_disposed || version != _sessionVersion || token.IsCancellationRequested) return;
             var source = isPlaylistChannel ? playlistUri! : _client!.CreateLiveStreamUri(channel, SelectedFormat!);
             _mediaWatch = null;
+            CloseEpisodesDrawer();
+            OnPropertyChanged(nameof(CanBrowseEpisodes));
             _mediaDetails = MediaPlaybackDetails.Empty; NotifyMediaDetails();
             _playbackService.Options = _playbackService.Options with { OnDemand = false, StartPositionMilliseconds = 0 };
             _playingChannelId = channel.Id;

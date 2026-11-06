@@ -39,8 +39,8 @@ public sealed partial class PlaybackService
         {
             if (session is null || !Current(session) || !Snapshot.IsActive) return false;
             var details = await _backend.ReadDetailsAsync(cancellationToken).ConfigureAwait(false);
-            return (subtitles ? details.SubtitleTracks : details.AudioTracks).Any(item => item.Id == id)
-                && await _backend.SelectTrackAsync(subtitles, id, cancellationToken).ConfigureAwait(false);
+            var validTrack = (id == -1 && subtitles) || (subtitles ? details.SubtitleTracks : details.AudioTracks).Any(item => item.Id == id);
+            return validTrack && await _backend.SelectTrackAsync(subtitles, id, cancellationToken).ConfigureAwait(false);
         }
         finally { _serial.Release(); }
     }

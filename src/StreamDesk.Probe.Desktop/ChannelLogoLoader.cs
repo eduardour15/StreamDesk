@@ -8,22 +8,63 @@ public sealed class ChannelLogoLoader(HttpClient client, TimeProvider? clock = n
 {
     public const int MaxCacheEntries = 500;
     public const long MaxCacheBytes = 32L * 1024 * 1024;
+
+    private readonly Dictionary<string, (BitmapSource? Image, LinkedListNode<string> Node, long Created, long Bytes)>
+        _cache = new(StringComparer.Ordinal);
+
     private readonly TimeProvider _clock = clock ?? TimeProvider.System;
-    private readonly SemaphoreSlim _slots = new(4, 4);
-    private readonly CancellationTokenSource _shutdown = new();
-    private readonly object _sync = new();
-    private readonly Dictionary<string, (BitmapSource? Image, LinkedListNode<string> Node, long Created, long Bytes)> _cache = new(StringComparer.Ordinal);
     private readonly Dictionary<string, PendingLoad> _inflight = new(StringComparer.Ordinal);
     private readonly LinkedList<string> _lru = new();
-    private bool _disposed;
+    private readonly CancellationTokenSource _shutdown = new();
+    private readonly SemaphoreSlim _slots = new(4, 4);
+    private readonly object _sync = new();
     private long _cachedBytes;
-    public int CachedCount { get { lock (_sync) return _cache.Count; } }
-    public long CachedBytes { get { lock (_sync) return _cachedBytes; } }
+    private bool _disposed;
 
-    public Task<BitmapSource?> GetAsync(string? url, CancellationToken cancellationToken) =>
-        GetAsync(url, 64, 64, cancellationToken);
+    public int CachedCount
+    {
+        get
+        {
+            lock (_sync)
+            {
+                return _cache.Count;
+            }
+        }
+    }
 
-    public async Task<BitmapSource?> GetAsync(string? url, int decodeWidth, int decodeHeight, CancellationToken cancellationToken)
+    public long CachedBytes
+    {
+        get
+        {
+            lock (_sync)
+            {
+                return _cachedBytes;
+            }
+        }
+    }
+
+    public void Dispose()
+    {
+        lock (_sync)
+        {
+            if (_disposed) return;
+            _disposed = true;
+            _cache.Clear();
+            _lru.Clear();
+            _cachedBytes = 0;
+        }
+
+        _shutdown.Cancel();
+        client.Dispose();
+    }
+
+    public Task<BitmapSource?> GetAsync(string? url, CancellationToken cancellationToken)
+    {
+        return GetAsync(url, 64, 64, cancellationToken);
+    }
+
+    public async Task<BitmapSource?> GetAsync(string? url, int decodeWidth, int decodeHeight,
+        CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
         var width = Math.Clamp(decodeWidth <= 0 ? 64 : decodeWidth, 16, 480);
@@ -37,21 +78,28 @@ public sealed class ChannelLogoLoader(HttpClient client, TimeProvider? clock = n
             if (TryGet(key, out var cached)) return cached;
             if (!_inflight.TryGetValue(key, out pending!))
             {
-                pending = new(CancellationTokenSource.CreateLinkedTokenSource(_shutdown.Token));
+                pending = new PendingLoad(CancellationTokenSource.CreateLinkedTokenSource(_shutdown.Token));
                 _inflight.Add(key, pending);
                 pending.Task = DownloadAsync(url, width, height, pending.Cancel.Token);
             }
+
             pending.Consumers++;
         }
-        try { return await pending.Task.WaitAsync(cancellationToken); }
+
+        try
+        {
+            return await pending.Task.WaitAsync(cancellationToken);
+        }
         finally
         {
             bool retire;
             lock (_sync)
             {
                 retire = --pending.Consumers == 0;
-                if (retire && _inflight.TryGetValue(key, out var current) && ReferenceEquals(current, pending)) _inflight.Remove(key);
+                if (retire && _inflight.TryGetValue(key, out var current) && ReferenceEquals(current, pending))
+                    _inflight.Remove(key);
             }
+
             if (retire)
             {
                 pending.Cancel.Cancel();
@@ -62,22 +110,30 @@ public sealed class ChannelLogoLoader(HttpClient client, TimeProvider? clock = n
 
     private static async Task DisposePendingAsync(PendingLoad pending)
     {
-        try { await pending.Task.ConfigureAwait(false); }
-        catch { /* Each consumer observes its own result/cancellation. */ }
-        finally { pending.Cancel.Dispose(); }
+        try
+        {
+            await pending.Task.ConfigureAwait(false);
+        }
+        catch
+        {
+            /* Each consumer observes its own result/cancellation. */
+        }
+        finally
+        {
+            pending.Cancel.Dispose();
+        }
     }
 
-    private sealed class PendingLoad(CancellationTokenSource cancel)
-    {
-        public CancellationTokenSource Cancel { get; } = cancel;
-        public Task<BitmapSource?> Task { get; set; } = System.Threading.Tasks.Task.FromResult<BitmapSource?>(null);
-        public int Consumers;
-    }
-
-    private async Task<BitmapSource?> DownloadAsync(string? url, int decodeWidth, int decodeHeight, CancellationToken cancellationToken)
+    private async Task<BitmapSource?> DownloadAsync(string? url, int decodeWidth, int decodeHeight,
+        CancellationToken cancellationToken)
     {
         CancellationToken shutdown;
-        lock (_sync) { ObjectDisposedException.ThrowIf(_disposed, this); shutdown = _shutdown.Token; }
+        lock (_sync)
+        {
+            ObjectDisposedException.ThrowIf(_disposed, this);
+            shutdown = _shutdown.Token;
+        }
+
         cancellationToken.ThrowIfCancellationRequested();
         var width = Math.Clamp(decodeWidth <= 0 ? 64 : decodeWidth, 16, 480);
         var height = Math.Clamp(decodeHeight <= 0 ? 64 : decodeHeight, 16, 720);
@@ -90,19 +146,22 @@ public sealed class ChannelLogoLoader(HttpClient client, TimeProvider? clock = n
         BitmapSource? image = null;
         try
         {
-            await _slots.WaitAsync(timeout.Token); entered = true;
+            await _slots.WaitAsync(timeout.Token);
+            entered = true;
             if (TryGet(cacheKey, out cached)) return cached;
             using var response = await client.GetAsync(uri, HttpCompletionOption.ResponseHeadersRead, timeout.Token);
-            if (!response.IsSuccessStatusCode || response.Content.Headers.ContentLength > 512 * 1024) return Remember(cacheKey, null);
+            if (!response.IsSuccessStatusCode || response.Content.Headers.ContentLength > 2 * 1024 * 1024)
+                return Remember(cacheKey, null);
             await using var input = await response.Content.ReadAsStreamAsync(timeout.Token);
             using var buffer = new MemoryStream();
             var bytes = new byte[8192];
             int read;
             while ((read = await input.ReadAsync(bytes, timeout.Token)) != 0)
             {
-                if (buffer.Length + read > 512 * 1024) return Remember(cacheKey, null);
+                if (buffer.Length + read > 2 * 1024 * 1024) return Remember(cacheKey, null);
                 buffer.Write(bytes, 0, read);
             }
+
             buffer.Position = 0;
             var encoded = buffer.ToArray();
             // WPF's built-in WIC codecs do not handle SVG, WebP, AVIF or HTML
@@ -114,15 +173,30 @@ public sealed class ChannelLogoLoader(HttpClient client, TimeProvider? clock = n
             {
                 using var stream = new MemoryStream(encoded);
                 var bitmap = new BitmapImage();
-                bitmap.BeginInit(); bitmap.CacheOption = BitmapCacheOption.OnLoad;
-                bitmap.DecodePixelWidth = width; bitmap.DecodePixelHeight = height;
-                bitmap.StreamSource = stream; bitmap.EndInit(); bitmap.Freeze();
+                bitmap.BeginInit();
+                bitmap.CacheOption = BitmapCacheOption.OnLoad;
+                bitmap.DecodePixelWidth = width;
+                bitmap.DecodePixelHeight = height;
+                bitmap.StreamSource = stream;
+                bitmap.EndInit();
+                bitmap.Freeze();
                 return bitmap;
             }, timeout.Token);
         }
-        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested || _shutdown.IsCancellationRequested) { throw; }
-        catch { /* An unavailable or invalid logo must not interrupt catalogue navigation. */ }
-        finally { if (entered) _slots.Release(); }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested ||
+                                                 _shutdown.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch
+        {
+            /* An unavailable or invalid logo must not interrupt catalogue navigation. */
+        }
+        finally
+        {
+            if (entered) _slots.Release();
+        }
+
         return Remember(cacheKey, image);
     }
 
@@ -154,60 +228,91 @@ public sealed class ChannelLogoLoader(HttpClient client, TimeProvider? clock = n
                 key.Equals("api_key", StringComparison.OrdinalIgnoreCase) ||
                 key.Equals("apikey", StringComparison.OrdinalIgnoreCase) ||
                 key.Equals("auth", StringComparison.OrdinalIgnoreCase))
-            {
                 return true;
-            }
         }
+
         return false;
     }
 
     private static bool LooksLikeWpfRasterImage(ReadOnlySpan<byte> data)
     {
         // PNG
-        if (data.Length >= 8 && data[..8].SequenceEqual(new byte[] { 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A })) return true;
+        if (data.Length >= 8 &&
+            data[..8].SequenceEqual(new byte[] { 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A })) return true;
         // JPEG
         if (data.Length >= 3 && data[0] == 0xFF && data[1] == 0xD8 && data[2] == 0xFF) return true;
         // GIF
-        if (data.Length >= 6 && (data[..6].SequenceEqual("GIF87a"u8) || data[..6].SequenceEqual("GIF89a"u8))) return true;
+        if (data.Length >= 6 && (data[..6].SequenceEqual("GIF87a"u8) || data[..6].SequenceEqual("GIF89a"u8)))
+            return true;
         // BMP
         if (data.Length >= 2 && data[0] == (byte)'B' && data[1] == (byte)'M') return true;
         // TIFF (little- and big-endian)
         if (data.Length >= 4 && ((data[0] == (byte)'I' && data[1] == (byte)'I' && data[2] == 0x2A && data[3] == 0x00) ||
-                                 (data[0] == (byte)'M' && data[1] == (byte)'M' && data[2] == 0x00 && data[3] == 0x2A))) return true;
+                                 (data[0] == (byte)'M' && data[1] == (byte)'M' && data[2] == 0x00 && data[3] == 0x2A)))
+            return true;
         // ICO/CUR
-        return data.Length >= 4 && data[0] == 0x00 && data[1] == 0x00 && (data[2] == 0x01 || data[2] == 0x02) && data[3] == 0x00;
+        return data.Length >= 4 && data[0] == 0x00 && data[1] == 0x00 && (data[2] == 0x01 || data[2] == 0x02) &&
+               data[3] == 0x00;
     }
 
     private bool TryGet(string key, out BitmapSource? image)
     {
         lock (_sync)
         {
-            if (!_cache.TryGetValue(key, out var entry)) { image = null; return false; }
+            if (!_cache.TryGetValue(key, out var entry))
+            {
+                image = null;
+                return false;
+            }
+
             if (entry.Image is null && _clock.GetElapsedTime(entry.Created) >= TimeSpan.FromSeconds(30))
-            { _cache.Remove(key); _lru.Remove(entry.Node); image = null; return false; }
-            _lru.Remove(entry.Node); _lru.AddFirst(entry.Node); image = entry.Image; return true;
+            {
+                _cache.Remove(key);
+                _lru.Remove(entry.Node);
+                image = null;
+                return false;
+            }
+
+            _lru.Remove(entry.Node);
+            _lru.AddFirst(entry.Node);
+            image = entry.Image;
+            return true;
         }
     }
+
     private BitmapSource? Remember(string key, BitmapSource? image)
     {
         lock (_sync)
         {
             if (_disposed) return null;
-            if (_cache.TryGetValue(key, out var existing)) { _lru.Remove(existing.Node); _cachedBytes -= existing.Bytes; }
-            var bytes = image is null ? 0 : ((long)image.PixelWidth * image.Format.BitsPerPixel + 7) / 8 * image.PixelHeight;
-            var node = _lru.AddFirst(key); _cache[key] = (image, node, _clock.GetTimestamp(), bytes); _cachedBytes += bytes;
+            if (_cache.TryGetValue(key, out var existing))
+            {
+                _lru.Remove(existing.Node);
+                _cachedBytes -= existing.Bytes;
+            }
+
+            var bytes = image is null
+                ? 0
+                : ((long)image.PixelWidth * image.Format.BitsPerPixel + 7) / 8 * image.PixelHeight;
+            var node = _lru.AddFirst(key);
+            _cache[key] = (image, node, _clock.GetTimestamp(), bytes);
+            _cachedBytes += bytes;
             while (_cache.Count > MaxCacheEntries || _cachedBytes > MaxCacheBytes)
-            { var last = _lru.Last!; _cachedBytes -= _cache[last.Value].Bytes; _cache.Remove(last.Value); _lru.RemoveLast(); }
+            {
+                var last = _lru.Last!;
+                _cachedBytes -= _cache[last.Value].Bytes;
+                _cache.Remove(last.Value);
+                _lru.RemoveLast();
+            }
         }
+
         return image;
     }
-    public void Dispose()
+
+    private sealed class PendingLoad(CancellationTokenSource cancel)
     {
-        lock (_sync)
-        {
-            if (_disposed) return;
-            _disposed = true; _cache.Clear(); _lru.Clear(); _cachedBytes = 0;
-        }
-        _shutdown.Cancel(); client.Dispose();
+        public int Consumers;
+        public CancellationTokenSource Cancel { get; } = cancel;
+        public Task<BitmapSource?> Task { get; set; } = System.Threading.Tasks.Task.FromResult<BitmapSource?>(null);
     }
 }

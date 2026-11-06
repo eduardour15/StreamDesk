@@ -157,6 +157,42 @@ public partial class MainWindow : FluentWindow
     private async void PlayRandomEpisode_Click(object sender, RoutedEventArgs e) => await _viewModel.PlayRandomEpisodeAsync();
     private void CycleAmplification_Click(object sender, RoutedEventArgs e) => _viewModel.CycleAmplification();
     private async void RestartMedia_Click(object sender, RoutedEventArgs e) => await _viewModel.PlayMediaAsync(true);
+    private void ToggleAudioSubtitles_Click(object sender, RoutedEventArgs e) => _viewModel.ToggleAudioSubtitles();
+    private void CloseAudioSubtitles_Click(object sender, RoutedEventArgs e) => _viewModel.CloseAudioSubtitles();
+    private void TogglePlaybackStats_Click(object sender, RoutedEventArgs e) => _viewModel.TogglePlaybackStats();
+    private void ClosePlaybackStats_Click(object sender, RoutedEventArgs e) => _viewModel.ClosePlaybackStats();
+    private void ToggleEpisodesDrawer_Click(object sender, RoutedEventArgs e) => _viewModel.ToggleEpisodesDrawer();
+    private void CloseEpisodesDrawer_Click(object sender, RoutedEventArgs e)
+    {
+        _viewModel.CloseEpisodesDrawer();
+        if (EpisodesDrawerButton.IsVisible) EpisodesDrawerButton.Focus();
+    }
+    private void SwitchToSeasonsView_Click(object sender, RoutedEventArgs e) => _viewModel.SwitchToSeasonsView();
+    private void SwitchToEpisodesView_Click(object sender, RoutedEventArgs e) => _viewModel.SwitchToEpisodesView();
+    private void SeasonItem_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is FrameworkElement { DataContext: DrawerSeasonItem seasonItem })
+            _viewModel.SelectDrawerSeason(seasonItem.Category);
+    }
+    private async void DrawerEpisodeItem_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is FrameworkElement { DataContext: DrawerEpisodeItem epItem })
+            await _viewModel.PlayEpisodeFromDrawerAsync(epItem.Episode);
+    }
+    private async void AudioTrackItem_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is FrameworkElement { DataContext: MediaTrackInfo track })
+            await _viewModel.SelectAudioTrackInfoAsync(track);
+    }
+    private async void SubtitleTrackItem_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is FrameworkElement { DataContext: MediaTrackInfo track })
+            await _viewModel.SelectSubtitleTrackInfoAsync(track);
+    }
+    private async void PlayNextEpisodeNow_Click(object sender, RoutedEventArgs e) => await _viewModel.PlayNextEpisodeNowAsync();
+    private void CancelNextEpisodeAutoPlay_Click(object sender, RoutedEventArgs e) => _viewModel.CancelNextEpisodeAutoPlay();
+    private void AudioSubtitlesOverlay_MouseDown(object sender, MouseButtonEventArgs e) { }
+    private void NextEpisodeOverlay_MouseDown(object sender, MouseButtonEventArgs e) { }
     private async void RefreshEpg_Click(object sender, RoutedEventArgs e) => await _viewModel.RefreshEpgAsync(true);
     private async void ApplyAudio_Click(object sender, RoutedEventArgs e) => await _viewModel.SelectTrackAsync(false);
     private async void Backup_Click(object sender, RoutedEventArgs e) => await _viewModel.CreateBackupAsync();
@@ -166,8 +202,39 @@ public partial class MainWindow : FluentWindow
     private async void SubtitleTrack_Changed(object sender, EventArgs e) => await _viewModel.SelectTrackAsync(true);
     private async void Format_Changed(object sender, EventArgs e) => await _viewModel.ApplyLiveFormatChangeAsync();
     private async void CycleStability_Click(object sender, RoutedEventArgs e) => await _viewModel.CycleStabilityPresetAsync();
-    private async void Seek_Completed(object sender, MouseButtonEventArgs e) => await _viewModel.SeekToAsync(SeekSlider.Value);
+    private void Seek_MouseDown(object sender, MouseButtonEventArgs e)
+    {
+        _keyboardControls = false;
+        RevealControls();
+    }
+    private async void Seek_Completed(object sender, MouseButtonEventArgs e)
+    {
+        SeekPreviewBadge.Visibility = Visibility.Collapsed;
+        await _viewModel.SeekToAsync(SeekSlider.Value);
+    }
     private async void Seek_KeyUp(object sender, KeyEventArgs e) { if (e.Key is Key.Left or Key.Right or Key.Home or Key.End) await _viewModel.SeekToAsync(SeekSlider.Value); }
+    private void SeekSlider_MouseMove(object sender, MouseEventArgs e)
+    {
+        if (!_viewModel.CanSeek || _viewModel.DurationSeconds <= 0 || SeekSlider.ActualWidth <= 0)
+        {
+            SeekPreviewBadge.Visibility = Visibility.Collapsed;
+            return;
+        }
+        var pos = e.GetPosition(SeekSlider);
+        var ratio = Math.Clamp(pos.X / SeekSlider.ActualWidth, 0.0, 1.0);
+        var targetSeconds = ratio * _viewModel.DurationSeconds;
+        var time = TimeSpan.FromSeconds(targetSeconds);
+        SeekPreviewText.Text = time.Hours > 0 ? time.ToString(@"hh\:mm\:ss") : time.ToString(@"mm\:ss");
+
+        SeekPreviewBadge.Visibility = Visibility.Visible;
+        var badgeWidth = SeekPreviewBadge.ActualWidth > 0 ? SeekPreviewBadge.ActualWidth : 56;
+        var left = Math.Clamp(pos.X - (badgeWidth / 2.0), 0, Math.Max(0, SeekSlider.ActualWidth - badgeWidth));
+        Canvas.SetLeft(SeekPreviewBadge, left);
+    }
+    private void SeekSlider_MouseLeave(object sender, MouseEventArgs e)
+    {
+        SeekPreviewBadge.Visibility = Visibility.Collapsed;
+    }
     private async void SeekBackward_Click(object sender, RoutedEventArgs e) => await _viewModel.SeekRelativeAsync(-10);
     private async void SeekForward_Click(object sender, RoutedEventArgs e) => await _viewModel.SeekRelativeAsync(10);
     private void Window_PreviewDragOver(object sender, DragEventArgs e)
@@ -463,6 +530,13 @@ public partial class MainWindow : FluentWindow
         _viewModel.SelectedProgress = progress;
         await _viewModel.PlayMediaAsync();
     }
+    private async void RemoveContinueWatching_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is FrameworkElement { DataContext: MediaProgress progress })
+        {
+            await _viewModel.RemoveFromContinueWatchingAsync(progress);
+        }
+    }
     private void VideoSurface_MouseDown(object sender, MouseButtonEventArgs e)
     {
         RevealControls();
@@ -487,9 +561,49 @@ public partial class MainWindow : FluentWindow
     private void Overlay_MouseDown(object sender, MouseButtonEventArgs e)
     {
         _keyboardControls = false;
+        var source = e.OriginalSource as DependencyObject;
+        if (_viewModel.IsEpisodesDrawerOpen)
+        {
+            var isInsideDrawer = IsDescendantOf(source, EpisodesDrawerOverlay);
+            var isInsideDrawerButton = IsDescendantOf(source, EpisodesDrawerButton);
+            if (!isInsideDrawer && !isInsideDrawerButton)
+            {
+                _viewModel.CloseEpisodesDrawer();
+                e.Handled = true;
+                return;
+            }
+        }
+        if (_viewModel.IsAudioSubtitlesOpen)
+        {
+            var isInsidePanel = IsDescendantOf(source, AudioSubtitlesOverlay);
+            var isInsideButton = IsDescendantOf(source, AudioSubtitlesButton);
+            if (!isInsidePanel && !isInsideButton)
+            {
+                _viewModel.CloseAudioSubtitles();
+                e.Handled = true;
+                return;
+            }
+        }
+        if (_viewModel.IsPlaybackStatsOpen)
+        {
+            var isInsideStats = IsDescendantOf(source, PlaybackStatsOverlay);
+            var isInsideStatsButton = IsDescendantOf(source, PlaybackStatsButton);
+            if (!isInsideStats && !isInsideStatsButton)
+            {
+                _viewModel.ClosePlaybackStats();
+                e.Handled = true;
+                return;
+            }
+        }
         RevealControls();
-        if (FindAncestor<ButtonBase>(e.OriginalSource as DependencyObject) is not null ||
-            HasEditingAncestor(e.OriginalSource as DependencyObject)) return;
+        if (IsDescendantOf(source, PlayerChrome) ||
+            IsDescendantOf(source, EpisodesDrawerOverlay) ||
+            IsDescendantOf(source, AudioSubtitlesOverlay) ||
+            IsDescendantOf(source, PlaybackStatsOverlay) ||
+            IsDescendantOf(source, NextEpisodeOverlay) ||
+            IsDescendantOf(source, PipHeader) ||
+            FindAncestor<ButtonBase>(source) is not null ||
+            HasEditingAncestor(source)) return;
         PlayerOverlay.Focus();
         if (e.ChangedButton == MouseButton.Left)
         {
@@ -561,6 +675,46 @@ public partial class MainWindow : FluentWindow
         if (AudioTrackBox.IsDropDownOpen || SubtitleTrackBox.IsDropDownOpen || FormatBox.IsDropDownOpen ||
             (source is not null && Window.GetWindow(source) is { } sourceWindow && sourceWindow != this && sourceWindow != _overlayWindow)) return;
         _keyboardControls = args.Key == Key.Tab || PlayerChrome.IsKeyboardFocusWithin || PipHeader.IsKeyboardFocusWithin;
+        if (args.Key == Key.Escape && Keyboard.Modifiers == ModifierKeys.None)
+        {
+            if (_viewModel.IsEpisodesDrawerOpen)
+            {
+                _viewModel.CloseEpisodesDrawer();
+                if (EpisodesDrawerButton.IsVisible) EpisodesDrawerButton.Focus();
+                args.Handled = true;
+                return;
+            }
+            if (_viewModel.IsAudioSubtitlesOpen)
+            {
+                _viewModel.CloseAudioSubtitles();
+                args.Handled = true;
+                return;
+            }
+            if (_viewModel.IsPlaybackStatsOpen)
+            {
+                _viewModel.ClosePlaybackStats();
+                args.Handled = true;
+                return;
+            }
+            if (_viewModel.IsNextEpisodeOverlayOpen)
+            {
+                _viewModel.CancelNextEpisodeAutoPlay();
+                args.Handled = true;
+                return;
+            }
+        }
+        if (args.Key == Key.E && Keyboard.Modifiers == ModifierKeys.None && !HasEditingAncestor(source) && !HasListAncestor(source) && _viewModel.CanBrowseEpisodes)
+        {
+            _viewModel.ToggleEpisodesDrawer();
+            args.Handled = true;
+            return;
+        }
+        if ((args.Key is Key.S or Key.C) && Keyboard.Modifiers == ModifierKeys.None && !HasEditingAncestor(source) && !HasListAncestor(source))
+        {
+            _viewModel.ToggleAudioSubtitles();
+            args.Handled = true;
+            return;
+        }
         RevealControls();
         if (args.Key == Key.Escape && Keyboard.Modifiers == ModifierKeys.None && _viewModel.IsImmersiveMode && !_displays.IsFullscreen && !_displays.IsPictureInPicture)
         {
@@ -595,12 +749,36 @@ public partial class MainWindow : FluentWindow
             case PlaybackShortcut.CycleBooster: _viewModel.CycleAmplification(); break;
         }
     }
+    private static DependencyObject? GetVisualOrLogicalParent(DependencyObject? source)
+    {
+        if (source is null) return null;
+        DependencyObject? parent = null;
+        if (source is Visual visual) parent = VisualTreeHelper.GetParent(visual);
+        if (parent is null)
+        {
+            if (source is FrameworkElement fe && fe.Parent is not null) parent = fe.Parent;
+            else parent = LogicalTreeHelper.GetParent(source);
+            if (parent is null && source is Popup popup) parent = popup.PlacementTarget;
+        }
+        return parent;
+    }
+    private static bool IsDescendantOf(DependencyObject? source, DependencyObject? target)
+    {
+        if (source is null || target is null) return false;
+        while (source is not null)
+        {
+            if (ReferenceEquals(source, target)) return true;
+            source = GetVisualOrLogicalParent(source);
+        }
+        return false;
+    }
     private static bool HasEditingAncestor(DependencyObject? source)
     {
         while (source is not null)
         {
-            if (source is TextBoxBase or System.Windows.Controls.PasswordBox or ComboBox or Slider or ButtonBase) return true;
-            source = source is Visual ? VisualTreeHelper.GetParent(source) : LogicalTreeHelper.GetParent(source);
+            if (source is TextBoxBase or System.Windows.Controls.PasswordBox or ComboBox or ComboBoxItem or Slider or ButtonBase or ScrollBar or Thumb) return true;
+            if (source is Popup || source.GetType().Name == "PopupRoot") return true;
+            source = GetVisualOrLogicalParent(source);
         }
         return false;
     }
@@ -608,8 +786,9 @@ public partial class MainWindow : FluentWindow
     {
         while (source is not null)
         {
-            if (source is ButtonBase or ScrollBar or Thumb) return true;
-            source = source is Visual ? VisualTreeHelper.GetParent(source) : LogicalTreeHelper.GetParent(source);
+            if (source is ButtonBase or ScrollBar or Thumb or ComboBox or ComboBoxItem) return true;
+            if (source is Popup || source.GetType().Name == "PopupRoot") return true;
+            source = GetVisualOrLogicalParent(source);
         }
         return false;
     }
@@ -618,7 +797,7 @@ public partial class MainWindow : FluentWindow
         while (source is not null)
         {
             if (source is T match) return match;
-            source = source is Visual ? VisualTreeHelper.GetParent(source) : LogicalTreeHelper.GetParent(source);
+            source = GetVisualOrLogicalParent(source);
         }
         return null;
     }
@@ -627,7 +806,7 @@ public partial class MainWindow : FluentWindow
         while (source is not null)
         {
             if (source is ListBox) return true;
-            source = source is Visual ? VisualTreeHelper.GetParent(source) : LogicalTreeHelper.GetParent(source);
+            source = GetVisualOrLogicalParent(source);
         }
         return false;
     }
@@ -644,9 +823,10 @@ public partial class MainWindow : FluentWindow
         Shell.Margin = new Thickness(fullscreen ? 0 : picture ? 0 : 16);
         Sidebar.Visibility = TvHeader.Visibility = ConnectionNotices.Visibility = CatalogPane.Visibility = StatusBar.Visibility = hideChrome ? Visibility.Collapsed : Visibility.Visible;
         NowPlayingTitle.Visibility = compact ? Visibility.Collapsed : Visibility.Visible;
-        SidebarColumn.Width = new GridLength(hideChrome ? 0 : ActualWidth < 1050 ? 132 : 158);
+        SidebarColumn.Width = new GridLength(hideChrome ? 0 : ActualWidth < 1050 ? 150 : 176);
         var mediaDetails = (_viewModel.ShowMovieDetails || _viewModel.ShowSeriesDetails) && !immersive;
-        CatalogColumn.Width = new GridLength(hideChrome ? 0 : mediaDetails ? ActualWidth < 1050 ? 260 : 360 : ActualWidth < 1050 ? 234 : 284);
+        var fullContinue = _viewModel.ShowContinueWatching && !_viewModel.ShowPlayerPane;
+        CatalogColumn.Width = new GridLength(hideChrome ? 0 : fullContinue ? 1 : mediaDetails ? ActualWidth < 1050 ? 260 : 360 : ActualWidth < 1050 ? 234 : 284, fullContinue ? GridUnitType.Star : GridUnitType.Pixel);
         Workspace.Margin = new Thickness(hideChrome ? 0 : 20, 0, 0, 0);
 
 
@@ -781,9 +961,13 @@ public partial class MainWindow : FluentWindow
         var interacting = _controlsHovered || PlayerChrome.IsMouseOver || PipHeader.IsMouseOver ||
             (_keyboardControls && (PlayerChrome.IsKeyboardFocusWithin || PipHeader.IsKeyboardFocusWithin)) ||
             PlayerOverlay.IsMouseCaptureWithin || PlayerOverlay.AreAnyTouchesCapturedWithin ||
-            AudioTrackBox.IsDropDownOpen || SubtitleTrackBox.IsDropDownOpen || FormatBox.IsDropDownOpen;
-        if (!_viewModel.CanHideControls || interacting || !IsEnabled || WindowState == WindowState.Minimized ||
-            (!IsActive && _overlayWindow?.IsActive != true))
+            AudioTrackBox.IsDropDownOpen || SubtitleTrackBox.IsDropDownOpen || FormatBox.IsDropDownOpen ||
+            _viewModel.IsAudioSubtitlesOpen || _viewModel.IsPlaybackStatsOpen || _viewModel.IsNextEpisodeOverlayOpen || _viewModel.IsEpisodesDrawerOpen ||
+            SeekSlider.IsMouseCaptureWithin || VolumeSlider.IsMouseCaptureWithin ||
+            AudioSubtitlesOverlay.IsMouseOver || PlaybackStatsOverlay.IsMouseOver || NextEpisodeOverlay.IsMouseOver || EpisodesDrawerOverlay.IsMouseOver ||
+            AudioSubtitlesOverlay.IsKeyboardFocusWithin || PlaybackStatsOverlay.IsKeyboardFocusWithin || EpisodesDrawerOverlay.IsKeyboardFocusWithin;
+        if (!_viewModel.CanHideControls || interacting || !IsEnabled || WindowState == WindowState.Minimized)
+
         {
             RevealControls();
             return;

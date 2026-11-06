@@ -21,11 +21,11 @@ public sealed class WindowDisplays
     public bool IsPictureInPicture { get; private set; }
     public static IReadOnlyList<DisplayChoice> Enumerate()
     {
-        var choices = new List<DisplayChoice>();
+        var choices = new List<DisplayChoice> { new(0, "Pantalla actual (predeterminada)") };
         MonitorCallback callback = (nint monitor, nint dc, ref NativeRect bounds, nint data) =>
         {
             var info = new MonitorInfo { Size = Marshal.SizeOf<MonitorInfo>() };
-            if (GetMonitorInfo(monitor, ref info)) choices.Add(new(monitor, $"Pantalla {choices.Count + 1}" + ((info.Flags & 1) != 0 ? " (principal)" : "")));
+            if (GetMonitorInfo(monitor, ref info)) choices.Add(new(monitor, $"Pantalla {choices.Count}" + ((info.Flags & 1) != 0 ? " (principal)" : "")));
             return true;
         };
         EnumDisplayMonitors(0, 0, callback, 0);
@@ -41,7 +41,7 @@ public sealed class WindowDisplays
             if (!SetWindowPlacement(handle, ref _restore)) throw new Win32Exception();
             IsFullscreen = false; return;
         }
-        var monitor = display?.Handle ?? MonitorFromWindow(handle, 2);
+        var monitor = (display is not null && display.Handle != 0) ? display.Handle : MonitorFromWindow(handle, 2);
         var info = new MonitorInfo { Size = Marshal.SizeOf<MonitorInfo>() };
         if (!GetMonitorInfo(monitor, ref info)) { monitor = MonitorFromWindow(handle, 2); if (!GetMonitorInfo(monitor, ref info)) throw new Win32Exception(); }
         _restore = new Placement { Length = Marshal.SizeOf<Placement>() };

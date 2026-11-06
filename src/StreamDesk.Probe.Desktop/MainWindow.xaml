@@ -1,11 +1,12 @@
 <ui:FluentWindow x:Class="StreamDesk.Probe.Desktop.MainWindow"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml" xmlns:lvs="clr-namespace:LibVLCSharp.WPF;assembly=LibVLCSharp.WPF"
-    xmlns:local="clr-namespace:StreamDesk.Probe.Desktop"
+    xmlns:local="clr-namespace:StreamDesk.Probe.Desktop" xmlns:core="clr-namespace:StreamDesk.Probe.Core;assembly=StreamDesk.Probe.Core"
     Title="StreamDesk" Icon="Resources/StreamDesk.ico" Width="1360" Height="850" MinWidth="760" MinHeight="540"
     WindowStartupLocation="CenterScreen" WindowStyle="SingleBorderWindow" ResizeMode="CanResize" ExtendsContentIntoTitleBar="False" Background="{DynamicResource CanvasBrush}">
     <ui:FluentWindow.Resources>
         <local:FavoriteConverter x:Key="FavoriteConverter" />
+        <local:InverseBooleanToVisibilityConverter x:Key="InverseBooleanToVisibilityConverter" />
         <Style TargetType="TextBox">
             <Setter Property="MinHeight" Value="36"/><Setter Property="Padding" Value="10,6"/>
             <Setter Property="Background" Value="{DynamicResource SurfaceRaisedBrush}"/><Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}"/>
@@ -41,8 +42,30 @@
             </Setter>
         </Style>
         <Style x:Key="NavItem" TargetType="ListBoxItem" BasedOn="{StaticResource {x:Type ListBoxItem}}">
-            <Setter Property="Padding" Value="10,11"/><Setter Property="Margin" Value="0,2"/>
-            <Setter Property="FontSize" Value="14"/><Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+            <Setter Property="Padding" Value="12,10"/><Setter Property="Margin" Value="0,2"/>
+            <Setter Property="FontSize" Value="14"/><Setter Property="Cursor" Value="Hand"/><Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ListBoxItem">
+                        <Border x:Name="ItemBorder" Background="Transparent" CornerRadius="8" Padding="{TemplateBinding Padding}" Margin="{TemplateBinding Margin}">
+                            <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="ItemBorder" Property="Background" Value="{DynamicResource SurfaceRaisedBrush}"/>
+                            </Trigger>
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter TargetName="ItemBorder" Property="Background" Value="#2500D294"/>
+                                <Setter Property="Foreground" Value="{DynamicResource AccentBrush}"/>
+                                <Setter Property="FontWeight" Value="SemiBold"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Opacity" Value="0.38"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
         </Style>
         <Style x:Key="StarToggle" TargetType="ToggleButton">
             <Setter Property="Width" Value="36"/><Setter Property="Height" Value="36"/>
@@ -225,17 +248,24 @@
         </Grid.RowDefinitions>
         <ui:TitleBar x:Name="AppTitleBar" Title="StreamDesk" Grid.Row="0" Foreground="{DynamicResource TextPrimaryBrush}" ButtonsForeground="{DynamicResource TextPrimaryBrush}"/>
         <Grid x:Name="Shell" Grid.Row="1" Margin="16" Background="{DynamicResource CanvasBrush}">
-            <Grid.ColumnDefinitions><ColumnDefinition x:Name="SidebarColumn" Width="158"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+            <Grid.ColumnDefinitions><ColumnDefinition x:Name="SidebarColumn" Width="176"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
         <Border x:Name="Sidebar" Background="{DynamicResource SurfaceBrush}" CornerRadius="12" Padding="10">
             <DockPanel>
-                <StackPanel DockPanel.Dock="Top" Margin="10,12,0,20">
+                <StackPanel DockPanel.Dock="Top" Margin="8,10,0,16">
                     <StackPanel Orientation="Horizontal">
-                        <Image Source="Resources/StreamDesk.ico" Width="20" Height="20" Stretch="Uniform" Margin="0,0,6,0" VerticalAlignment="Center"/>
-                        <TextBlock Text="StreamDesk" FontWeight="Bold" FontSize="14" Foreground="{DynamicResource AccentBrush}" VerticalAlignment="Center"/>
+                        <Image Source="Resources/StreamDesk.ico" Width="22" Height="22" Stretch="Uniform" Margin="0,0,8,0" VerticalAlignment="Center"/>
+                        <TextBlock Text="StreamDesk" FontWeight="Bold" FontSize="15" Foreground="{DynamicResource AccentBrush}" VerticalAlignment="Center"/>
                     </StackPanel>
-                    <TextBlock Text="TV simple y rápida" FontSize="12" Foreground="{DynamicResource TextMutedBrush}" Margin="0,4,0,0"/>
+                    <TextBlock Text="IPTV Multimedia" FontSize="11" Foreground="{DynamicResource TextMutedBrush}" Margin="2,3,0,0"/>
                 </StackPanel>
-                <StackPanel DockPanel.Dock="Bottom" Margin="10,12,0,6">
+                <Border DockPanel.Dock="Top" Visibility="{Binding IsCatalogSyncing, Converter={StaticResource BooleanToVisibilityConverter}}"
+                        Background="#2000D294" BorderBrush="#5000D294" BorderThickness="1" CornerRadius="6" Padding="8,4" Margin="4,0,4,10">
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                        <ProgressBar Width="12" Height="12" IsIndeterminate="True" Margin="0,0,6,0" VerticalAlignment="Center"/>
+                        <TextBlock Text="Sincronizando…" FontSize="11" Foreground="{DynamicResource AccentBrush}" VerticalAlignment="Center"/>
+                    </StackPanel>
+                </Border>
+                <StackPanel DockPanel.Dock="Bottom" Margin="8,10,0,6">
                     <TextBlock Text="{Binding VersionLabel}" FontSize="11" Foreground="{DynamicResource TextMutedBrush}"/>
                 </StackPanel>
                 <ListBox x:Name="NavigationTabs" Background="Transparent" BorderThickness="0" SelectedIndex="{Binding CurrentTabIndex, Mode=TwoWay}"
@@ -294,57 +324,171 @@
         <Grid x:Name="Workspace" Grid.Column="1" Margin="20,0,0,0">
             <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
             <ScrollViewer x:Name="HomePage" VerticalScrollBarVisibility="Auto" Visibility="{Binding ShowHome, Converter={StaticResource BooleanToVisibilityConverter}}">
-                <StackPanel Margin="12,20" MaxWidth="820" HorizontalAlignment="Left">
-                    <TextBlock Text="¿Qué quieres ver hoy?" FontSize="32" FontWeight="SemiBold"/>
-                    <TextBlock Text="Haz clic en cualquier canal o película para empezar al instante." FontSize="15" Foreground="{DynamicResource TextMutedBrush}" Margin="0,6,0,24"/>
-                    <Border Background="{DynamicResource SurfaceBrush}" CornerRadius="12" Padding="22" Margin="0,0,0,18">
-                        <StackPanel>
-                            <StackPanel Orientation="Horizontal">
-                                <ui:SymbolIcon Symbol="Play24" FontSize="12" Foreground="{DynamicResource AccentBrush}" Margin="0,0,6,0" VerticalAlignment="Center"/>
-                                <TextBlock Text="ÚLTIMO CANAL VISTO" FontSize="12" Foreground="{DynamicResource AccentBrush}" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                <StackPanel Margin="16,18,24,24" MaxWidth="1180" HorizontalAlignment="Stretch">
+                    <!-- Welcome / Discover Heading -->
+                    <TextBlock Text="¿Qué quieres ver hoy?" FontSize="30" FontWeight="Bold" Foreground="White"/>
+                    <TextBlock Text="Explora televisión en vivo, películas y series bajo demanda." FontSize="14" Foreground="{DynamicResource TextMutedBrush}" Margin="0,4,0,20"/>
+
+                    <!-- Hero / Last Played Banner -->
+                    <Border Background="{DynamicResource SurfaceBrush}" BorderBrush="#30FFFFFF" BorderThickness="1" CornerRadius="14" Padding="24,20" Margin="0,0,0,24">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0" VerticalAlignment="Center">
+                                <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                                    <Border Background="#2500D294" CornerRadius="4" Padding="6,2" Margin="0,0,8,0">
+                                        <TextBlock Text="ÚLTIMO CANAL VISTO" FontSize="11" Foreground="{DynamicResource AccentBrush}" FontWeight="Bold"/>
+                                    </Border>
+                                    <TextBlock Text="Televisión en directo" FontSize="12" Foreground="{DynamicResource TextMutedBrush}" VerticalAlignment="Center"/>
+                                </StackPanel>
+                                <TextBlock Text="{Binding LastChannelLabel}" FontSize="24" FontWeight="SemiBold" TextWrapping="Wrap" Margin="0,0,0,16"/>
+                                <WrapPanel>
+                                    <ui:Button Click="PlayLast_Click" IsEnabled="{Binding HasLastChannel}"
+                                               Appearance="Primary" MinHeight="38" Padding="16,8" Margin="0,0,10,6" ToolTip="Seguir viendo el último canal">
+                                        <StackPanel Orientation="Horizontal">
+                                            <ui:SymbolIcon Symbol="Play24" FontSize="15" Margin="0,0,8,0" VerticalAlignment="Center"/>
+                                            <TextBlock Text="Seguir viendo" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                                        </StackPanel>
+                                    </ui:Button>
+                                    <ui:Button Tag="1" Click="Navigate_Click" MinHeight="38" Padding="14,8" Margin="0,0,10,6" ToolTip="Abrir guía de canales">
+                                        <StackPanel Orientation="Horizontal">
+                                            <ui:SymbolIcon Symbol="Tv24" FontSize="15" Margin="0,0,8,0" VerticalAlignment="Center"/>
+                                            <TextBlock Text="Canales en vivo" VerticalAlignment="Center"/>
+                                        </StackPanel>
+                                    </ui:Button>
+                                    <ui:Button Tag="4" Click="Navigate_Click" MinHeight="38" Padding="12,8" Margin="0,0,0,6" ToolTip="Administrar cuentas">
+                                        <StackPanel Orientation="Horizontal">
+                                            <ui:SymbolIcon Symbol="Settings24" FontSize="14" Margin="0,0,6,0" VerticalAlignment="Center"/>
+                                            <TextBlock Text="Configurar cuenta" VerticalAlignment="Center"/>
+                                        </StackPanel>
+                                    </ui:Button>
+                                </WrapPanel>
                             </StackPanel>
-                            <TextBlock Text="{Binding LastChannelLabel}" FontSize="22" TextWrapping="Wrap" Margin="0,8,0,16"/>
-                            <WrapPanel>
-                                <ui:Button Click="PlayLast_Click" IsEnabled="{Binding HasLastChannel}" Margin="0,0,10,6">
-                                    <StackPanel Orientation="Horizontal">
-                                        <ui:SymbolIcon Symbol="Play24" FontSize="14" Margin="0,0,6,0" VerticalAlignment="Center"/>
-                                        <TextBlock Text="Seguir viendo" VerticalAlignment="Center"/>
-                                    </StackPanel>
-                                </ui:Button>
-                                <ui:Button Tag="1" Click="Navigate_Click" Margin="0,0,10,6">
-                                    <StackPanel Orientation="Horizontal">
-                                        <ui:SymbolIcon Symbol="Tv24" FontSize="14" Margin="0,0,6,0" VerticalAlignment="Center"/>
-                                        <TextBlock Text="Ir a TV en vivo" VerticalAlignment="Center"/>
-                                    </StackPanel>
-                                </ui:Button>
-                                <ui:Button Tag="4" Click="Navigate_Click" Margin="0,0,0,6">
-                                    <StackPanel Orientation="Horizontal">
-                                        <ui:SymbolIcon Symbol="Settings24" FontSize="14" Margin="0,0,6,0" VerticalAlignment="Center"/>
-                                        <TextBlock Text="Configurar cuenta" VerticalAlignment="Center"/>
-                                    </StackPanel>
-                                </ui:Button>
-                            </WrapPanel>
-                        </StackPanel>
+                        </Grid>
                     </Border>
-                    <WrapPanel>
-                        <Border Background="{DynamicResource SurfaceBrush}" CornerRadius="10" Padding="16" Width="250" Margin="0,0,12,12">
-                            <StackPanel>
-                                <TextBlock Text="1. Añade tu cuenta" FontWeight="SemiBold" Margin="0,0,0,4"/>
-                                <TextBlock Text="Ej: https://tuservidor.com:8080" FontSize="12" Foreground="{DynamicResource TextMutedBrush}"/>
+
+                    <!-- Continue Watching Row (when user has in-progress media) -->
+                    <StackPanel Visibility="{Binding HasContinueWatching, Converter={StaticResource BooleanToVisibilityConverter}}" Margin="0,0,0,24">
+                        <DockPanel Margin="0,0,0,12">
+                            <ui:Button Tag="7" Click="Navigate_Click" DockPanel.Dock="Right" Padding="8,4" MinHeight="26" Background="Transparent" BorderThickness="0">
+                                <StackPanel Orientation="Horizontal">
+                                    <TextBlock Text="Ver todos" FontSize="12" Foreground="{DynamicResource AccentBrush}" Margin="0,0,4,0"/>
+                                    <ui:SymbolIcon Symbol="ChevronRight24" FontSize="12" Foreground="{DynamicResource AccentBrush}"/>
+                                </StackPanel>
+                            </ui:Button>
+                            <StackPanel Orientation="Horizontal">
+                                <ui:SymbolIcon Symbol="Play24" FontSize="18" Foreground="{DynamicResource AccentBrush}" Margin="0,0,8,0" VerticalAlignment="Center"/>
+                                <TextBlock Text="Continuar viendo" FontSize="18" FontWeight="SemiBold" Foreground="White" VerticalAlignment="Center"/>
                             </StackPanel>
-                        </Border>
-                        <Border Background="{DynamicResource SurfaceBrush}" CornerRadius="10" Padding="16" Width="250" Margin="0,0,12,12">
-                            <StackPanel>
-                                <TextBlock Text="2. Elige con 1 clic" FontWeight="SemiBold" Margin="0,0,0,4"/>
-                                <TextBlock Text="Toca cualquier canal para reproducir" FontSize="12" Foreground="{DynamicResource TextMutedBrush}"/>
-                            </StackPanel>
-                        </Border>
-                        <Border Background="{DynamicResource SurfaceBrush}" CornerRadius="10" Padding="16" Width="250" Margin="0,0,0,12">
-                            <StackPanel>
-                                <TextBlock Text="3. Guarda tus favoritos" FontWeight="SemiBold" Margin="0,0,0,4"/>
-                                <TextBlock Text="Marca tus canales preferidos" FontSize="12" Foreground="{DynamicResource TextMutedBrush}"/>
-                            </StackPanel>
-                        </Border>
+                        </DockPanel>
+                        <ScrollViewer HorizontalScrollBarVisibility="Auto" VerticalScrollBarVisibility="Disabled">
+                            <ItemsControl ItemsSource="{Binding ContinueWatching}">
+                                <ItemsControl.ItemsPanel>
+                                    <ItemsPanelTemplate>
+                                        <StackPanel Orientation="Horizontal"/>
+                                    </ItemsPanelTemplate>
+                                </ItemsControl.ItemsPanel>
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Border Width="220" Height="100" Background="{DynamicResource SurfaceBrush}" BorderBrush="#30FFFFFF" BorderThickness="1" CornerRadius="10" Margin="0,0,14,0" Padding="10">
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="60"/>
+                                                    <ColumnDefinition Width="*"/>
+                                                </Grid.ColumnDefinitions>
+                                                <Border CornerRadius="6" ClipToBounds="True" Background="#FF161A24">
+                                                    <local:ChannelLogo Url="{Binding Item.PosterUrl}" Loader="{Binding LogoLoader, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Stretch="UniformToFill"/>
+                                                </Border>
+                                                <StackPanel Grid.Column="1" Margin="10,0,0,0" VerticalAlignment="Center">
+                                                    <TextBlock Text="{Binding Item.Name}" FontWeight="SemiBold" FontSize="13" TextTrimming="CharacterEllipsis"/>
+                                                    <ProgressBar Height="4" Minimum="0" Maximum="{Binding DurationMilliseconds}" Value="{Binding PositionMilliseconds}" Foreground="{DynamicResource AccentBrush}" Background="#30FFFFFF" Margin="0,8,0,8"/>
+                                                    <ui:Button Click="PlayMedia_Click" Padding="8,3" MinHeight="24" HorizontalAlignment="Left">
+                                                        <StackPanel Orientation="Horizontal">
+                                                            <ui:SymbolIcon Symbol="Play24" FontSize="11" Margin="0,0,4,0"/>
+                                                            <TextBlock Text="Reanudar" FontSize="11"/>
+                                                        </StackPanel>
+                                                    </ui:Button>
+                                                </StackPanel>
+                                            </Grid>
+                                        </Border>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </ScrollViewer>
+                    </StackPanel>
+
+                    <!-- Quick Navigation Entertainment Cards -->
+                    <TextBlock Text="Explora tu contenido" FontSize="18" FontWeight="SemiBold" Foreground="White" Margin="0,0,0,14"/>
+                    <WrapPanel Margin="0,0,0,20">
+                        <!-- Películas Card -->
+                        <Button Tag="5" Click="Navigate_Click" IsEnabled="{Binding HasMovies}" Style="{StaticResource {x:Type Button}}"
+                                Width="260" Height="100" Margin="0,0,14,14" Padding="18,14" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch"
+                                Background="{DynamicResource SurfaceBrush}" BorderBrush="#25FFFFFF" BorderThickness="1" Cursor="Hand" ToolTip="Explorar catálogo de películas">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <StackPanel VerticalAlignment="Center">
+                                    <TextBlock Text="Películas" FontSize="17" FontWeight="Bold" Foreground="White"/>
+                                    <TextBlock Text="Cine y estrenos bajo demanda" FontSize="12" Foreground="{DynamicResource TextMutedBrush}" Margin="0,4,0,0"/>
+                                </StackPanel>
+                                <ui:SymbolIcon Grid.Column="1" Symbol="MoviesAndTv24" FontSize="28" Foreground="{DynamicResource AccentBrush}" VerticalAlignment="Center"/>
+                            </Grid>
+                        </Button>
+
+                        <!-- Series Card -->
+                        <Button Tag="6" Click="Navigate_Click" IsEnabled="{Binding HasSeries}" Style="{StaticResource {x:Type Button}}"
+                                Width="260" Height="100" Margin="0,0,14,14" Padding="18,14" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch"
+                                Background="{DynamicResource SurfaceBrush}" BorderBrush="#25FFFFFF" BorderThickness="1" Cursor="Hand" ToolTip="Explorar series y temporadas">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <StackPanel VerticalAlignment="Center">
+                                    <TextBlock Text="Series" FontSize="17" FontWeight="Bold" Foreground="White"/>
+                                    <TextBlock Text="Temporadas y episodios completos" FontSize="12" Foreground="{DynamicResource TextMutedBrush}" Margin="0,4,0,0"/>
+                                </StackPanel>
+                                <ui:SymbolIcon Grid.Column="1" Symbol="Tv24" FontSize="28" Foreground="{DynamicResource AccentBrush}" VerticalAlignment="Center"/>
+                            </Grid>
+                        </Button>
+
+                        <!-- TV en Vivo Card -->
+                        <Button Tag="1" Click="Navigate_Click" Style="{StaticResource {x:Type Button}}"
+                                Width="260" Height="100" Margin="0,0,14,14" Padding="18,14" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch"
+                                Background="{DynamicResource SurfaceBrush}" BorderBrush="#25FFFFFF" BorderThickness="1" Cursor="Hand" ToolTip="Ver canales de televisión en directo">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <StackPanel VerticalAlignment="Center">
+                                    <TextBlock Text="TV en vivo" FontSize="17" FontWeight="Bold" Foreground="White"/>
+                                    <TextBlock Text="Canales en directo con guía EPG" FontSize="12" Foreground="{DynamicResource TextMutedBrush}" Margin="0,4,0,0"/>
+                                </StackPanel>
+                                <ui:SymbolIcon Grid.Column="1" Symbol="Tv24" FontSize="28" Foreground="{DynamicResource AccentBrush}" VerticalAlignment="Center"/>
+                            </Grid>
+                        </Button>
+
+                        <!-- Favoritos Card -->
+                        <Button Tag="2" Click="Navigate_Click" Style="{StaticResource {x:Type Button}}"
+                                Width="260" Height="100" Margin="0,0,0,14" Padding="18,14" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch"
+                                Background="{DynamicResource SurfaceBrush}" BorderBrush="#25FFFFFF" BorderThickness="1" Cursor="Hand" ToolTip="Acceso directo a tus canales favoritos">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <StackPanel VerticalAlignment="Center">
+                                    <TextBlock Text="Favoritos" FontSize="17" FontWeight="Bold" Foreground="White"/>
+                                    <TextBlock Text="Canales guardados con un toque" FontSize="12" Foreground="{DynamicResource TextMutedBrush}" Margin="0,4,0,0"/>
+                                </StackPanel>
+                                <ui:SymbolIcon Grid.Column="1" Symbol="Star24" FontSize="28" Foreground="{DynamicResource AccentBrush}" VerticalAlignment="Center"/>
+                            </Grid>
+                        </Button>
                     </WrapPanel>
                 </StackPanel>
             </ScrollViewer>
@@ -455,18 +599,79 @@
                             </Grid>
                         </Grid>
                     </Border>
-                    <Border Background="{DynamicResource SurfaceBrush}" CornerRadius="10" Padding="12" Margin="0,0,14,0" Visibility="{Binding ShowContinueWatching, Converter={StaticResource BooleanToVisibilityConverter}}">
-                        <DockPanel>
-                            <TextBlock DockPanel.Dock="Top" Text="Haz clic en un título para continuar donde lo dejaste:" FontSize="12" Foreground="{DynamicResource TextMutedBrush}" Margin="0,0,0,8"/>
-                            <ui:Button DockPanel.Dock="Bottom" Click="PlayMedia_Click" Margin="0,10,0,0">
-                                <StackPanel Orientation="Horizontal">
-                                    <ui:SymbolIcon Symbol="Play24" FontSize="14" Margin="0,0,6,0" VerticalAlignment="Center"/>
-                                    <TextBlock Text="Reanudar" VerticalAlignment="Center"/>
+                    <Border Background="{DynamicResource SurfaceBrush}" CornerRadius="12" Padding="16" Margin="0,0,14,0" Visibility="{Binding ShowContinueWatching, Converter={StaticResource BooleanToVisibilityConverter}}">
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="*"/>
+                            </Grid.RowDefinitions>
+                            <DockPanel Grid.Row="0" Margin="0,0,0,14">
+                                <TextBlock Text="Continuar viendo" FontSize="20" FontWeight="Bold" Foreground="White" VerticalAlignment="Center"/>
+                                <TextBlock Text="{Binding HeaderSummary}" FontSize="12" Foreground="{DynamicResource TextMutedBrush}" VerticalAlignment="Center" Margin="12,0,0,0"/>
+                            </DockPanel>
+                            <Grid Grid.Row="1">
+                                <ListBox ItemsSource="{Binding ContinueWatching}" SelectedItem="{Binding SelectedProgress}" Background="Transparent" BorderThickness="0"
+                                         AutomationProperties.Name="Continuar viendo" PreviewMouseLeftButtonUp="ContinueWatching_MouseUp"
+                                         ScrollViewer.CanContentScroll="True" Visibility="{Binding HasContinueWatching, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                    <ListBox.ItemContainerStyle>
+                                        <Style TargetType="ListBoxItem" BasedOn="{StaticResource {x:Type ListBoxItem}}">
+                                            <Setter Property="Padding" Value="0"/>
+                                            <Setter Property="Margin" Value="0,0,0,10"/>
+                                            <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+                                        </Style>
+                                    </ListBox.ItemContainerStyle>
+                                    <ListBox.ItemTemplate>
+                                        <DataTemplate>
+                                            <Border Background="{DynamicResource SurfaceRaisedBrush}" BorderBrush="#25FFFFFF" BorderThickness="1" CornerRadius="10" Padding="12" Cursor="Hand" ToolTip="Haz clic para reanudar">
+                                                <Grid>
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="68"/>
+                                                        <ColumnDefinition Width="*"/>
+                                                        <ColumnDefinition Width="Auto"/>
+                                                    </Grid.ColumnDefinitions>
+                                                    <Border CornerRadius="6" ClipToBounds="True" Background="#FF161A24" Width="64" Height="88" VerticalAlignment="Center">
+                                                        <Grid>
+                                                            <local:ChannelLogo Url="{Binding Item.PosterUrl}" Loader="{Binding LogoLoader, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Stretch="UniformToFill" DecodeWidth="140" DecodeHeight="190"/>
+                                                            <ui:SymbolIcon Symbol="MoviesAndTv24" FontSize="22" Foreground="#40FFFFFF" HorizontalAlignment="Center" VerticalAlignment="Center" IsHitTestVisible="False"/>
+                                                        </Grid>
+                                                    </Border>
+                                                    <StackPanel Grid.Column="1" Margin="14,0,14,0" VerticalAlignment="Center">
+                                                        <TextBlock Text="{Binding Item.Name}" FontSize="16" FontWeight="SemiBold" Foreground="White" TextTrimming="CharacterEllipsis"/>
+                                                        <TextBlock Text="{Binding Label}" FontSize="12" Foreground="{DynamicResource AccentBrush}" Margin="0,4,0,8"/>
+                                                        <ProgressBar Height="4" Minimum="0" Maximum="{Binding DurationMilliseconds}" Value="{Binding PositionMilliseconds}"
+                                                                     Foreground="{DynamicResource AccentBrush}" Background="#30FFFFFF" BorderThickness="0"/>
+                                                    </StackPanel>
+                                                    <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                                                        <ui:Button Click="PlayMedia_Click" ToolTip="Reanudar reproducción" Appearance="Primary" Padding="12,6" Margin="0,0,8,0">
+                                                            <StackPanel Orientation="Horizontal">
+                                                                <ui:SymbolIcon Symbol="Play24" FontSize="14" Margin="0,0,6,0" VerticalAlignment="Center"/>
+                                                                <TextBlock Text="Reanudar" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                                                            </StackPanel>
+                                                        </ui:Button>
+                                                        <ui:Button Click="RemoveContinueWatching_Click" ToolTip="Quitar de continuar viendo" Background="Transparent" BorderThickness="0" Padding="6">
+                                                            <ui:SymbolIcon Symbol="Dismiss24" FontSize="14" Foreground="{DynamicResource TextMutedBrush}"/>
+                                                        </ui:Button>
+                                                    </StackPanel>
+                                                </Grid>
+                                            </Border>
+                                        </DataTemplate>
+                                    </ListBox.ItemTemplate>
+                                </ListBox>
+                                <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" Margin="24"
+                                            Visibility="{Binding HasContinueWatching, Converter={StaticResource InverseBooleanToVisibilityConverter}}">
+                                    <ui:SymbolIcon Symbol="History24" FontSize="44" Foreground="{DynamicResource TextMutedBrush}" HorizontalAlignment="Center" Margin="0,0,0,12"/>
+                                    <TextBlock Text="No hay contenido en curso" FontSize="18" FontWeight="SemiBold" Foreground="White" HorizontalAlignment="Center"/>
+                                    <TextBlock Text="Las películas y series que empieces a ver aparecerán aquí para que continúes donde las dejaste."
+                                               FontSize="13" Foreground="{DynamicResource TextMutedBrush}" TextWrapping="Wrap" TextAlignment="Center" MaxWidth="360" Margin="0,6,0,18"/>
+                                    <ui:Button Tag="5" Click="Navigate_Click" Appearance="Primary" HorizontalAlignment="Center" Padding="16,8">
+                                        <StackPanel Orientation="Horizontal">
+                                            <ui:SymbolIcon Symbol="MoviesAndTv24" FontSize="15" Margin="0,0,8,0" VerticalAlignment="Center"/>
+                                            <TextBlock Text="Explorar películas" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                                        </StackPanel>
+                                    </ui:Button>
                                 </StackPanel>
-                            </ui:Button>
-                            <ListBox ItemsSource="{Binding ContinueWatching}" SelectedItem="{Binding SelectedProgress}" DisplayMemberPath="Label" Background="Transparent" BorderThickness="0"
-                                     AutomationProperties.Name="Continuar viendo" PreviewMouseLeftButtonUp="ContinueWatching_MouseUp"/>
-                        </DockPanel>
+                            </Grid>
+                        </Grid>
                     </Border>
                     </Grid>
                     <Border x:Name="MediaBrowsePane" Grid.ColumnSpan="2" Background="{DynamicResource SurfaceBrush}" CornerRadius="10" Padding="18" Visibility="Collapsed">
@@ -499,76 +704,107 @@
                             <ListBox Grid.Row="1" x:Name="MediaList" ItemsSource="{Binding MediaItems}" SelectedItem="{Binding SelectedMedia, Mode=TwoWay}" Background="Transparent" BorderThickness="0"
                                      PreviewMouseLeftButtonUp="Media_MouseUp" MouseDoubleClick="Media_DoubleClick" KeyDown="Media_KeyDown"
                                      VirtualizingPanel.IsVirtualizing="True" VirtualizingPanel.VirtualizationMode="Recycling" ScrollViewer.CanContentScroll="True" AutomationProperties.Name="Películas o series">
-                                <ListBox.ItemContainerStyle><Style TargetType="ListBoxItem" BasedOn="{StaticResource {x:Type ListBoxItem}}"><Setter Property="Height" Value="104"/><Setter Property="HorizontalContentAlignment" Value="Stretch"/><Setter Property="Padding" Value="4"/></Style></ListBox.ItemContainerStyle>
+                                <ListBox.ItemContainerStyle><Style TargetType="ListBoxItem" BasedOn="{StaticResource {x:Type ListBoxItem}}"><Setter Property="Height" Value="112"/><Setter Property="HorizontalContentAlignment" Value="Stretch"/><Setter Property="Padding" Value="4"/></Style></ListBox.ItemContainerStyle>
                                 <ListBox.ItemTemplate><DataTemplate>
-                                    <Border Background="{DynamicResource SurfaceRaisedBrush}" CornerRadius="8" Padding="10" Margin="0,0,8,8">
-                                        <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="64"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-                                            <Border Background="{DynamicResource SurfaceBrush}" CornerRadius="4" ClipToBounds="True">
-                                                <local:ChannelLogo Url="{Binding PosterUrl}" Loader="{Binding LogoLoader, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Stretch="UniformToFill"/>
+                                    <Border Background="{DynamicResource SurfaceRaisedBrush}" BorderBrush="#25FFFFFF" BorderThickness="1" CornerRadius="8" Padding="10" Margin="0,0,8,8">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="74"/>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="Auto"/>
+                                            </Grid.ColumnDefinitions>
+                                            <Border Background="{DynamicResource SurfaceBrush}" CornerRadius="6" ClipToBounds="True">
+                                                <Grid>
+                                                    <local:ChannelLogo Url="{Binding PosterUrl}" Loader="{Binding LogoLoader, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Stretch="UniformToFill" DecodeWidth="150" DecodeHeight="220"/>
+                                                    <ui:SymbolIcon Symbol="MoviesAndTv24" FontSize="20" Foreground="#35FFFFFF" HorizontalAlignment="Center" VerticalAlignment="Center" IsHitTestVisible="False"/>
+                                                </Grid>
                                             </Border>
-                                            <StackPanel Grid.Column="1" Margin="12,4,4,4" VerticalAlignment="Center">
-                                                <TextBlock Text="{Binding Name}" FontSize="16" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
-                                                <TextBlock Text="{Binding Description}" FontSize="12" Foreground="{DynamicResource TextMutedBrush}" TextWrapping="Wrap" MaxHeight="36" Margin="0,5,0,0"/>
+                                            <StackPanel Grid.Column="1" Margin="14,4,8,4" VerticalAlignment="Center">
+                                                <TextBlock Text="{Binding Name}" FontSize="16" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" Foreground="White"/>
+                                                <TextBlock Text="{Binding Description}" FontSize="12" Foreground="{DynamicResource TextMutedBrush}" TextWrapping="Wrap" MaxHeight="38" Margin="0,5,0,0"/>
                                             </StackPanel>
+                                            <ui:Button Grid.Column="2" Click="PlayMedia_Click" ToolTip="Reproducir ahora" VerticalAlignment="Center" Padding="10,6" Margin="4,0,4,0">
+                                                <ui:SymbolIcon Symbol="Play24" FontSize="14" Foreground="{DynamicResource AccentBrush}"/>
+                                            </ui:Button>
                                         </Grid>
                                     </Border>
                                 </DataTemplate></ListBox.ItemTemplate>
                             </ListBox>
                         </Grid>
                     </Border>
-                    <Border x:Name="MovieDetailsPane" Background="{DynamicResource SurfaceBrush}" CornerRadius="10" Padding="14" Margin="0,0,14,0" Visibility="Collapsed">
+                    <Border x:Name="MovieDetailsPane" Background="{DynamicResource SurfaceBrush}" CornerRadius="12" Padding="18" Margin="0,0,14,0" Visibility="Collapsed">
                         <Grid>
                             <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
-                            <DockPanel Grid.Row="0" Margin="0,0,0,12">
-                                <Button Click="BackToMediaBrowse_Click" ToolTip="Volver a películas" AutomationProperties.Name="Volver a películas" Padding="8,6" Margin="0,0,8,0">
-                                    <ui:SymbolIcon Symbol="ArrowLeft24" FontSize="14"/>
+                            <DockPanel Grid.Row="0" Margin="0,0,0,14">
+                                <Button Click="BackToMediaBrowse_Click" ToolTip="Volver a películas" AutomationProperties.Name="Volver a películas" Padding="8,6" Margin="0,0,10,0">
+                                    <StackPanel Orientation="Horizontal">
+                                        <ui:SymbolIcon Symbol="ArrowLeft24" FontSize="14" Margin="0,0,6,0" VerticalAlignment="Center"/>
+                                        <TextBlock Text="Volver" VerticalAlignment="Center"/>
+                                    </StackPanel>
                                 </Button>
-                                <TextBlock Text="Película" FontSize="18" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                                <TextBlock Text="Película" FontSize="18" FontWeight="Bold" Foreground="White" VerticalAlignment="Center"/>
                             </DockPanel>
-                            <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,0,0,12">
-                                <local:ChannelLogo Width="78" Height="112" Url="{Binding MediaPosterUrl}" Loader="{Binding LogoLoader, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Stretch="UniformToFill" Margin="0,0,12,0"/>
+                            <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,0,0,14">
+                                <Border CornerRadius="8" ClipToBounds="True" Background="#FF161A24" Width="96" Height="140" Margin="0,0,16,0" VerticalAlignment="Top">
+                                    <local:ChannelLogo Url="{Binding MediaPosterUrl}" Loader="{Binding LogoLoader, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Stretch="UniformToFill" DecodeWidth="200" DecodeHeight="300"/>
+                                </Border>
                                 <StackPanel VerticalAlignment="Center">
-                                    <TextBlock Text="{Binding SelectedMedia.Name}" FontWeight="SemiBold" TextWrapping="Wrap"/>
-                                    <TextBlock Text="{Binding MediaCategoryLabel}" FontSize="12" Foreground="{DynamicResource AccentBrush}" Margin="0,6,0,0"/>
+                                    <TextBlock Text="{Binding SelectedMedia.Name}" FontSize="20" FontWeight="Bold" Foreground="White" TextWrapping="Wrap"/>
+                                    <Border Background="#2000D294" CornerRadius="4" Padding="6,2" HorizontalAlignment="Left" Margin="0,8,0,0">
+                                        <TextBlock Text="{Binding MediaCategoryLabel}" FontSize="12" Foreground="{DynamicResource AccentBrush}" FontWeight="SemiBold"/>
+                                    </Border>
                                 </StackPanel>
                             </StackPanel>
                             <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto">
-                                <TextBlock Text="{Binding MediaDescription}" TextWrapping="Wrap" Foreground="{DynamicResource TextMutedBrush}"/>
+                                <TextBlock Text="{Binding MediaDescription}" TextWrapping="Wrap" FontSize="13" LineHeight="20" Foreground="{DynamicResource TextMutedBrush}"/>
                             </ScrollViewer>
-                            <WrapPanel Grid.Row="3" Margin="0,12,0,0">
-                                <ui:Button Click="PlayMedia_Click" ToolTip="Reproducir película" AutomationProperties.Name="Reproducir película" Padding="12,6" Margin="0,0,8,4">
-                                    <ui:SymbolIcon Symbol="Play24" FontSize="14"/>
+                            <WrapPanel Grid.Row="3" Margin="0,16,0,0">
+                                <ui:Button Click="PlayMedia_Click" ToolTip="Reproducir película" Appearance="Primary" AutomationProperties.Name="Reproducir película" Padding="16,8" MinHeight="38" Margin="0,0,10,4">
+                                    <StackPanel Orientation="Horizontal">
+                                        <ui:SymbolIcon Symbol="Play24" FontSize="15" Margin="0,0,8,0" VerticalAlignment="Center"/>
+                                        <TextBlock Text="Reproducir" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                                    </StackPanel>
                                 </ui:Button>
-                                <ui:Button Click="RestartMedia_Click" ToolTip="Reproducir desde el inicio" AutomationProperties.Name="Reproducir desde el inicio" Padding="12,6" Margin="0,0,0,4">
-                                    <ui:SymbolIcon Symbol="ArrowReset24" FontSize="14"/>
+                                <ui:Button Click="RestartMedia_Click" ToolTip="Reproducir desde el inicio" AutomationProperties.Name="Reproducir desde el inicio" Padding="14,8" MinHeight="38" Margin="0,0,0,4">
+                                    <StackPanel Orientation="Horizontal">
+                                        <ui:SymbolIcon Symbol="ArrowReset24" FontSize="14" Margin="0,0,6,0" VerticalAlignment="Center"/>
+                                        <TextBlock Text="Desde el inicio" VerticalAlignment="Center"/>
+                                    </StackPanel>
                                 </ui:Button>
                             </WrapPanel>
                         </Grid>
                     </Border>
-                    <Border x:Name="SeriesDetailsPane" Background="{DynamicResource SurfaceBrush}" CornerRadius="10" Padding="14" Margin="0,0,14,0" Visibility="Collapsed">
+                    <Border x:Name="SeriesDetailsPane" Background="{DynamicResource SurfaceBrush}" CornerRadius="12" Padding="18" Margin="0,0,14,0" Visibility="Collapsed">
                         <Grid>
                             <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
-                            <DockPanel Grid.Row="0" Margin="0,0,0,10">
-                                <Button Click="BackToMediaBrowse_Click" ToolTip="Volver a series" AutomationProperties.Name="Volver a series" Padding="8,6" Margin="0,0,8,0">
-                                    <ui:SymbolIcon Symbol="ArrowLeft24" FontSize="14"/>
+                            <DockPanel Grid.Row="0" Margin="0,0,0,12">
+                                <Button Click="BackToMediaBrowse_Click" ToolTip="Volver a series" AutomationProperties.Name="Volver a series" Padding="8,6" Margin="0,0,10,0">
+                                    <StackPanel Orientation="Horizontal">
+                                        <ui:SymbolIcon Symbol="ArrowLeft24" FontSize="14" Margin="0,0,6,0" VerticalAlignment="Center"/>
+                                        <TextBlock Text="Volver" VerticalAlignment="Center"/>
+                                    </StackPanel>
                                 </Button>
-                                <TextBlock Text="Serie" FontSize="18" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                                <TextBlock Text="Serie" FontSize="18" FontWeight="Bold" Foreground="White" VerticalAlignment="Center"/>
                             </DockPanel>
-                            <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,0,0,10">
-                                <local:ChannelLogo Width="66" Height="92" Url="{Binding MediaPosterUrl}" Loader="{Binding LogoLoader, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Stretch="UniformToFill" Margin="0,0,10,0"/>
+                            <StackPanel Grid.Row="1" Orientation="Horizontal" Margin="0,0,0,12">
+                                <Border CornerRadius="8" ClipToBounds="True" Background="#FF161A24" Width="90" Height="130" Margin="0,0,14,0" VerticalAlignment="Top">
+                                    <local:ChannelLogo Url="{Binding MediaPosterUrl}" Loader="{Binding LogoLoader, RelativeSource={RelativeSource AncestorType={x:Type Window}}}" Stretch="UniformToFill" DecodeWidth="180" DecodeHeight="260"/>
+                                </Border>
                                 <StackPanel VerticalAlignment="Center">
-                                    <TextBlock Text="{Binding SelectedMedia.Name}" FontWeight="SemiBold" TextWrapping="Wrap"/>
-                                    <TextBlock Text="{Binding MediaCategoryLabel}" FontSize="12" Foreground="{DynamicResource AccentBrush}" TextWrapping="Wrap" Margin="0,5,0,0"/>
-                                    <TextBlock Text="{Binding SeriesSummary}" FontSize="11" Foreground="{DynamicResource TextMutedBrush}" TextWrapping="Wrap" Margin="0,5,0,0"/>
+                                    <TextBlock Text="{Binding SelectedMedia.Name}" FontSize="20" FontWeight="Bold" Foreground="White" TextWrapping="Wrap"/>
+                                    <Border Background="#2000D294" CornerRadius="4" Padding="6,2" HorizontalAlignment="Left" Margin="0,6,0,0">
+                                        <TextBlock Text="{Binding MediaCategoryLabel}" FontSize="12" Foreground="{DynamicResource AccentBrush}" FontWeight="SemiBold"/>
+                                    </Border>
+                                    <TextBlock Text="{Binding SeriesSummary}" FontSize="12" Foreground="{DynamicResource TextMutedBrush}" TextWrapping="Wrap" Margin="0,6,0,0"/>
                                 </StackPanel>
                             </StackPanel>
-                            <TextBlock Grid.Row="2" Text="{Binding MediaDescription}" TextWrapping="Wrap" MaxHeight="72" FontSize="12" Foreground="{DynamicResource TextMutedBrush}" Margin="0,0,0,10"/>
+                            <TextBlock Grid.Row="2" Text="{Binding MediaDescription}" TextWrapping="Wrap" MaxHeight="64" FontSize="12" Foreground="{DynamicResource TextMutedBrush}" Margin="0,0,0,12"/>
                             <Grid Grid.Row="3">
                                 <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
-                                <StackPanel Grid.Row="0" Margin="0,0,0,8">
-                                    <ComboBox ItemsSource="{Binding Seasons}" DisplayMemberPath="Name" SelectedItem="{Binding Season, Mode=TwoWay}" AutomationProperties.Name="Temporada" Margin="0,0,0,6"/>
+                                <StackPanel Grid.Row="0" Margin="0,0,0,10">
+                                    <ComboBox ItemsSource="{Binding Seasons}" DisplayMemberPath="Name" SelectedItem="{Binding Season, Mode=TwoWay}" AutomationProperties.Name="Temporada" Margin="0,0,0,8"/>
                                     <WrapPanel VerticalAlignment="Center">
-                                        <ui:Button x:Name="PlayRandomEpisodeButton" Click="PlayRandomEpisode_Click" IsEnabled="{Binding CanPlayRandomEpisode}" ToolTip="Elegir y reproducir un episodio al azar de esta serie" AutomationProperties.Name="Episodio al azar" Padding="10,4" Margin="0,0,10,4">
+                                        <ui:Button x:Name="PlayRandomEpisodeButton" Click="PlayRandomEpisode_Click" IsEnabled="{Binding CanPlayRandomEpisode}" ToolTip="Elegir y reproducir un episodio al azar de esta serie" AutomationProperties.Name="Episodio al azar" Padding="12,5" Margin="0,0,10,4">
                                             <StackPanel Orientation="Horizontal">
                                                 <ui:SymbolIcon Symbol="ArrowSync24" FontSize="14" Margin="0,0,6,0" VerticalAlignment="Center"/>
                                                 <TextBlock Text="Episodio al azar" VerticalAlignment="Center"/>
@@ -580,14 +816,18 @@
                                 <ListBox Grid.Row="1" x:Name="EpisodesList" ItemsSource="{Binding Episodes}" SelectedItem="{Binding SelectedEpisode, Mode=TwoWay}" Background="Transparent" BorderThickness="0"
                                          VirtualizingPanel.IsVirtualizing="True" VirtualizingPanel.VirtualizationMode="Recycling" ScrollViewer.CanContentScroll="True"
                                          AutomationProperties.Name="Episodios" PreviewMouseLeftButtonUp="Episodes_MouseUp" KeyDown="Episodes_KeyDown">
-                                    <ListBox.ItemContainerStyle><Style TargetType="ListBoxItem" BasedOn="{StaticResource {x:Type ListBoxItem}}"><Setter Property="MinHeight" Value="48"/><Setter Property="HorizontalContentAlignment" Value="Stretch"/></Style></ListBox.ItemContainerStyle>
+                                    <ListBox.ItemContainerStyle><Style TargetType="ListBoxItem" BasedOn="{StaticResource {x:Type ListBoxItem}}"><Setter Property="MinHeight" Value="52"/><Setter Property="HorizontalContentAlignment" Value="Stretch"/><Setter Property="Margin" Value="0,0,0,4"/></Style></ListBox.ItemContainerStyle>
                                     <ListBox.ItemTemplate><DataTemplate>
-                                        <Grid Margin="4"><Grid.ColumnDefinitions><ColumnDefinition Width="38"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
-                                            <Border Background="{DynamicResource SurfaceRaisedBrush}" CornerRadius="4" Width="30" Height="30" VerticalAlignment="Center">
-                                                <TextBlock Text="{Binding Episode}" FontSize="12" FontWeight="SemiBold" HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                                            </Border>
-                                            <TextBlock Grid.Column="1" Text="{Binding Name}" VerticalAlignment="Center" Margin="8,0,4,0" TextTrimming="CharacterEllipsis" TextWrapping="Wrap"/>
-                                        </Grid>
+                                        <Border Background="{DynamicResource SurfaceRaisedBrush}" BorderBrush="#20FFFFFF" BorderThickness="1" CornerRadius="6" Padding="8,6">
+                                            <Grid>
+                                                <Grid.ColumnDefinitions><ColumnDefinition Width="42"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                                <Border Background="#2500D294" CornerRadius="4" Width="34" Height="34" VerticalAlignment="Center">
+                                                    <TextBlock Text="{Binding Episode}" FontSize="13" FontWeight="Bold" Foreground="{DynamicResource AccentBrush}" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                                                </Border>
+                                                <TextBlock Grid.Column="1" Text="{Binding Name}" VerticalAlignment="Center" Margin="10,0,8,0" TextTrimming="CharacterEllipsis" Foreground="White" FontSize="13"/>
+                                                <ui:SymbolIcon Grid.Column="2" Symbol="Play24" FontSize="14" Foreground="{DynamicResource AccentBrush}" VerticalAlignment="Center" Margin="4,0,4,0"/>
+                                            </Grid>
+                                        </Border>
                                     </DataTemplate></ListBox.ItemTemplate>
                                 </ListBox>
                             </Grid>
@@ -621,6 +861,173 @@
                                         <SolidColorBrush x:Key="TextPrimaryBrush" Color="#FFF2F4F7"/>
                                         <SolidColorBrush x:Key="TextMutedBrush" Color="#FFD0D6E0"/>
                                         <SolidColorBrush x:Key="SurfaceRaisedBrush" Color="#FF232630"/>
+
+                                        <!-- Modern Player Progress Slider Style -->
+                                        <Style x:Key="PlayerProgressSliderStyle" TargetType="Slider">
+                                            <Setter Property="Stylus.IsPressAndHoldEnabled" Value="False"/>
+                                            <Setter Property="Background" Value="Transparent"/>
+                                            <Setter Property="Focusable" Value="True"/>
+                                            <Setter Property="IsMoveToPointEnabled" Value="True"/>
+                                            <Setter Property="MinHeight" Value="24"/>
+                                            <Setter Property="Cursor" Value="Hand"/>
+                                            <Setter Property="Template">
+                                                <Setter.Value>
+                                                    <ControlTemplate TargetType="Slider">
+                                                        <Grid VerticalAlignment="Center">
+                                                            <Border Height="24" Background="Transparent"/>
+                                                            <Border x:Name="TrackBackground" Height="5" Background="#35FFFFFF" CornerRadius="2.5" VerticalAlignment="Center"/>
+                                                            <Track x:Name="PART_Track" Height="24">
+                                                                <Track.DecreaseRepeatButton>
+                                                                    <RepeatButton Command="{x:Static Slider.DecreaseLarge}">
+                                                                        <RepeatButton.Template>
+                                                                            <ControlTemplate TargetType="RepeatButton">
+                                                                                <Border Height="5" Background="{DynamicResource AccentBrush}" CornerRadius="2.5" VerticalAlignment="Center"/>
+                                                                            </ControlTemplate>
+                                                                        </RepeatButton.Template>
+                                                                    </RepeatButton>
+                                                                </Track.DecreaseRepeatButton>
+                                                                <Track.Thumb>
+                                                                    <Thumb x:Name="Thumb">
+                                                                        <Thumb.Template>
+                                                                            <ControlTemplate TargetType="Thumb">
+                                                                                <Grid Width="20" Height="20">
+                                                                                    <Ellipse x:Name="ThumbGlow" Width="18" Height="18" Fill="{DynamicResource AccentBrush}" Opacity="0.3" Visibility="Collapsed"/>
+                                                                                    <Ellipse x:Name="ThumbInner" Width="14" Height="14" Fill="#FFFFFF">
+                                                                                        <Ellipse.Effect>
+                                                                                            <DropShadowEffect BlurRadius="4" ShadowDepth="1" Opacity="0.6"/>
+                                                                                        </Ellipse.Effect>
+                                                                                    </Ellipse>
+                                                                                </Grid>
+                                                                                <ControlTemplate.Triggers>
+                                                                                    <Trigger Property="IsMouseOver" Value="True">
+                                                                                        <Setter TargetName="ThumbGlow" Property="Visibility" Value="Visible"/>
+                                                                                        <Setter TargetName="ThumbInner" Property="Width" Value="16"/>
+                                                                                        <Setter TargetName="ThumbInner" Property="Height" Value="16"/>
+                                                                                    </Trigger>
+                                                                                    <Trigger Property="IsDragging" Value="True">
+                                                                                        <Setter TargetName="ThumbGlow" Property="Visibility" Value="Visible"/>
+                                                                                        <Setter TargetName="ThumbInner" Property="Width" Value="16"/>
+                                                                                        <Setter TargetName="ThumbInner" Property="Height" Value="16"/>
+                                                                                    </Trigger>
+                                                                                </ControlTemplate.Triggers>
+                                                                            </ControlTemplate>
+                                                                        </Thumb.Template>
+                                                                    </Thumb>
+                                                                </Track.Thumb>
+                                                                <Track.IncreaseRepeatButton>
+                                                                    <RepeatButton Command="{x:Static Slider.IncreaseLarge}">
+                                                                        <RepeatButton.Template>
+                                                                            <ControlTemplate TargetType="RepeatButton">
+                                                                                <Border Height="5" Background="Transparent" VerticalAlignment="Center"/>
+                                                                            </ControlTemplate>
+                                                                        </RepeatButton.Template>
+                                                                    </RepeatButton>
+                                                                </Track.IncreaseRepeatButton>
+                                                            </Track>
+                                                        </Grid>
+                                                        <ControlTemplate.Triggers>
+                                                            <Trigger Property="IsMouseOver" Value="True">
+                                                                <Setter TargetName="TrackBackground" Property="Height" Value="6"/>
+                                                            </Trigger>
+                                                        </ControlTemplate.Triggers>
+                                                    </ControlTemplate>
+                                                </Setter.Value>
+                                            </Setter>
+                                        </Style>
+
+                                        <!-- Modern Full-Width Track Option Button Style -->
+                                        <Style x:Key="TrackOptionButtonStyle" TargetType="Button">
+                                            <Setter Property="Background" Value="Transparent"/>
+                                            <Setter Property="BorderBrush" Value="Transparent"/>
+                                            <Setter Property="BorderThickness" Value="1"/>
+                                            <Setter Property="Foreground" Value="#D0D6E0"/>
+                                            <Setter Property="HorizontalAlignment" Value="Stretch"/>
+                                            <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+                                            <Setter Property="MinHeight" Value="38"/>
+                                            <Setter Property="Padding" Value="12,8"/>
+                                            <Setter Property="Margin" Value="0,0,0,4"/>
+                                            <Setter Property="Cursor" Value="Hand"/>
+                                            <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+                                            <Setter Property="Template">
+                                                <Setter.Value>
+                                                    <ControlTemplate TargetType="Button">
+                                                        <Border x:Name="OptionBorder"
+                                                                Background="{TemplateBinding Background}"
+                                                                BorderBrush="{TemplateBinding BorderBrush}"
+                                                                BorderThickness="{TemplateBinding BorderThickness}"
+                                                                CornerRadius="6"
+                                                                Padding="{TemplateBinding Padding}"
+                                                                SnapsToDevicePixels="True">
+                                                            <ContentPresenter VerticalAlignment="Center"/>
+                                                        </Border>
+                                                        <ControlTemplate.Triggers>
+                                                            <Trigger Property="IsMouseOver" Value="True">
+                                                                <Setter TargetName="OptionBorder" Property="Background" Value="#25FFFFFF"/>
+                                                                <Setter TargetName="OptionBorder" Property="BorderBrush" Value="#40FFFFFF"/>
+                                                                <Setter Property="Foreground" Value="#FFFFFF"/>
+                                                            </Trigger>
+                                                            <Trigger Property="IsKeyboardFocused" Value="True">
+                                                                <Setter TargetName="OptionBorder" Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
+                                                                <Setter TargetName="OptionBorder" Property="Background" Value="#1AFFFFFF"/>
+                                                            </Trigger>
+                                                            <Trigger Property="IsPressed" Value="True">
+                                                                <Setter TargetName="OptionBorder" Property="Background" Value="#38FFFFFF"/>
+                                                            </Trigger>
+                                                            <DataTrigger Binding="{Binding IsSelected}" Value="True">
+                                                                <Setter TargetName="OptionBorder" Property="Background" Value="#203B82F6"/>
+                                                                <Setter TargetName="OptionBorder" Property="BorderBrush" Value="#703B82F6"/>
+                                                                <Setter Property="Foreground" Value="#FFFFFF"/>
+                                                            </DataTrigger>
+                                                        </ControlTemplate.Triggers>
+                                                    </ControlTemplate>
+                                                </Setter.Value>
+                                            </Setter>
+                                        </Style>
+
+                                        <!-- Netflix-style Episode Drawer Card Button Style -->
+                                        <Style x:Key="DrawerEpisodeCardStyle" TargetType="Button">
+                                            <Setter Property="Background" Value="#1C202B"/>
+                                            <Setter Property="BorderBrush" Value="#25FFFFFF"/>
+                                            <Setter Property="BorderThickness" Value="1"/>
+                                            <Setter Property="HorizontalAlignment" Value="Stretch"/>
+                                            <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+                                            <Setter Property="MinHeight" Value="82"/>
+                                            <Setter Property="Padding" Value="10"/>
+                                            <Setter Property="Margin" Value="0,0,6,10"/>
+                                            <Setter Property="Cursor" Value="Hand"/>
+                                            <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+                                            <Setter Property="Template">
+                                                <Setter.Value>
+                                                    <ControlTemplate TargetType="Button">
+                                                        <Border x:Name="CardBorder"
+                                                                Background="{TemplateBinding Background}"
+                                                                BorderBrush="{TemplateBinding BorderBrush}"
+                                                                BorderThickness="{TemplateBinding BorderThickness}"
+                                                                CornerRadius="8"
+                                                                Padding="{TemplateBinding Padding}"
+                                                                SnapsToDevicePixels="True">
+                                                            <ContentPresenter VerticalAlignment="Center"/>
+                                                        </Border>
+                                                        <ControlTemplate.Triggers>
+                                                            <Trigger Property="IsMouseOver" Value="True">
+                                                                <Setter TargetName="CardBorder" Property="Background" Value="#2A303F"/>
+                                                                <Setter TargetName="CardBorder" Property="BorderBrush" Value="#60FFFFFF"/>
+                                                            </Trigger>
+                                                            <Trigger Property="IsKeyboardFocused" Value="True">
+                                                                <Setter TargetName="CardBorder" Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
+                                                            </Trigger>
+                                                            <Trigger Property="IsPressed" Value="True">
+                                                                <Setter TargetName="CardBorder" Property="Background" Value="#353D50"/>
+                                                            </Trigger>
+                                                            <DataTrigger Binding="{Binding IsPlaying}" Value="True">
+                                                                <Setter TargetName="CardBorder" Property="Background" Value="#26005A9E"/>
+                                                                <Setter TargetName="CardBorder" Property="BorderBrush" Value="{DynamicResource AccentBrush}"/>
+                                                            </DataTrigger>
+                                                        </ControlTemplate.Triggers>
+                                                    </ControlTemplate>
+                                                </Setter.Value>
+                                            </Setter>
+                                        </Style>
                                     </Grid.Resources>
                                     <StackPanel VerticalAlignment="Center" Margin="24" Visibility="{Binding ShowPlaybackPlaceholder, Converter={StaticResource BooleanToVisibilityConverter}}"
                                         AutomationProperties.Name="{Binding PlaybackStatus}" AutomationProperties.HelpText="Reproducción detenida.">
@@ -649,7 +1056,18 @@
                                             </StackPanel>
                                         </ui:Button>
                                     </Grid>
-                                    <StackPanel x:Name="PlayerChrome" VerticalAlignment="Bottom" Margin="12">
+                                    <!-- Subtle Bottom Vignette Gradient to boost legibility over bright video -->
+                                    <Border VerticalAlignment="Bottom" Height="220" IsHitTestVisible="False">
+                                        <Border.Background>
+                                            <LinearGradientBrush StartPoint="0,0" EndPoint="0,1">
+                                                <GradientStop Color="#00000000" Offset="0.0"/>
+                                                <GradientStop Color="#5505080E" Offset="0.4"/>
+                                                <GradientStop Color="#E605080E" Offset="1.0"/>
+                                            </LinearGradientBrush>
+                                        </Border.Background>
+                                    </Border>
+
+                                    <StackPanel x:Name="PlayerChrome" VerticalAlignment="Bottom" Margin="16,0,16,14">
                                         <Grid>
                                             <Border x:Name="VideoLoadingIndicator" Background="#E610141D" CornerRadius="6" Padding="10,6" Margin="4,6,4,2"
                                                 Visibility="{Binding IsVideoLoading, Converter={StaticResource BooleanToVisibilityConverter}}"
@@ -671,56 +1089,160 @@
                                                         </Style.Triggers></Style></TextBlock.Style>
                                             </TextBlock>
                                         </Grid>
-                                        <Border x:Name="PlayerControls" Background="#E610141D" BorderBrush="#40FFFFFF" BorderThickness="1" CornerRadius="8" Padding="10,6" Margin="0,4,0,0" MouseEnter="Controls_MouseEnter" MouseLeave="Controls_MouseLeave" PreviewTouchDown="Controls_TouchDown">
-                                            <Grid><StackPanel x:Name="StandardControls">
-                                                    <DockPanel Margin="0,0,0,6" Visibility="{Binding CanSeek, Converter={StaticResource BooleanToVisibilityConverter}}">
-                                                        <TextBlock Text="{Binding PositionLabel}" DockPanel.Dock="Right" FontSize="11" Foreground="{DynamicResource TextMutedBrush}" VerticalAlignment="Center" Margin="10,0,0,0"/>
-                                                        <Slider x:Name="SeekSlider" Minimum="0" Maximum="{Binding DurationSeconds}" Value="{Binding PositionSeconds, Mode=OneWay}" IsEnabled="{Binding CanSeek}" PreviewMouseLeftButtonUp="Seek_Completed" KeyUp="Seek_KeyUp" AutomationProperties.Name="Posición del contenido"/>
-                                                    </DockPanel>
-                                                    <StackPanel>
-                                                        <TextBlock x:Name="ControlsMediaTitle" Text="{Binding NowPlaying}" FontWeight="SemiBold" FontSize="13" Foreground="{DynamicResource TextPrimaryBrush}" TextTrimming="CharacterEllipsis" ToolTip="{Binding NowPlaying}" Margin="2,0,2,6"/>
-                                                        <TextBlock x:Name="PlaybackDiagnosticsLabel" Text="{Binding PlaybackDiagnosticsText}" ToolTip="{Binding PlaybackDiagnosticsText}" FontSize="11" Foreground="{DynamicResource TextMutedBrush}" TextTrimming="CharacterEllipsis" Margin="2,0,2,6" AutomationProperties.Name="Diagnóstico de reproducción"/>
-                                                        <WrapPanel x:Name="PlaybackActions" VerticalAlignment="Center">
-                                                            <ui:Button x:Name="PlayPauseButton" Click="TogglePlayPause_Click" ToolTip="{Binding PlayPauseToolTip}" AutomationProperties.Name="{Binding PlayPauseAction}" MinWidth="34" MinHeight="32" Padding="6,4" Margin="0,0,4,0">
-                                                                <ui:SymbolIcon Symbol="{Binding PlayPauseSymbol}" FontSize="15"/>
-                                                            </ui:Button>
-                                                            <ui:Button x:Name="SeekBackwardButton" Content="↺10" Click="SeekBackward_Click" IsEnabled="{Binding CanSeek}" ToolTip="Retroceder 10 segundos (J)" AutomationProperties.Name="Retroceder 10 segundos" MinWidth="32" MinHeight="32" Padding="4,4" Margin="0,0,4,0"/>
-                                                            <ui:Button x:Name="SeekForwardButton" Content="↻10" Click="SeekForward_Click" IsEnabled="{Binding CanSeek}" ToolTip="Adelantar 10 segundos (L)" AutomationProperties.Name="Adelantar 10 segundos" MinWidth="32" MinHeight="32" Padding="4,4" Margin="0,0,4,0"/>
-                                                            <ui:Button x:Name="StopButton" Content="⏹" Click="Stop_Click" ToolTip="Detener reproducción" AutomationProperties.Name="Detener" IsEnabled="{Binding CanStopPlayback}" MinWidth="30" MinHeight="32" Padding="4,4" Margin="0,0,6,0"/>
-                                                            <ToggleButton IsChecked="{Binding IsMuted, Mode=TwoWay}" ToolTip="Silenciar o activar sonido (M)" AutomationProperties.Name="Silenciar" Background="Transparent" BorderThickness="0" MinWidth="30" MinHeight="32" Padding="4,4" VerticalAlignment="Center" Margin="0,0,4,0">
-                                                                <ui:SymbolIcon Symbol="{Binding MuteSymbol}" FontSize="15" Foreground="{DynamicResource TextMutedBrush}"/>
-                                                            </ToggleButton>
-                                                            <Slider x:Name="VolumeSlider" Width="72" Minimum="0" Maximum="400" Value="{Binding Volume, Mode=TwoWay}" TickFrequency="5" IsSnapToTickEnabled="False" VerticalAlignment="Center" Margin="0,0,4,0" ToolTip="Volumen (↑/↓: 5 puntos, hasta 100%; Sound Booster manual hasta 400%)" AutomationProperties.Name="Volumen"/>
-                                                            <TextBlock x:Name="VolumePercentageText" Text="{Binding VolumeLabel}" FontSize="11" Foreground="{DynamicResource TextMutedBrush}" VerticalAlignment="Center" MinWidth="34" Margin="0,0,2,0" AutomationProperties.Name="Porcentaje de volumen"/>
+                                        <Border x:Name="PlayerControls" Background="#E60D1017" BorderBrush="#35FFFFFF" BorderThickness="1" CornerRadius="10" Padding="14,10" Margin="0,4,0,0" MouseEnter="Controls_MouseEnter" MouseLeave="Controls_MouseLeave" PreviewTouchDown="Controls_TouchDown">
+                                            <Grid>
+                                                <StackPanel x:Name="StandardControls">
+                                                    <!-- VOD Progress Bar Row (when CanSeek is true) -->
+                                                    <Grid Margin="0,0,0,6" Visibility="{Binding CanSeek, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                                        <Grid.RowDefinitions>
+                                                            <RowDefinition Height="Auto"/>
+                                                            <RowDefinition Height="Auto"/>
+                                                        </Grid.RowDefinitions>
 
-                                                            <ui:Button x:Name="EpisodeReturnControl" Click="BackToEpisodes_Click"
-                                                                Visibility="{Binding IsImmersiveMode, Converter={StaticResource BooleanToVisibilityConverter}}"
-                                                                ToolTip="{Binding ImmersiveReturnLabel}" AutomationProperties.Name="{Binding ImmersiveReturnLabel}"
-                                                                MinWidth="30" MinHeight="32" Padding="4,4" Margin="0,0,4,0">
-                                                                <ui:SymbolIcon Symbol="DocumentBulletList24" FontSize="14"/>
-                                                            </ui:Button>
-                                                            <ui:Button Click="Previous_Click" ToolTip="Canal o episodio anterior (Shift+P)" AutomationProperties.Name="Anterior" MinWidth="30" MinHeight="32" Padding="4,4" Margin="0,0,4,0">
-                                                                <ui:SymbolIcon Symbol="Previous24" FontSize="14"/>
-                                                            </ui:Button>
-                                                            <ui:Button Click="Next_Click" ToolTip="Canal o episodio siguiente (Shift+N)" AutomationProperties.Name="Siguiente" MinWidth="30" MinHeight="32" Padding="4,4" Margin="0,0,6,0">
-                                                                <ui:SymbolIcon Symbol="Next24" FontSize="14"/>
-                                                            </ui:Button>
-                                                            <ui:SymbolIcon Symbol="Headphones24" ToolTip="Audio" AutomationProperties.Name="Audio" FontSize="14" VerticalAlignment="Center" Margin="0,0,4,0" Foreground="{DynamicResource TextMutedBrush}"/>
-                                                            <ComboBox x:Name="AudioTrackBox" Width="80" MinHeight="32" ItemsSource="{Binding AudioTracks}" SelectedItem="{Binding SelectedAudioTrack}" DisplayMemberPath="Name" DropDownClosed="AudioTrack_Changed" AutomationProperties.Name="Pista de audio" Margin="0,0,6,0"/>
-                                                            <ui:SymbolIcon Symbol="ClosedCaption24" ToolTip="Subtítulos" AutomationProperties.Name="Subtítulos" FontSize="14" VerticalAlignment="Center" Margin="0,0,4,0" Foreground="{DynamicResource TextMutedBrush}"/>
-                                                            <ComboBox x:Name="SubtitleTrackBox" Width="80" MinHeight="32" ItemsSource="{Binding SubtitleTracks}" SelectedItem="{Binding SelectedSubtitleTrack}" DisplayMemberPath="Name" DropDownClosed="SubtitleTrack_Changed" AutomationProperties.Name="Subtítulos" Margin="0,0,6,0"/>
-                                                            <ComboBox x:Name="FormatBox" Width="62" MinHeight="32" ItemsSource="{Binding AvailableFormats}" SelectedItem="{Binding SelectedFormat, Mode=TwoWay}" DropDownClosed="Format_Changed" ToolTip="Formato de emisión (ts / m3u8)" AutomationProperties.Name="Formato de reproducción" Margin="0,0,6,0"/>
-                                                            <ui:Button Click="Retry_Click" ToolTip="Reintentar" AutomationProperties.Name="Reintentar" IsEnabled="{Binding CanRetryPlayback}" MinWidth="30" MinHeight="32" Padding="4,4" Margin="0,0,4,0">
-                                                                <ui:SymbolIcon Symbol="ArrowSync24" FontSize="14"/>
-                                                            </ui:Button>
-                                                            <ui:Button x:Name="PlaybackPipButton" Click="TogglePictureInPicture_Click" ToolTip="Ventana flotante PiP (P)" AutomationProperties.Name="Ventana flotante PiP" MinWidth="32" MinHeight="32" Padding="4,4" Margin="0,0,4,0">
-                                                                <ui:SymbolIcon Symbol="PictureInPicture24" FontSize="14"/>
-                                                            </ui:Button>
-                                                            <ui:Button Click="ToggleFullscreen_Click" ToolTip="Pantalla completa (F o doble clic)" AutomationProperties.Name="Pantalla completa" MinWidth="32" MinHeight="32" Padding="4,4">
-                                                                <ui:SymbolIcon Symbol="FullScreenMaximize24" FontSize="14"/>
-                                                            </ui:Button>
-                                                        </WrapPanel>
+                                                        <!-- Hover Scrub Preview Badge Canvas -->
+                                                        <Canvas Grid.Row="0" Height="22" ClipToBounds="False">
+                                                            <Border x:Name="SeekPreviewBadge"
+                                                                    Background="#F010141D" BorderBrush="#50FFFFFF" BorderThickness="1"
+                                                                    CornerRadius="4" Padding="6,2" Visibility="Collapsed" IsHitTestVisible="False">
+                                                                <TextBlock x:Name="SeekPreviewText" Text="00:00:00" FontSize="11" FontWeight="SemiBold" Foreground="White"/>
+                                                            </Border>
+                                                        </Canvas>
+
+                                                        <!-- Time Labels and Slider -->
+                                                        <Grid Grid.Row="1">
+                                                            <Grid.ColumnDefinitions>
+                                                                <ColumnDefinition Width="*"/>
+                                                                <ColumnDefinition Width="Auto"/>
+                                                            </Grid.ColumnDefinitions>
+                                                            <Slider x:Name="SeekSlider" Grid.Column="0"
+                                                                    Style="{StaticResource PlayerProgressSliderStyle}"
+                                                                    Minimum="0" Maximum="{Binding DurationSeconds}" Value="{Binding PositionSeconds, Mode=OneWay}"
+                                                                    IsEnabled="{Binding CanSeek}"
+                                                                    PreviewMouseLeftButtonDown="Seek_MouseDown"
+                                                                    PreviewMouseLeftButtonUp="Seek_Completed"
+                                                                    KeyUp="Seek_KeyUp"
+                                                                    MouseMove="SeekSlider_MouseMove"
+                                                                    MouseLeave="SeekSlider_MouseLeave"
+                                                                    AutomationProperties.Name="Posición del contenido"
+                                                                    Margin="0,0,14,0"/>
+                                                            <TextBlock Grid.Column="1" Text="{Binding PositionLabel}" FontSize="12" FontWeight="SemiBold" Foreground="{DynamicResource TextMutedBrush}" VerticalAlignment="Center"/>
+                                                        </Grid>
+                                                    </Grid>
+
+                                                    <!-- Live TV Indicator Bar (when CanSeek is false) -->
+                                                    <StackPanel Orientation="Horizontal" Margin="2,0,0,6" Visibility="{Binding IsLivePlayback, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                                        <Border Background="#25E50914" BorderBrush="#80E50914" BorderThickness="1" CornerRadius="4" Padding="8,3" Margin="0,0,10,0" VerticalAlignment="Center">
+                                                            <StackPanel Orientation="Horizontal">
+                                                                <Ellipse Width="8" Height="8" Fill="#E50914" Margin="0,0,6,0" VerticalAlignment="Center"/>
+                                                                <TextBlock Text="EN VIVO" FontWeight="Bold" FontSize="11" Foreground="#FF4D4D" VerticalAlignment="Center"/>
+                                                            </StackPanel>
+                                                        </Border>
+                                                        <TextBlock Text="Transmisión en directo" FontSize="12" Foreground="{DynamicResource TextMutedBrush}" VerticalAlignment="Center"/>
                                                     </StackPanel>
+
+                                                    <!-- Media Title -->
+                                                    <TextBlock x:Name="ControlsMediaTitle" Text="{Binding NowPlaying}" FontWeight="SemiBold" FontSize="13" Foreground="{DynamicResource TextPrimaryBrush}" TextTrimming="CharacterEllipsis" ToolTip="{Binding NowPlaying}" Margin="2,0,2,6"/>
+
+                                                    <!-- Main Controls Bar: Left Group and Right Group -->
+                                                    <DockPanel LastChildFill="False">
+                                                        <!-- Left Group: Playback & Volume -->
+                                                        <StackPanel DockPanel.Dock="Left" Orientation="Horizontal" VerticalAlignment="Center">
+                                                            <ui:Button x:Name="PlayPauseButton" Click="TogglePlayPause_Click" ToolTip="{Binding PlayPauseToolTip}" AutomationProperties.Name="{Binding PlayPauseAction}"
+                                                                       MinWidth="38" MinHeight="36" Padding="6,4" Margin="0,0,6,0">
+                                                                <ui:SymbolIcon Symbol="{Binding PlayPauseSymbol}" FontSize="17"/>
+                                                            </ui:Button>
+                                                            <ui:Button x:Name="SeekBackwardButton" Content="↺10" Click="SeekBackward_Click" IsEnabled="{Binding CanSeek}"
+                                                                       ToolTip="Retroceder 10 segundos (J / 🠔)" AutomationProperties.Name="Retroceder 10 segundos"
+                                                                       MinWidth="34" MinHeight="36" Padding="4" Margin="0,0,4,0"/>
+                                                            <ui:Button x:Name="SeekForwardButton" Content="↻10" Click="SeekForward_Click" IsEnabled="{Binding CanSeek}"
+                                                                       ToolTip="Adelantar 10 segundos (L / ➔)" AutomationProperties.Name="Adelantar 10 segundos"
+                                                                       MinWidth="34" MinHeight="36" Padding="4" Margin="0,0,6,0"/>
+                                                            <ui:Button x:Name="StopButton" Content="⏹" Click="Stop_Click" ToolTip="Detener reproducción" AutomationProperties.Name="Detener"
+                                                                       IsEnabled="{Binding CanStopPlayback}" MinWidth="32" MinHeight="36" Padding="4" Margin="0,0,8,0"/>
+
+                                                            <Rectangle Width="1" Fill="#20FFFFFF" Margin="0,6,8,6"/>
+
+                                                            <!-- Volume and Mute -->
+                                                            <ToggleButton IsChecked="{Binding IsMuted, Mode=TwoWay}" ToolTip="Silenciar o activar sonido (M)" AutomationProperties.Name="Silenciar"
+                                                                          Background="Transparent" BorderThickness="0" MinWidth="32" MinHeight="36" Padding="4" VerticalAlignment="Center" Margin="0,0,4,0">
+                                                                <ui:SymbolIcon Symbol="{Binding MuteSymbol}" FontSize="16" Foreground="{DynamicResource TextMutedBrush}"/>
+                                                            </ToggleButton>
+                                                            <Slider x:Name="VolumeSlider" Width="76" Minimum="0" Maximum="400" Value="{Binding Volume, Mode=TwoWay}" TickFrequency="5" IsSnapToTickEnabled="False"
+                                                                    VerticalAlignment="Center" Margin="0,0,6,0" ToolTip="Volumen (↑/↓: 5 puntos, hasta 100%; Sound Booster manual hasta 400%)" AutomationProperties.Name="Volumen"/>
+                                                            <TextBlock x:Name="VolumePercentageText" Text="{Binding VolumeLabel}" FontSize="11" Foreground="{DynamicResource TextMutedBrush}" VerticalAlignment="Center" MinWidth="34" AutomationProperties.Name="Porcentaje de volumen"/>
+                                                        </StackPanel>
+
+                                                        <!-- Right Group: Options, Navigation, Fullscreen -->
+                                                        <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
+                                                            <!-- Audio and Subtitles Button -->
+                                                            <ui:Button x:Name="AudioSubtitlesButton" Click="ToggleAudioSubtitles_Click" ToolTip="Audio y subtítulos (S)" AutomationProperties.Name="Audio y subtítulos"
+                                                                       MinHeight="36" Padding="8,4" Margin="0,0,6,0">
+                                                                <StackPanel Orientation="Horizontal">
+                                                                    <ui:SymbolIcon Symbol="ClosedCaption24" FontSize="15" Margin="0,0,6,0" VerticalAlignment="Center"/>
+                                                                    <TextBlock Text="Audio y subs" FontSize="12" VerticalAlignment="Center"/>
+                                                                </StackPanel>
+                                                            </ui:Button>
+
+                                                            <!-- In-Player Seasons & Episodes Drawer Button (Netflix style) -->
+                                                            <ui:Button x:Name="EpisodesDrawerButton" Click="ToggleEpisodesDrawer_Click"
+                                                                       Visibility="{Binding CanBrowseEpisodes, Converter={StaticResource BooleanToVisibilityConverter}}"
+                                                                       ToolTip="Temporadas y episodios (E)" AutomationProperties.Name="Selector de episodios de la serie"
+                                                                       MinHeight="36" Padding="8,4" Margin="0,0,6,0">
+                                                                <StackPanel Orientation="Horizontal">
+                                                                    <ui:SymbolIcon Symbol="MoviesAndTv24" FontSize="15" Margin="0,0,6,0" VerticalAlignment="Center"/>
+                                                                    <TextBlock Text="Episodios" FontSize="12" VerticalAlignment="Center"/>
+                                                                </StackPanel>
+                                                            </ui:Button>
+
+                                                            <!-- Episode / Channel Navigation -->
+                                                            <ui:Button x:Name="EpisodeReturnControl" Click="BackToEpisodes_Click"
+                                                                       Visibility="{Binding IsImmersiveMode, Converter={StaticResource BooleanToVisibilityConverter}}"
+                                                                       ToolTip="{Binding ImmersiveReturnLabel}" AutomationProperties.Name="{Binding ImmersiveReturnLabel}"
+                                                                       MinWidth="32" MinHeight="36" Padding="4" Margin="0,0,4,0">
+                                                                <ui:SymbolIcon Symbol="DocumentBulletList24" FontSize="15"/>
+                                                            </ui:Button>
+                                                            <ui:Button Click="Previous_Click" ToolTip="Canal o episodio anterior (Shift+P)" AutomationProperties.Name="Anterior"
+                                                                       MinWidth="32" MinHeight="36" Padding="4" Margin="0,0,4,0">
+                                                                <ui:SymbolIcon Symbol="Previous24" FontSize="15"/>
+                                                            </ui:Button>
+                                                            <ui:Button Click="Next_Click" ToolTip="Canal o episodio siguiente (Shift+N)" AutomationProperties.Name="Siguiente"
+                                                                       MinWidth="32" MinHeight="36" Padding="4" Margin="0,0,6,0">
+                                                                <ui:SymbolIcon Symbol="Next24" FontSize="15"/>
+                                                            </ui:Button>
+
+                                                            <Rectangle Width="1" Fill="#20FFFFFF" Margin="0,6,8,6"/>
+
+                                                            <!-- Secondary Options: Stats, Format, Retry, PiP -->
+                                                            <ui:Button x:Name="PlaybackStatsButton" Click="TogglePlaybackStats_Click" ToolTip="Estadísticas de reproducción" AutomationProperties.Name="Estadísticas de reproducción"
+                                                                       MinWidth="32" MinHeight="36" Padding="4" Margin="0,0,4,0">
+                                                                <ui:SymbolIcon Symbol="DataUsage24" FontSize="15"/>
+                                                            </ui:Button>
+
+                                                            <StackPanel Visibility="Collapsed">
+                                                                <ComboBox x:Name="AudioTrackBox" Width="80" MinHeight="32" ItemsSource="{Binding AudioTracks}" SelectedItem="{Binding SelectedAudioTrack, Mode=TwoWay}" DisplayMemberPath="Name" DropDownClosed="AudioTrack_Changed"/>
+                                                                <ComboBox x:Name="SubtitleTrackBox" Width="80" MinHeight="32" ItemsSource="{Binding SubtitleTracks}" SelectedItem="{Binding SelectedSubtitleTrack, Mode=TwoWay}" DisplayMemberPath="Name" DropDownClosed="SubtitleTrack_Changed"/>
+                                                            </StackPanel>
+
+                                                            <ComboBox x:Name="FormatBox" Width="66" MinHeight="34" ItemsSource="{Binding AvailableFormats}" SelectedItem="{Binding SelectedFormat, Mode=TwoWay}" DropDownClosed="Format_Changed"
+                                                                      ToolTip="Formato de emisión (ts / m3u8)" AutomationProperties.Name="Formato de reproducción" Margin="0,0,4,0"/>
+
+                                                            <ui:Button Click="Retry_Click" ToolTip="Reintentar reproducción" AutomationProperties.Name="Reintentar"
+                                                                       IsEnabled="{Binding CanRetryPlayback}" MinWidth="32" MinHeight="36" Padding="4" Margin="0,0,4,0">
+                                                                <ui:SymbolIcon Symbol="ArrowSync24" FontSize="15"/>
+                                                            </ui:Button>
+
+                                                            <ui:Button x:Name="PlaybackPipButton" Click="TogglePictureInPicture_Click" ToolTip="Ventana flotante PiP (P)" AutomationProperties.Name="Ventana flotante PiP"
+                                                                       MinWidth="32" MinHeight="36" Padding="4" Margin="0,0,4,0">
+                                                                <ui:SymbolIcon Symbol="PictureInPicture24" FontSize="15"/>
+                                                            </ui:Button>
+
+                                                            <!-- Fullscreen -->
+                                                            <ui:Button Click="ToggleFullscreen_Click" ToolTip="Pantalla completa (F o doble clic)" AutomationProperties.Name="Pantalla completa"
+                                                                       MinWidth="34" MinHeight="36" Padding="4">
+                                                                <ui:SymbolIcon Symbol="FullScreenMaximize24" FontSize="15"/>
+                                                            </ui:Button>
+                                                        </StackPanel>
+                                                    </DockPanel>
                                                 </StackPanel>
                                                 <WrapPanel x:Name="PipControls" Visibility="Collapsed" VerticalAlignment="Center" HorizontalAlignment="Center">
                                                     <ui:Button Click="TogglePlayPause_Click" ToolTip="{Binding PlayPauseToolTip}" AutomationProperties.Name="{Binding PlayPauseAction}" MinWidth="28" MinHeight="26" Padding="4,2" Margin="0,0,4,0">
@@ -744,7 +1266,382 @@
                                                     </ui:Button>
                                                 </WrapPanel>
                                             </Grid>
-                                        </Border>                                    </StackPanel>
+                                         </Border>
+                                    </StackPanel>
+                                    <!-- Modern Netflix/Apple TV style Audio and Subtitles Floating Selector Panel -->
+                                    <Border x:Name="AudioSubtitlesOverlay"
+                                        Background="#F210141D" BorderBrush="#45FFFFFF" BorderThickness="1"
+                                        CornerRadius="12" Padding="20,16"
+                                        HorizontalAlignment="Right" VerticalAlignment="Bottom"
+                                        Margin="0,0,24,106" MaxWidth="540" MinWidth="360" MaxHeight="420"
+                                        Visibility="{Binding IsAudioSubtitlesOpen, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                        <Border.Effect>
+                                            <DropShadowEffect BlurRadius="36" ShadowDepth="4" Opacity="0.85" Color="#000000"/>
+                                        </Border.Effect>
+                                        <Grid>
+                                            <Grid.RowDefinitions>
+                                                <RowDefinition Height="Auto"/>
+                                                <RowDefinition Height="*"/>
+                                                <RowDefinition Height="Auto"/>
+                                            </Grid.RowDefinitions>
+                                            <DockPanel Grid.Row="0" Margin="0,0,0,12">
+                                                <ui:Button DockPanel.Dock="Right" Click="CloseAudioSubtitles_Click"
+                                                    ToolTip="Cerrar (Esc)" AutomationProperties.Name="Cerrar selector de audio y subtítulos"
+                                                    Padding="4" MinWidth="28" MinHeight="28" Background="Transparent" BorderThickness="0">
+                                                    <ui:SymbolIcon Symbol="Dismiss24" FontSize="14" Foreground="{DynamicResource TextMutedBrush}"/>
+                                                </ui:Button>
+                                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                                    <ui:SymbolIcon Symbol="ClosedCaption24" FontSize="16" Foreground="{DynamicResource AccentBrush}" Margin="0,0,8,0" VerticalAlignment="Center"/>
+                                                    <TextBlock Text="Audio y subtítulos" FontSize="15" FontWeight="SemiBold" Foreground="White" VerticalAlignment="Center"/>
+                                                </StackPanel>
+                                            </DockPanel>
+
+                                            <!-- Divider -->
+                                            <Rectangle Grid.Row="0" VerticalAlignment="Bottom" Height="1" Fill="#20FFFFFF" Margin="-4,0,-4,0"/>
+                                            <Grid Grid.Row="1">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*"/>
+                                                    <ColumnDefinition Width="1"/>
+                                                    <ColumnDefinition Width="*"/>
+                                                </Grid.ColumnDefinitions>
+                                                <!-- Column 0: AUDIO -->
+                                                <DockPanel Grid.Column="0" Margin="0,0,12,0">
+                                                    <TextBlock DockPanel.Dock="Top" Text="AUDIO" FontSize="11" FontWeight="Bold" Foreground="{DynamicResource AccentBrush}" Margin="4,0,0,8"/>
+                                                    <TextBlock DockPanel.Dock="Top" Text="{Binding AudioStatusMessage}" FontSize="11" Foreground="{DynamicResource TextMutedBrush}" Margin="4,0,0,8"
+                                                        Visibility="{Binding HasNoAudioTracks, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+                                                    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" MaxHeight="270">
+                                                        <ItemsControl ItemsSource="{Binding FormattedAudioTracks}">
+                                                            <ItemsControl.ItemTemplate>
+                                                                <DataTemplate DataType="{x:Type core:MediaTrackInfo}">
+                                                                    <Button Click="AudioTrackItem_Click" Style="{StaticResource TrackOptionButtonStyle}"
+                                                                        ToolTip="{Binding DisplayName}">
+                                                                        <DockPanel LastChildFill="True">
+                                                                            <ui:SymbolIcon Symbol="Checkmark24" DockPanel.Dock="Right" FontSize="14" Foreground="{DynamicResource AccentBrush}"
+                                                                                Margin="8,0,0,0" VerticalAlignment="Center"
+                                                                                Visibility="{Binding IsSelected, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+                                                                            <TextBlock Text="{Binding DisplayName}" TextTrimming="CharacterEllipsis" FontSize="13" VerticalAlignment="Center">
+                                                                                <TextBlock.Style>
+                                                                                    <Style TargetType="TextBlock">
+                                                                                        <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}"/>
+                                                                                        <Setter Property="FontWeight" Value="Normal"/>
+                                                                                        <Style.Triggers>
+                                                                                            <DataTrigger Binding="{Binding IsSelected}" Value="True">
+                                                                                                <Setter Property="Foreground" Value="White"/>
+                                                                                                <Setter Property="FontWeight" Value="SemiBold"/>
+                                                                                            </DataTrigger>
+                                                                                        </Style.Triggers>
+                                                                                    </Style>
+                                                                                </TextBlock.Style>
+                                                                            </TextBlock>
+                                                                        </DockPanel>
+                                                                    </Button>
+                                                                </DataTemplate>
+                                                            </ItemsControl.ItemTemplate>
+                                                        </ItemsControl>
+                                                    </ScrollViewer>
+                                                </DockPanel>
+                                                <Rectangle Grid.Column="1" Fill="#30FFFFFF" Width="1" Margin="0,4"/>
+                                                <DockPanel Grid.Column="2" Margin="10,0,0,0">
+                                                    <TextBlock DockPanel.Dock="Top" Text="SUBTÍTULOS" FontSize="11" FontWeight="Bold" Foreground="{DynamicResource AccentBrush}" Margin="4,0,0,8"/>
+                                                    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" MaxHeight="270">
+                                                        <ItemsControl ItemsSource="{Binding FormattedSubtitleTracks}">
+                                                            <ItemsControl.ItemTemplate>
+                                                                <DataTemplate DataType="{x:Type core:MediaTrackInfo}">
+                                                                    <Button Click="SubtitleTrackItem_Click" Style="{StaticResource TrackOptionButtonStyle}"
+                                                                        ToolTip="{Binding DisplayName}">
+                                                                        <DockPanel LastChildFill="True">
+                                                                            <ui:SymbolIcon Symbol="Checkmark24" DockPanel.Dock="Right" FontSize="14" Foreground="{DynamicResource AccentBrush}"
+                                                                                Margin="8,0,0,0" VerticalAlignment="Center"
+                                                                                Visibility="{Binding IsSelected, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+                                                                            <TextBlock Text="{Binding DisplayName}" TextTrimming="CharacterEllipsis" FontSize="13" VerticalAlignment="Center">
+                                                                                <TextBlock.Style>
+                                                                                    <Style TargetType="TextBlock">
+                                                                                        <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}"/>
+                                                                                        <Setter Property="FontWeight" Value="Normal"/>
+                                                                                        <Style.Triggers>
+                                                                                            <DataTrigger Binding="{Binding IsSelected}" Value="True">
+                                                                                                <Setter Property="Foreground" Value="White"/>
+                                                                                                <Setter Property="FontWeight" Value="SemiBold"/>
+                                                                                            </DataTrigger>
+                                                                                        </Style.Triggers>
+                                                                                    </Style>
+                                                                                </TextBlock.Style>
+                                                                            </TextBlock>
+                                                                        </DockPanel>
+                                                                    </Button>
+                                                                </DataTemplate>
+                                                            </ItemsControl.ItemTemplate>
+                                                        </ItemsControl>
+                                                    </ScrollViewer>
+                                                </DockPanel>
+                                            </Grid>
+                                            <Border Grid.Row="2" Background="#26FFFFFF" CornerRadius="6" Padding="10,5" Margin="0,10,0,0"
+                                                Visibility="{Binding HasAudioSubtitlesFeedback, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                                <TextBlock Text="{Binding AudioSubtitlesFeedback}" FontSize="11" Foreground="{DynamicResource AccentBrush}"
+                                                    TextTrimming="CharacterEllipsis" HorizontalAlignment="Center"/>
+                                            </Border>
+                                        </Grid>
+                                    </Border>
+
+                                    <!-- Playback Statistics Floating HUD Panel -->
+                                    <Border x:Name="PlaybackStatsOverlay"
+                                        Background="#F210141D" BorderBrush="#45FFFFFF" BorderThickness="1"
+                                        CornerRadius="12" Padding="18,16"
+                                        HorizontalAlignment="Right" VerticalAlignment="Bottom"
+                                        Margin="0,0,24,106" MaxWidth="380" MinWidth="300"
+                                        Visibility="{Binding IsPlaybackStatsOpen, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                        <Border.Effect>
+                                            <DropShadowEffect BlurRadius="36" ShadowDepth="4" Opacity="0.85" Color="#000000"/>
+                                        </Border.Effect>
+                                        <StackPanel>
+                                            <DockPanel Margin="0,0,0,12">
+                                                <ui:Button DockPanel.Dock="Right" Click="ClosePlaybackStats_Click"
+                                                    ToolTip="Cerrar estadísticas (Esc)" AutomationProperties.Name="Cerrar estadísticas de reproducción"
+                                                    Padding="4" MinWidth="28" MinHeight="28" Background="Transparent" BorderThickness="0">
+                                                    <ui:SymbolIcon Symbol="Dismiss24" FontSize="14" Foreground="{DynamicResource TextMutedBrush}"/>
+                                                </ui:Button>
+                                                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                                    <ui:SymbolIcon Symbol="DataUsage24" FontSize="16" Foreground="{DynamicResource AccentBrush}" Margin="0,0,8,0" VerticalAlignment="Center"/>
+                                                    <TextBlock Text="Estadísticas de reproducción" FontSize="15" FontWeight="SemiBold" Foreground="White" VerticalAlignment="Center"/>
+                                                </StackPanel>
+                                            </DockPanel>
+
+                                            <!-- Divider -->
+                                            <Rectangle Height="1" Fill="#20FFFFFF" Margin="-2,0,-2,12"/>
+
+                                            <!-- Key metrics grid -->
+                                            <Grid Margin="2,0,2,4">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="Auto"/>
+                                                    <ColumnDefinition Width="*"/>
+                                                </Grid.ColumnDefinitions>
+                                                <Grid.RowDefinitions>
+                                                    <RowDefinition Height="Auto"/>
+                                                    <RowDefinition Height="Auto"/>
+                                                    <RowDefinition Height="Auto"/>
+                                                    <RowDefinition Height="Auto"/>
+                                                    <RowDefinition Height="Auto"/>
+                                                    <RowDefinition Height="Auto"/>
+                                                </Grid.RowDefinitions>
+
+                                                <TextBlock Grid.Row="0" Grid.Column="0" Text="Velocidad:" Foreground="{DynamicResource TextMutedBrush}" FontSize="12" Margin="0,3,16,3"/>
+                                                <TextBlock Grid.Row="0" Grid.Column="1" Text="{Binding StatsBitrateText}" FontWeight="SemiBold" Foreground="White" FontSize="12" HorizontalAlignment="Right" Margin="0,3,0,3"/>
+
+                                                <TextBlock Grid.Row="1" Grid.Column="0" Text="Fotogramas (FPS):" Foreground="{DynamicResource TextMutedBrush}" FontSize="12" Margin="0,3,16,3"/>
+                                                <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding StatsFpsText}" FontWeight="SemiBold" Foreground="White" FontSize="12" HorizontalAlignment="Right" Margin="0,3,0,3"/>
+
+                                                <TextBlock Grid.Row="2" Grid.Column="0" Text="Búfer efectivo:" Foreground="{DynamicResource TextMutedBrush}" FontSize="12" Margin="0,3,16,3"/>
+                                                <TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding StatsBufferText}" FontWeight="SemiBold" Foreground="White" FontSize="12" HorizontalAlignment="Right" Margin="0,3,0,3"/>
+
+                                                <TextBlock Grid.Row="3" Grid.Column="0" Text="Recargas (pausas):" Foreground="{DynamicResource TextMutedBrush}" FontSize="12" Margin="0,3,16,3"/>
+                                                <TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding StatsRebufferText}" FontWeight="SemiBold" Foreground="White" FontSize="12" HorizontalAlignment="Right" Margin="0,3,0,3"/>
+
+                                                <TextBlock Grid.Row="4" Grid.Column="0" Text="Decodificación:" Foreground="{DynamicResource TextMutedBrush}" FontSize="12" Margin="0,3,16,3"/>
+                                                <TextBlock Grid.Row="4" Grid.Column="1" Text="{Binding StatsDecoderText}" FontWeight="SemiBold" Foreground="White" FontSize="12" HorizontalAlignment="Right" Margin="0,3,0,3"/>
+
+                                                <TextBlock Grid.Row="5" Grid.Column="0" Text="Formato de flujo:" Foreground="{DynamicResource TextMutedBrush}" FontSize="12" Margin="0,3,16,3"/>
+                                                <TextBlock Grid.Row="5" Grid.Column="1" Text="{Binding StatsFormatText}" FontWeight="SemiBold" Foreground="White" FontSize="12" HorizontalAlignment="Right" Margin="0,3,0,3"/>
+                                            </Grid>
+
+                                            <!-- Technical diagnostic line (preserves compatibility with PlaybackDiagnosticsLabel tests) -->
+                                            <Border Background="#1AFFFFFF" CornerRadius="6" Padding="10,6" Margin="0,8,0,0">
+                                                <TextBlock x:Name="PlaybackDiagnosticsLabel" Text="{Binding PlaybackDiagnosticsText}" FontSize="11" Foreground="{DynamicResource TextMutedBrush}" TextWrapping="Wrap" AutomationProperties.LiveSetting="Polite"/>
+                                            </Border>
+                                        </StackPanel>
+                                    </Border>
+
+                                    <!-- Netflix-style Next Episode Auto-Play Card -->
+                                    <Border x:Name="NextEpisodeOverlay"
+                                        Background="#F210141D" BorderBrush="#55FFFFFF" BorderThickness="1"
+                                        CornerRadius="12" Padding="20,18"
+                                        HorizontalAlignment="Right" VerticalAlignment="Bottom"
+                                        Margin="0,0,24,116" MaxWidth="440" Width="400"
+                                        Visibility="{Binding IsNextEpisodeOverlayOpen, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                        <Border.Effect>
+                                            <DropShadowEffect BlurRadius="32" ShadowDepth="4" Opacity="0.85" Color="#000000"/>
+                                        </Border.Effect>
+                                        <StackPanel>
+                                            <DockPanel Margin="0,0,0,8">
+                                                <ui:Button DockPanel.Dock="Right" Click="CancelNextEpisodeAutoPlay_Click"
+                                                    ToolTip="Cancelar reproducción automática (Esc)" AutomationProperties.Name="Cancelar cuenta regresiva"
+                                                    Padding="4,2" MinWidth="26" MinHeight="26" Background="Transparent" BorderThickness="0">
+                                                    <ui:SymbolIcon Symbol="Dismiss24" FontSize="14" Foreground="{DynamicResource TextMutedBrush}"/>
+                                                </ui:Button>
+                                                <TextBlock Text="A CONTINUACIÓN" FontSize="11" FontWeight="Bold" Foreground="{DynamicResource AccentBrush}" VerticalAlignment="Center"/>
+                                            </DockPanel>
+                                            <TextBlock Text="{Binding NextEpisodeSeasonEpisodeLabel}" FontSize="15" FontWeight="SemiBold" Foreground="White" Margin="0,0,0,2" TextTrimming="CharacterEllipsis"/>
+                                            <TextBlock Text="{Binding NextEpisodeNameLabel}" FontSize="13" Foreground="{DynamicResource TextMutedBrush}" Margin="0,0,0,12" TextTrimming="CharacterEllipsis"/>
+                                            <TextBlock Text="{Binding NextEpisodeCountdownLabel}" FontSize="12" Foreground="{DynamicResource TextPrimaryBrush}" Margin="0,0,0,6"/>
+                                            <ProgressBar Height="5" Minimum="0" Maximum="10" Value="{Binding NextEpisodeProgressValue, Mode=OneWay}"
+                                                Foreground="{DynamicResource AccentBrush}" Background="#30FFFFFF" Margin="0,0,0,16"/>
+                                            <WrapPanel>
+                                                <ui:Button Click="PlayNextEpisodeNow_Click"
+                                                    Appearance="Primary" MinHeight="36" Padding="14,6" Margin="0,0,8,0"
+                                                    ToolTip="Reproducir inmediatamente" AutomationProperties.Name="Reproducir siguiente episodio">
+                                                    <StackPanel Orientation="Horizontal">
+                                                        <ui:SymbolIcon Symbol="Play24" FontSize="14" Margin="0,0,6,0" VerticalAlignment="Center"/>
+                                                        <TextBlock Text="Reproducir siguiente" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                                                    </StackPanel>
+                                                </ui:Button>
+                                                <ui:Button Content="Cancelar" Click="CancelNextEpisodeAutoPlay_Click"
+                                                    MinHeight="36" Padding="12,6" ToolTip="Cancelar reproducción automática" AutomationProperties.Name="Cancelar reproducción automática"/>
+                                            </WrapPanel>
+                                        </StackPanel>
+                                    </Border>
+
+                                    <!-- Netflix-style Seasons & Episodes Right-side Drawer Panel -->
+                                    <Border x:Name="EpisodesDrawerOverlay"
+                                        HorizontalAlignment="Right" VerticalAlignment="Stretch"
+                                        Width="440" MaxWidth="520"
+                                        Background="#F510141D" BorderBrush="#40FFFFFF" BorderThickness="1,0,0,0"
+                                        Visibility="{Binding IsEpisodesDrawerOpen, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                        <Border.Effect>
+                                            <DropShadowEffect BlurRadius="40" ShadowDepth="0" Opacity="0.9" Color="#000000"/>
+                                        </Border.Effect>
+                                        <Grid Margin="18,16,14,16">
+                                            <Grid.RowDefinitions>
+                                                <RowDefinition Height="Auto"/>
+                                                <RowDefinition Height="Auto"/>
+                                                <RowDefinition Height="*"/>
+                                                <RowDefinition Height="Auto"/>
+                                            </Grid.RowDefinitions>
+
+                                            <!-- Header -->
+                                            <Grid Grid.Row="0" Margin="0,0,0,12">
+                                                <!-- Header for Episodes view -->
+                                                <DockPanel Visibility="{Binding IsDrawerEpisodesViewOpen, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                                    <ui:Button DockPanel.Dock="Right" Click="CloseEpisodesDrawer_Click"
+                                                        ToolTip="Cerrar (Esc)" AutomationProperties.Name="Cerrar selector de episodios"
+                                                        Padding="4" MinWidth="28" MinHeight="28" Background="Transparent" BorderThickness="0">
+                                                        <ui:SymbolIcon Symbol="Dismiss24" FontSize="14" Foreground="{DynamicResource TextMutedBrush}"/>
+                                                    </ui:Button>
+                                                    <ui:Button DockPanel.Dock="Left" Click="SwitchToSeasonsView_Click"
+                                                        ToolTip="Cambiar de temporada" AutomationProperties.Name="Seleccionar temporada"
+                                                        Padding="8,4" MinHeight="28" Background="#20FFFFFF" BorderThickness="0" Margin="0,0,10,0" VerticalAlignment="Center">
+                                                        <StackPanel Orientation="Horizontal">
+                                                            <ui:SymbolIcon Symbol="ArrowLeft24" FontSize="12" Margin="0,0,6,0" VerticalAlignment="Center"/>
+                                                            <TextBlock Text="Temporadas" FontSize="12" VerticalAlignment="Center" Foreground="White"/>
+                                                        </StackPanel>
+                                                    </ui:Button>
+                                                    <TextBlock Text="{Binding DrawerSelectedSeasonName}" FontSize="15" FontWeight="SemiBold" Foreground="White" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"/>
+                                                </DockPanel>
+
+                                                <!-- Header for Seasons view -->
+                                                <DockPanel Visibility="{Binding IsDrawerSeasonsViewOpen, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                                    <ui:Button DockPanel.Dock="Right" Click="CloseEpisodesDrawer_Click"
+                                                        ToolTip="Cerrar (Esc)" AutomationProperties.Name="Cerrar selector de episodios"
+                                                        Padding="4" MinWidth="28" MinHeight="28" Background="Transparent" BorderThickness="0">
+                                                        <ui:SymbolIcon Symbol="Dismiss24" FontSize="14" Foreground="{DynamicResource TextMutedBrush}"/>
+                                                    </ui:Button>
+                                                    <ui:Button DockPanel.Dock="Left" Click="SwitchToEpisodesView_Click"
+                                                        ToolTip="Volver a los episodios" AutomationProperties.Name="Volver a los episodios"
+                                                        Padding="6,4" MinHeight="28" Background="#20FFFFFF" BorderThickness="0" Margin="0,0,10,0" VerticalAlignment="Center">
+                                                        <ui:SymbolIcon Symbol="ArrowLeft24" FontSize="12" VerticalAlignment="Center"/>
+                                                    </ui:Button>
+                                                    <TextBlock Text="Seleccionar temporada" FontSize="15" FontWeight="SemiBold" Foreground="White" VerticalAlignment="Center"/>
+                                                </DockPanel>
+                                            </Grid>
+
+                                            <!-- Divider -->
+                                            <Rectangle Grid.Row="1" Height="1" Fill="#20FFFFFF" Margin="-18,0,-14,12"/>
+
+                                            <!-- Content Body: Episodes View or Seasons View -->
+                                            <Grid Grid.Row="2">
+                                                <!-- View 1: Episodes list -->
+                                                <ScrollViewer Visibility="{Binding IsDrawerEpisodesViewOpen, Converter={StaticResource BooleanToVisibilityConverter}}"
+                                                              VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                                                    <ItemsControl ItemsSource="{Binding DrawerEpisodes}">
+                                                        <ItemsControl.ItemTemplate>
+                                                            <DataTemplate>
+                                                                <Button Click="DrawerEpisodeItem_Click" Style="{StaticResource DrawerEpisodeCardStyle}"
+                                                                        ToolTip="{Binding DisplayTitle}">
+                                                                    <Grid>
+                                                                        <Grid.ColumnDefinitions>
+                                                                            <ColumnDefinition Width="110"/>
+                                                                            <ColumnDefinition Width="*"/>
+                                                                        </Grid.ColumnDefinitions>
+
+                                                                        <!-- Thumbnail & Playing badge overlay -->
+                                                                        <Border Grid.Column="0" Height="68" CornerRadius="6" ClipToBounds="True" Background="#FF161A24">
+                                                                            <Grid>
+                                                                                <local:ChannelLogo Url="{Binding PosterUrl}"
+                                                                                    Loader="{Binding LogoLoader, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+                                                                                    Stretch="UniformToFill"/>
+                                                                                <!-- Fallback icon if no thumbnail -->
+                                                                                <ui:SymbolIcon Symbol="MoviesAndTv24" FontSize="24" Foreground="#40FFFFFF"
+                                                                                    HorizontalAlignment="Center" VerticalAlignment="Center"
+                                                                                    IsHitTestVisible="False"/>
+                                                                                <!-- Playing badge overlay on thumbnail -->
+                                                                                <Border Background="#B3000000" VerticalAlignment="Bottom" Padding="4,2"
+                                                                                    Visibility="{Binding IsPlaying, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                                                                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                                                                                        <ui:SymbolIcon Symbol="Play24" FontSize="10" Foreground="{DynamicResource AccentBrush}" Margin="0,0,4,0" VerticalAlignment="Center"/>
+                                                                                        <TextBlock Text="EN CURSO" FontSize="9" FontWeight="Bold" Foreground="{DynamicResource AccentBrush}" VerticalAlignment="Center"/>
+                                                                                    </StackPanel>
+                                                                                </Border>
+                                                                            </Grid>
+                                                                        </Border>
+
+                                                                        <!-- Episode info -->
+                                                                        <StackPanel Grid.Column="1" Margin="12,0,0,0" VerticalAlignment="Center">
+                                                                            <DockPanel LastChildFill="True">
+                                                                                <TextBlock DockPanel.Dock="Right" Text="{Binding DurationText}" FontSize="11" Foreground="{DynamicResource TextMutedBrush}" VerticalAlignment="Center" Margin="6,0,0,0"/>
+                                                                                <TextBlock Text="{Binding DisplayTitle}" FontWeight="SemiBold" FontSize="13" Foreground="White" TextTrimming="CharacterEllipsis" VerticalAlignment="Center"/>
+                                                                            </DockPanel>
+                                                                            <TextBlock Text="{Binding Description}" FontSize="11" Foreground="{DynamicResource TextMutedBrush}" TextWrapping="Wrap" MaxHeight="32" TextTrimming="CharacterEllipsis" Margin="0,4,0,0"/>
+                                                                            <!-- Progress bar -->
+                                                                            <ProgressBar Height="3" Minimum="0" Maximum="1" Value="{Binding ProgressFraction}"
+                                                                                Visibility="{Binding HasProgress, Converter={StaticResource BooleanToVisibilityConverter}}"
+                                                                                Foreground="{DynamicResource AccentBrush}" Background="#30FFFFFF" BorderThickness="0" Margin="0,6,0,0"/>
+                                                                        </StackPanel>
+                                                                    </Grid>
+                                                                </Button>
+                                                            </DataTemplate>
+                                                        </ItemsControl.ItemTemplate>
+                                                    </ItemsControl>
+                                                </ScrollViewer>
+
+                                                <!-- View 2: Seasons list -->
+                                                <ScrollViewer Visibility="{Binding IsDrawerSeasonsViewOpen, Converter={StaticResource BooleanToVisibilityConverter}}"
+                                                              VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                                                    <ItemsControl ItemsSource="{Binding DrawerSeasons}">
+                                                        <ItemsControl.ItemTemplate>
+                                                            <DataTemplate>
+                                                                <Button Click="SeasonItem_Click" Style="{StaticResource TrackOptionButtonStyle}"
+                                                                        MinHeight="44" Margin="0,0,0,4" ToolTip="{Binding Name}">
+                                                                    <DockPanel LastChildFill="True">
+                                                                        <ui:SymbolIcon Symbol="Checkmark24" DockPanel.Dock="Right" FontSize="14" Foreground="{DynamicResource AccentBrush}"
+                                                                            Margin="8,0,0,0" VerticalAlignment="Center"
+                                                                            Visibility="{Binding IsSelected, Converter={StaticResource BooleanToVisibilityConverter}}"/>
+                                                                        <TextBlock DockPanel.Dock="Right" Text="{Binding EpisodeCountLabel}" FontSize="12" Foreground="{DynamicResource TextMutedBrush}" VerticalAlignment="Center" Margin="8,0,0,0"/>
+                                                                        <TextBlock Text="{Binding Name}" FontSize="13" FontWeight="SemiBold" VerticalAlignment="Center">
+                                                                            <TextBlock.Style>
+                                                                                <Style TargetType="TextBlock">
+                                                                                    <Setter Property="Foreground" Value="{DynamicResource TextMutedBrush}"/>
+                                                                                    <Style.Triggers>
+                                                                                        <DataTrigger Binding="{Binding IsSelected}" Value="True">
+                                                                                            <Setter Property="Foreground" Value="White"/>
+                                                                                        </DataTrigger>
+                                                                                    </Style.Triggers>
+                                                                                </Style>
+                                                                            </TextBlock.Style>
+                                                                        </TextBlock>
+                                                                    </DockPanel>
+                                                                </Button>
+                                                            </DataTemplate>
+                                                        </ItemsControl.ItemTemplate>
+                                                    </ItemsControl>
+                                                </ScrollViewer>
+                                            </Grid>
+
+                                            <!-- Footer / Status Message -->
+                                            <Border Grid.Row="3" Background="#26FFFFFF" CornerRadius="6" Padding="10,5" Margin="0,10,0,0"
+                                                Visibility="{Binding HasDrawerStatusMessage, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                                <TextBlock Text="{Binding DrawerStatusMessage}" FontSize="11" Foreground="{DynamicResource AccentBrush}"
+                                                    TextTrimming="CharacterEllipsis" HorizontalAlignment="Center"/>
+                                            </Border>
+                                        </Grid>
+                                    </Border>
                                 </Grid>
                             </lvs:VideoView>
                         </Border>
@@ -853,6 +1750,24 @@
                                 <TextBlock Text="Vencimiento:" Foreground="{DynamicResource TextMutedBrush}" FontSize="12" Margin="0,0,6,0"/>
                                 <TextBlock Text="{Binding AccountExpirationInfo}" Foreground="{DynamicResource TextPrimaryBrush}" FontSize="12"/>
                             </StackPanel>
+                        </StackPanel>
+                    </Border>
+                    <Border Background="{DynamicResource SurfaceBrush}" Padding="18" CornerRadius="10" Margin="0,0,0,14">
+                        <StackPanel>
+                            <TextBlock Text="Sincronización del catálogo IPTV" FontSize="18" FontWeight="SemiBold" Margin="0,0,0,8"/>
+                            <TextBlock Text="StreamDesk sincroniza tus películas y series automáticamente en segundo plano. Puedes forzar una actualización manual si tu proveedor ha añadido títulos nuevos." FontSize="12" Foreground="{DynamicResource TextMutedBrush}" TextWrapping="Wrap" Margin="0,0,0,12"/>
+                            <DockPanel Margin="0,0,0,8">
+                                <ui:Button DockPanel.Dock="Right" Click="ProbeContent_Click" IsEnabled="{Binding CanConnect}" ToolTip="Descargar catálogo completo de películas y series">
+                                    <StackPanel Orientation="Horizontal">
+                                        <ui:SymbolIcon Symbol="ArrowSync24" FontSize="14" Margin="0,0,6,0" VerticalAlignment="Center"/>
+                                        <TextBlock Text="Sincronizar ahora" VerticalAlignment="Center"/>
+                                    </StackPanel>
+                                </ui:Button>
+                                <StackPanel VerticalAlignment="Center">
+                                    <TextBlock Text="{Binding CatalogSyncStatus}" FontSize="13" Foreground="{DynamicResource AccentBrush}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
+                                    <TextBlock Text="{Binding ContentStatus}" FontSize="11" Foreground="{DynamicResource TextMutedBrush}" Margin="0,2,0,0"/>
+                                </StackPanel>
+                            </DockPanel>
                         </StackPanel>
                     </Border>
                     <Border Background="{DynamicResource SurfaceBrush}" Padding="18" CornerRadius="10" Margin="0,0,0,14">

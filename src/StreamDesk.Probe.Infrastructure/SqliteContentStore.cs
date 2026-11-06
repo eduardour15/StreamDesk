@@ -9,9 +9,18 @@ public sealed class SqliteContentStore(string path, bool pooling = true, TimePro
 {
     private readonly string _connectionString = new SqliteConnectionStringBuilder { DataSource = Path.GetFullPath(path), ForeignKeys = true, Pooling = pooling, DefaultTimeout = 5 }.ToString();
     private readonly TimeProvider _clock = clock ?? TimeProvider.System;
-    public Task<MediaCatalog?> LoadCatalogAsync(string profileId, ContentKind kind, string scope = "", CancellationToken cancellationToken = default) => Task.Run(() =>
+    public Task<MediaCatalog?> LoadCatalogAsync(string profileId, ContentKind kind, string scope = "", CancellationToken cancellationToken = default) =>
+        LoadCatalogAsync(profileId, kind, scope, false, cancellationToken);
+
+    public Task<MediaCatalog?> LoadCatalogAsync(string profileId, ContentKind kind, string scope, bool allowStale, CancellationToken cancellationToken = default) => Task.Run(() =>
     {
         using var connection = Open(); using var command = connection.CreateCommand(); cancellationToken.ThrowIfCancellationRequested();
+        if (allowStale)
+        {
+            command.CommandText = "SELECT Payload FROM MediaCache WHERE ProfileId=$profile AND Kind=$kind AND Scope=$scope ORDER BY UpdatedAt DESC LIMIT 1;";
+            command.Parameters.AddWithValue("$profile", profileId); command.Parameters.AddWithValue("$kind", (int)kind); command.Parameters.AddWithValue("$scope", scope);
+            return command.ExecuteScalar() is string staleJson ? JsonSerializer.Deserialize<MediaCatalog>(staleJson) : null;
+        }
         command.CommandText = "SELECT Payload FROM MediaCache WHERE ProfileId=$profile AND Kind=$kind AND Scope=$scope AND UpdatedAt >= $cutoff;";
         command.Parameters.AddWithValue("$profile", profileId); command.Parameters.AddWithValue("$kind", (int)kind); command.Parameters.AddWithValue("$scope", scope);
         command.Parameters.AddWithValue("$cutoff", _clock.GetUtcNow().AddDays(-7).ToString("O"));
@@ -94,5 +103,74 @@ public sealed class SqliteContentStore(string path, bool pooling = true, TimePro
             { Title = MediaMetadata.Text(item.Title, 512), Description = MediaMetadata.Text(item.Description), StartUtc = item.StartUtc.ToUniversalTime(), EndUtc = item.EndUtc.ToUniversalTime() })));
         command.ExecuteNonQuery(); cancellationToken.ThrowIfCancellationRequested(); transaction.Commit();
     }, cancellationToken);
-    private SqliteConnection Open() { var connection = new SqliteConnection(_connectionString); connection.Open(); return connection; }
+
+    public Task<MediaTrackPreference?> LoadTrackPreferenceAsync(string profileId, string contentId, ContentKind kind, CancellationToken cancellationToken = default) => Task.Run(() =>
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        using var connection = Open();
+        using var command = connection.CreateCommand();
+        var key = kind == ContentKind.Movie ? $"movie:{contentId}" : $"series:{contentId}";
+        command.CommandText = "SELECT Payload FROM MediaTrackPreferences WHERE ProfileId=$profile AND ContentKey=$key;";
+        command.Parameters.AddWithValue("$profile", profileId);
+        command.Parameters.AddWithValue("$key", key);
+        return command.ExecuteScalar() is string json ? JsonSerializer.Deserialize<MediaTrackPreference>(json) : null;
+    }, cancellationToken);
+
+    public Task SaveTrackPreferenceAsync(string profileId, MediaTrackPreference preference, CancellationToken cancellationToken = default) => Task.Run(() =>
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        if (string.IsNullOrWhiteSpace(preference.ContentId)) return;
+        var key = preference.Kind == ContentKind.Movie ? $"movie:{preference.ContentId}" : $"series:{preference.ContentId}";
+        using var connection = Open();
+        using var transaction = connection.BeginTransaction();
+        using var command = connection.CreateCommand();
+        command.Transaction = transaction;
+        command.CommandText = """
+            INSERT INTO MediaTrackPreferences VALUES($profile, $key, $kind, $date, $json)
+            ON CONFLICT(ProfileId, ContentKey) DO UPDATE SET
+                UpdatedAt = excluded.UpdatedAt,
+                Payload = excluded.Payload;
+            """;
+        command.Parameters.AddWithValue("$profile", profileId);
+        command.Parameters.AddWithValue("$key", key);
+        command.Parameters.AddWithValue("$kind", (int)preference.Kind);
+        command.Parameters.AddWithValue("$date", preference.UpdatedAt.ToUniversalTime().ToString("O"));
+        command.Parameters.AddWithValue("$json", JsonSerializer.Serialize(preference));
+        command.ExecuteNonQuery();
+        cancellationToken.ThrowIfCancellationRequested();
+        transaction.Commit();
+    }, cancellationToken);
+
+    private static readonly HashSet<string> InitializedDatabases = new(StringComparer.OrdinalIgnoreCase);
+    private static readonly object InitLock = new();
+
+    private void EnsurePreferencesTable(SqliteConnection connection)
+    {
+        lock (InitLock)
+        {
+            if (InitializedDatabases.Add(_connectionString))
+            {
+                using var command = connection.CreateCommand();
+                command.CommandText = """
+                    CREATE TABLE IF NOT EXISTS MediaTrackPreferences (
+                        ProfileId TEXT NOT NULL,
+                        ContentKey TEXT NOT NULL,
+                        Kind INTEGER NOT NULL,
+                        UpdatedAt TEXT NOT NULL,
+                        Payload TEXT NOT NULL,
+                        PRIMARY KEY(ProfileId,ContentKey)
+                    );
+                    """;
+                command.ExecuteNonQuery();
+            }
+        }
+    }
+
+    private SqliteConnection Open()
+    {
+        var connection = new SqliteConnection(_connectionString);
+        connection.Open();
+        EnsurePreferencesTable(connection);
+        return connection;
+    }
 }

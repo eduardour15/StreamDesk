@@ -1,4 +1,4 @@
-﻿using System.Windows.Input;
+using System.Windows.Input;
 using StreamDesk.Application;
 using StreamDesk.Probe.Core;
 
@@ -127,6 +127,10 @@ public sealed partial class MainViewModel
                 else CatalogSummary = "Sin canales guardados. Pulsa Actualizar canales.";
                 await LoadLibraryAsync(profile?.Id, version, token);
                 await LoadContentCacheAsync(profile?.Id, version, token);
+                if (profile is not null && profile.ProviderType != "m3u")
+                {
+                    _ = AutoSyncCatalogAsync(false);
+                }
             }
             if (profile is not null && _viewer is not null && version == _sessionVersion)
                 await _viewer.SetLastProfileAsync(profile.Id, token);

@@ -51,7 +51,7 @@ internal sealed class TestDatabase : IDisposable
     }
 }
 
-internal sealed class FixtureProvider(CatalogSnapshot snapshot, bool failChannels = false) : IIptvProvider
+internal sealed class FixtureProvider(CatalogSnapshot snapshot, bool failChannels = false) : IIptvProvider, IContentProvider
 {
     public bool UsesUnencryptedTransport => false;
     public Task<XtreamAccount> AuthenticateAsync(CancellationToken cancellationToken = default) =>
@@ -61,6 +61,16 @@ internal sealed class FixtureProvider(CatalogSnapshot snapshot, bool failChannel
         ? Task.FromException<IReadOnlyList<XtreamChannel>>(new XtreamApiException(XtreamFailureKind.ProviderUnavailable)) : Task.FromResult(snapshot.Channels);
     public Uri CreateLiveStreamUri(XtreamChannel channel, string format) => new("https://provider.invalid/fixture");
     public void Dispose() { }
+
+    public Task<MediaCatalog> GetMediaCatalogAsync(ContentKind kind, CancellationToken cancellationToken = default) =>
+        Task.FromResult(new MediaCatalog([], [], DateTimeOffset.UtcNow));
+    public Task<MediaItem> GetMovieInfoAsync(MediaItem movie, CancellationToken cancellationToken = default) =>
+        Task.FromResult(movie);
+    public Task<MediaCatalog> GetEpisodesAsync(string seriesId, CancellationToken cancellationToken = default) =>
+        Task.FromResult(new MediaCatalog([], [], DateTimeOffset.UtcNow));
+    public Task<IReadOnlyList<EpgProgram>> GetEpgAsync(string channelId, CancellationToken cancellationToken = default) =>
+        Task.FromResult<IReadOnlyList<EpgProgram>>([]);
+    public Uri CreateMediaUri(MediaItem item) => new("https://provider.invalid/media/fixture.mp4");
 }
 
 internal sealed class FixtureCredentials : ICredentialStore
@@ -89,6 +99,8 @@ internal sealed class FixturePlayback : IPlaybackService
     { Snapshot = new(Snapshot.Sequence + 1, PlaybackState.Paused); StateChanged?.Invoke(this, Snapshot); return Task.CompletedTask; }
     public Task ResumeAsync()
     { Snapshot = new(Snapshot.Sequence + 1, PlaybackState.Playing); StateChanged?.Invoke(this, Snapshot); return Task.CompletedTask; }
+    public bool SelectTrackResult { get; set; } = true;
+    public Task<bool> SelectTrackAsync(bool subtitles, int id, CancellationToken cancellationToken = default) => Task.FromResult(SelectTrackResult);
     public ValueTask DisposeAsync() { HasActiveMedia = false; return ValueTask.CompletedTask; }
     public void Dispose() => HasActiveMedia = false;
 }

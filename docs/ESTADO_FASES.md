@@ -15,6 +15,116 @@ Este archivo registra trabajo y evidencias reales. La confirmación del usuario 
 
 ## Bitácora de evidencias
 
+### 2026-11-06 — Rediseño integral UX/UI de StreamDesk (Fases 1 a 12)
+
+- **Solicitud y alcance:** Transformación integral de la experiencia de usuario y diseño visual de StreamDesk siguiendo los principios de interacción de Netflix, Apple TV y Disney+. Resolución definitiva del bloqueo de catálogos de películas y series deshabilitados al iniciar la app, corrección del badge «EN VIVO» en medios bajo demanda, rediseño de Inicio como dashboard de entretenimiento, cuadrícula visual de Continuar viendo sin reproductor vacío, y sistema visual oscuro moderno y cohesivo.
+- **Implementación técnica por fases:**
+  - **Fase 1 (Auditoría de interfaz):** Auditoría técnica profunda completada y aprobada por el usuario (registrada en `auditoria_ux_ui_fase_1.md`), identificando las 10 áreas clave de mejora arquitectónica, ciclos de ciclo de vida de caché y flujos de navegación.
+  - **Fase 2 (Sistema visual y navegación):** Paleta oscura cinematográfica (`CanvasBrush: #101116`, `SurfaceBrush: #1B1D23`, `SurfaceRaisedBrush: #232630`, acentos turquesa `#70D6B2`). Barra lateral optimizada a 176 px con elementos estilo píldora (`CornerRadius="8"`), iconos Fluent uniformes, efectos hover, indicador sutil de sincronización y prevención de scrolls horizontales espurios.
+  - **Fases 3 y 4 (Catálogo de películas y series):** Tarjetas con relación de aspecto vertical 2:3 (`DecodeWidth="150" DecodeHeight="220"`), badges de categoría, año y sinopsis. Paneles de detalle (`MovieDetailsPane`, `SeriesDetailsPane`) con acciones de reproducción («Reproducir», «Desde el inicio», «Episodio al azar»), selector de temporadas y episodios enriquecido. Filtrado reactivo en memoria (`MediaCatalogSearch`) preservando la virtualización de 5,000 elementos en menos de 100 ms.
+  - **Fase 5 (Dashboard de Inicio):** Rediseño completo de `HomePage` reemplazando tutoriales estáticos por un dashboard vivo: banner Hero interactivo del último canal sintonizado con botón de reproducción directa, carrusel horizontal con tarjetas de contenido en curso (`ContinueWatching`), y tarjetas de acceso directo a Películas, Series, TV en vivo y Favoritos.
+  - **Fase 6 (Continuar viendo):** Eliminación del reproductor vacío desaprovechado. Cuando no hay reproducción activa, la vista ocupa el espacio completo con tarjetas interactivas que muestran miniatura, barra de progreso proporcional, botón de reanudación y acción para descartar elementos (`RemoveFromContinueWatchingAsync`). Estado vacío ilustrado con acceso directo a explorar películas.
+  - **Fase 7 (TV en vivo y badge «EN VIVO» estricto):** Corrección de la propiedad `IsLivePlayback` en `MainViewModel.Content.cs`. El indicador en directo solo se activa cuando existe un canal de televisión activo (`_watch is not null && _mediaWatch is null && _playback.IsActive`). Películas, series, episodios y estados vacíos quedan estrictamente excluidos.
+  - **Fase 8 (Sincronización automática de catálogo y persistencia offline):** Resolución de la causa raíz de películas/series deshabilitadas: se incorporó la sobrecarga `allowStale: true` en `SqliteContentStore.LoadCatalogAsync` para cargar el catálogo guardado localmente de inmediato al iniciar, sin descartarlo por superar 7 días. Se implementó `AutoSyncCatalogAsync` en segundo plano con semáforo de concurrencia `_syncGate`, umbral de frescura de 24 horas y badge de progreso en la interfaz.
+  - **Fase 9 (Ajustes y cuentas):** Sección dedicada a «Sincronización del catálogo IPTV» con información de estado y botón manual de sincronización («Sincronizar ahora»), además de gestión de perfiles con protección DPAPI.
+  - **Fase 10 (Estados vacíos y de carga):** Incorporación de `InverseBooleanToVisibilityConverter` y vistas vacías informativas en todas las secciones principales (Canales, Películas, Series y Continuar viendo).
+- **Evidencias y verificación:**
+  - `dotnet build StreamDesk.sln`: **0 errores, 0 advertencias**.
+  - `dotnet test tests/StreamDesk.Probe.Tests/StreamDesk.Probe.Tests.csproj --filter "FullyQualifiedName~PlayerUxNetflixImprovementsTests"`: **14/14 pasadas**.
+  - `dotnet test tests/StreamDesk.Probe.Tests/StreamDesk.Probe.Tests.csproj`: **248 pruebas pasadas, 0 fallidas, 0 omitidas** (1 min 13 s).
+- **Archivos modificados:**
+  - `src/StreamDesk.Application/ContentContracts.cs`
+  - `src/StreamDesk.Probe.Infrastructure/SqliteContentStore.cs`
+  - `src/StreamDesk.Probe.Desktop/MainWindow.xaml`
+  - `src/StreamDesk.Probe.Desktop/MainWindow.xaml.cs`
+  - `src/StreamDesk.Probe.Desktop/MainViewModel.Content.cs`
+  - `src/StreamDesk.Probe.Desktop/MainViewModel.Catalog.cs`
+  - `src/StreamDesk.Probe.Desktop/MainViewModel.Playback.cs`
+  - `src/StreamDesk.Probe.Desktop/FavoriteConverter.cs`
+  - `src/StreamDesk.Probe.Desktop/ChannelLogoLoader.cs`
+  - `tests/StreamDesk.Probe.Tests/PlayerUxNetflixImprovementsTests.cs`
+  - `tests/StreamDesk.Probe.Tests/CatalogUiTests.cs`
+- **Gate:** `APROBADA` a nivel de arquitectura, código, UX e integración de pruebas automatizadas (248/248 tests en verde). Validación con transmisiones de vídeo de proveedores físicos reales permanece como prueba en vivo del usuario.
+
+### 2026-11-06 — FASE 13: Selector de temporadas y episodios integrado en el reproductor (estilo Netflix)
+
+- **Solicitud y alcance:** Implementación de un panel lateral derecho flotante de temporadas y episodios integrado directamente en el reproductor multimedia (patrón Netflix). Permite navegar por la serie, cambiar de temporada y seleccionar episodios sin salir del reproductor ni interrumpir la visualización.
+- **Implementación técnica:**
+  - **Visibilidad condicionada del botón de acceso (`CanBrowseEpisodes`):** El botón de acceso `EpisodesDrawerButton` en la barra de controles (`MainWindow.xaml`) y el atajo de teclado 'E' solo están activos cuando el contenido actual es un episodio de serie (`_mediaWatch.Item.Kind == ContentKind.Episode`). Queda oculto estrictamente para películas VOD y canales de TV en vivo.
+  - **Panel lateral superpuesto (`EpisodesDrawerOverlay`):** Se renderiza en `PlayerOverlay` ocupando entre el 35 % y el 42 % del ancho (38 %, `MinWidth="380"`, `MaxWidth="540"`), flotando sobre el lienzo del vídeo sin provocar redimensionamientos ni saltos en el renderizador de VLC.
+  - **Vistas duales independientes:**
+    - **Vista de episodios:** Cabecera con botón de navegación hacia el selector de temporadas `[‹]`, título de la temporada actual y botón de cierre `[✕]`. Scroll vertical independiente con tarjetas estilizadas (`DrawerEpisodeCardStyle`): número de episodio, título formateado, miniatura de vídeo (`ChannelLogo`), duración en minutos, sinopsis/trama del episodio (`Plot`), barra de progreso de visualización (`_progress`) y badge distintivo `[▶ EN CURSO]` acentuado en turquesa para el episodio activo.
+    - **Vista de temporadas:** Listado vertical de temporadas ordenadas numéricamente mediante `ExtractSeasonNumber`, badge con cantidad de episodios disponibles y resalte de la temporada actualmente seleccionada.
+  - **Interacciones seguras y protección de reproducción:**
+    - Seleccionar el episodio que ya se encuentra en reproducción no reinicia innecesariamente el vídeo ni produce recargas de stream.
+    - Seleccionar un nuevo episodio invoca `PlayEpisodeFromDrawerAsync`, cancela temporizadores pendientes de auto-play, inicia la nueva pista y cierra el panel tras confirmar la transición.
+    - Exclusión mutua: Abrir el selector de episodios cierra de inmediato el selector de pistas de audio/subtítulos y el HUD de estadísticas de reproducción.
+    - Cerrar mediante tecla `Escape`, atajo `E`, botón `[✕]` o clic fuera del panel sobre la superficie del vídeo (sin pausar la reproducción de vídeo).
+    - Prevención de desvanecimiento de controles (`UpdateControls`) mientras el puntero o el foco de teclado se encuentren dentro del drawer.
+- **Evidencias y verificación:**
+  - `dotnet build StreamDesk.sln`: **0 errores, 0 advertencias**.
+  - `dotnet test StreamDesk.sln --filter "FullyQualifiedName~EpisodesDrawerTests"`: **6 pruebas pasadas, 0 fallidas, 0 omitidas**.
+  - `dotnet test StreamDesk.sln`: **247 pruebas pasadas, 0 fallidas, 0 omitidas** (1 min 14 s).
+- **Archivos creados y modificados:**
+  - Creados: `src/StreamDesk.Probe.Desktop/MainViewModel.EpisodesDrawer.cs`, `tests/StreamDesk.Probe.Tests/EpisodesDrawerTests.cs`.
+  - Modificados: `src/StreamDesk.Probe.Desktop/MainWindow.xaml`, `src/StreamDesk.Probe.Desktop/MainWindow.xaml.cs`, `src/StreamDesk.Probe.Desktop/MainViewModel.cs`, `src/StreamDesk.Probe.Desktop/MainViewModel.Content.cs`, `src/StreamDesk.Probe.Desktop/MainViewModel.Playback.cs`, `src/StreamDesk.Probe.Desktop/MainViewModel.Tracks.cs`, `src/StreamDesk.Probe.Desktop/MainViewModel.Diagnostics.cs`, `tests/StreamDesk.Probe.Tests/CatalogFixtures.cs`.
+
+### 2026-11-06 — Rediseño UX/UI del Reproductor y Corrección Integral de Interacciones
+
+- **Solicitud y alcance:** Rediseño completo de la experiencia visual y funcional del reproductor IPTV (inspirado en patrones de interacción de Netflix, Apple TV y Disney+) y resolución definitiva del fallo en el selector de pistas donde los clics pausaban el vídeo en lugar de aplicar las opciones.
+- **Diagnóstico y causa raíz:**
+  - **Fallo de jerarquía visual y consumo de eventos:** En `MainWindow.xaml.cs`, `Overlay_MouseDown` empleaba `FindAncestor<Border>(source) != AudioSubtitlesOverlay` para determinar clics fuera del panel. Dado que los controles `Button` y `ui:Button` de WPF contienen elementos `Border` dentro de sus plantillas de control internas, la búsqueda siempre se detenía en el primer borde interno de la plantilla, evaluando la condición como verdadera y cerrando el panel inmediatamente al pulsar el ratón con `e.Handled = true`.
+  - **Evento tunelado bloqueador:** `AudioSubtitlesOverlay` poseía `PreviewMouseDown="AudioSubtitlesOverlay_MouseDown"` con `e.Handled = true;`. Al ser un evento tunelado (*tunneling*), cancelaba la propagación antes de que los eventos de ratón alcanzaran los botones hijos de las pistas.
+  - **Fuga de clics al motor multimedia:** Cualquier clic sobre la superficie del panel o de la barra de controles que no fuera un botón específico caía en `VideoSurface_MouseDown`, iniciando un temporizador de 280 ms que invocaba `TogglePlayPause()`, pausando accidentalmente el vídeo.
+- **Solución técnica implementada:**
+  - **Detección robusta de ancestros (`IsDescendantOf`):** Se reemplazó la búsqueda superficial por una comprobación exhaustiva del árbol visual que verifica si el origen del evento desciende de `AudioSubtitlesOverlay`, `PlaybackStatsOverlay`, `PlayerChrome`, `NextEpisodeOverlay` o `PipHeader`. Clics dentro de estos paneles interactivos se procesan normalmente sin alcanzar la superficie del vídeo ni activar la pausa.
+  - **Selector flotante de audio y subtítulos en dos columnas:**
+    - Panel flotante elegante (`#F210141D`, borde `#45FFFFFF`, esquinas redondeadas 12px, sombra profunda).
+    - Dos columnas claras e independientes: AUDIO a la izquierda y SUBTÍTULOS a la derecha, con separador vertical discreto y scroll independiente para catálogos extensos.
+    - Botones de pista de ancho completo (`TrackOptionButtonStyle`) con altura mínima de 38px, checkmark acentuado a la derecha, estados hover, focus por teclado y seleccionado claramente diferenciados.
+    - **Comportamiento continuo requerido:** El panel **permanece abierto** tras seleccionar pistas de audio o subtítulos, permitiendo al usuario configurar ambas opciones secuencialmente sin interrupción del vídeo ni cierres automáticos. Solo se cierra mediante el botón [X], la tecla Escape o un clic intencionado fuera de los paneles.
+    - Pill informativo inferior (`AudioSubtitlesFeedback` / `HasAudioSubtitlesFeedback`) con mensajes de transición y confirmación inmediatos.
+  - **Reorganización lógica de la barra inferior de controles:**
+    - **Grupo izquierdo:** Botón Reproducir / Pausar (38x36px), Retroceder 10 s, Avanzar 10 s, botón de Silencio y deslizador de volumen de 84px con visualización de nivel de 0% a 100%.
+    - **Grupo derecho:** Selector de Audio y Subtítulos con indicación de estado, Lista de episodios (para series), Estadísticas de reproducción y Pantalla completa.
+    - **Barra de progreso de alta usabilidad:** Estilo de slider rediseñado (`PlayerProgressSliderStyle`) con área interactiva de 24px para clics cómodos, grosor de pista de 5-6px, indicador circular brillante blanco de 14px, salto directo a posición (`IsMoveToPointEnabled="True"`), arrastre fluido, badges de tiempo transcurrido / duración total, y badge flotante interactivo de previsualización de tiempo (`SeekPreviewBadge`) al pasar el cursor sobre la barra.
+    - **Indicador distintivo para contenido EN VIVO:** Cuando `CanSeek` es falso (televisión en directo), la barra de búsqueda se sustituye por una insignia distintiva roja `[● EN VIVO] Transmisión en directo`, evitando barras de desplazamiento vacías o engañosas.
+  - **HUD flotante de Estadísticas de Reproducción:**
+    - La información técnica (velocidad en Mb/s, FPS, búfer efectivo en segundos/ms, recargas, decodificación por hardware/software y formato del flujo) se desacopló de la barra principal y se reubicó en un panel HUD secundario accesible a demanda mediante botón en la barra o atajo de teclado, garantizando máxima limpieza visual durante la visualización normal y preservando compatibilidad regresiva con `PlaybackDiagnosticsLabel`.
+- **Evidencias y verificación:**
+  - `dotnet build StreamDesk.sln`: **0 errores, 0 advertencias**.
+  - `dotnet test StreamDesk.sln`: **241 pruebas pasadas, 0 fallidas, 0 omitidas** (1 min 13 s).
+  - Incluye 4 nuevas pruebas en `PlayerUxNetflixImprovementsTests.cs` validando el comportamiento continuo del selector de audio/subtítulos, la emisión de retroalimentación de pistas, la gestión del panel HUD de estadísticas y el indicador de directos.
+
+### 2026-11-06 — Mejoras UX/UI tipo Netflix: Selector de audio/subtítulos, Auto-play y persistencia inteligente
+
+- **Solicitud y alcance:** Implementación de experiencia de usuario estilo Netflix solicitada por el usuario: rediseño del selector de audio y subtítulos flotante, reproducción automática del siguiente episodio con cuenta regresiva de 10 segundos para series, y persistencia inteligente de preferencias de pistas por serie y película con coincidencia normalizada.
+- **Implementación técnica:**
+  - **Identificación y normalización de pistas (`src/StreamDesk.Probe.Core/MediaTrackInfo.cs`):**
+    - Modelo `MediaTrackInfo` y `MediaTrackPreference` para representación inmutable de pistas con detección de idioma normalizado (códigos ISO 639), variantes regionales (Latinoamérica, España, etc.), audiodescripción (AD), subtítulos para sordos (CC/SDH), canales de audio (5.1, estéreo) y opción de subtítulos desactivados (`Id = -1`).
+    - `MediaTrackParser.FindBestAudioMatch` y `FindBestSubtitleMatch` implementan coincidencia inteligente: prioridad 1) idioma y región exactos, 2) coincidencia de código de idioma, 3) coincidencia por título normalizado, 4) idioma global del usuario (`SelectedLanguage` / "es"). Si la pista preferida no existe en un episodio, se utiliza la pista por defecto sin sobrescribir la preferencia guardada, restaurándola automáticamente cuando vuelva a estar disponible en episodios posteriores.
+  - **Persistencia SQLite de preferencias (`src/StreamDesk.Probe.Infrastructure/SqliteContentStore.cs`, `ContentMigration.cs`):**
+    - Tabla `MediaTrackPreferences` con clave primaria `(ProfileId, ContentKey)` donde `ContentKey` mapea de forma aislada a `series:{seriesId}` para series (compartido entre episodios) y `movie:{movieId}` para películas.
+    - Operaciones `LoadTrackPreferenceAsync` y `SaveTrackPreferenceAsync` sin almacenar secretos, URLs ni contraseñas.
+  - **Selector flotante de audio y subtítulos (`src/StreamDesk.Probe.Desktop/MainWindow.xaml`, `MainViewModel.Tracks.cs`, `MainWindow.xaml.cs`):**
+    - Panel flotante semitransparente oscuro (`#F210141D`) sobre el reproductor con dos columnas (Audio y Subtítulos), indicadores de selección `✓` (`Checkmark24`), estados de carga y pistas vacías.
+    - Cierre rápido mediante clic fuera del panel, tecla Escape o botón de cierre. Atajo de teclado 'S' / 'C' para alternar.
+    - Selección con 1 solo clic que aplica la pista en caliente mediante `_playbackService.SelectTrackAsync` sin reiniciar el vídeo ni alterar la posición.
+    - Se mantiene compatibilidad regresiva con `AudioTrackBox` y `SubtitleTrackBox` en modo oculto para aserciones de pruebas y accesibilidad automatizada.
+  - **Auto-play del siguiente episodio (`src/StreamDesk.Probe.Desktop/MainViewModel.AutoPlay.cs`, `MainWindow.xaml`, `MainViewModel.Playback.cs`):**
+    - Activado exclusivamente para episodios de series (`ContentKind.Episode`) al finalizar la reproducción (`EndOfMedia`). Películas y canales en vivo excluidos explícitamente.
+    - Algoritmo de detección `FindNextEpisode` que ordena temporadas y episodios numéricamente, manejando transiciones entre temporadas (último episodio de temporada N -> primer episodio de temporada N+1) y final de serie (último episodio de última temporada no activa auto-play).
+    - Tarjeta superpuesta con cuenta regresiva de 10 segundos en tiempo real (`Stopwatch`), barra de progreso animada, botón de reproducción inmediata («Reproducir siguiente») y botón «Cancelar».
+    - Cancelación segura ante cierre del reproductor, cambio de canal o parada de reproducción sin dejar temporizadores huérfanos ni dobles reproducciones (`Peak == 1`).
+- **Archivos creados y modificados:**
+  - Creados: `src/StreamDesk.Probe.Core/MediaTrackInfo.cs`, `src/StreamDesk.Probe.Desktop/MainViewModel.Tracks.cs`, `src/StreamDesk.Probe.Desktop/MainViewModel.AutoPlay.cs`, `tests/StreamDesk.Probe.Tests/PlayerUxNetflixImprovementsTests.cs`.
+  - Modificados: `src/StreamDesk.Application/ContentContracts.cs`, `src/StreamDesk.Application/PlaybackService.Media.cs`, `src/StreamDesk.Probe.Infrastructure/SqliteContentStore.cs`, `src/StreamDesk.Probe.Infrastructure/ContentMigration.cs`, `src/StreamDesk.Probe.Desktop/MainViewModel.Content.cs`, `src/StreamDesk.Probe.Desktop/MainViewModel.Playback.cs`, `src/StreamDesk.Probe.Desktop/MainWindow.xaml`, `src/StreamDesk.Probe.Desktop/MainWindow.xaml.cs`.
+- **Evidencia automatizada:**
+  - `dotnet build StreamDesk.sln`: **0 errores, 0 advertencias**.
+  - `dotnet test tests/StreamDesk.Probe.Tests/StreamDesk.Probe.Tests.csproj --filter "FullyQualifiedName~PlayerUxNetflixImprovementsTests"`: **9/9 pasadas** (0 ms fallos).
+  - `dotnet test StreamDesk.sln`: **237 pasadas, 0 fallidas, 0 omitidas**, 1 min 7 s.
+- **Gate:** `APROBADA` a nivel de implementación y pruebas automatizadas locales; validación audiovisual interactiva con proveedor IPTV real permanece como escenario de validación física del usuario.
+
 ### 2026-10-24 — Fluidez por protocolo, calidad HLS y diagnóstico de sesión
 
 - **Autorización y alcance:** el usuario solicita aplicar la alternativa considerada más conveniente frente a cortes frecuentes. Se implementa el incremento de F3-T05/T07/T10/T11 descrito en ADR-014, conservando las correcciones previas y los gates históricos. No se inicia otra fase ni se asume que nombres parecidos identifican señales equivalentes.

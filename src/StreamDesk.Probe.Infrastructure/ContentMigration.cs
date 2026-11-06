@@ -15,6 +15,13 @@ internal static class ContentMigration
             ProfileId TEXT NOT NULL REFERENCES Profiles(Id) ON DELETE CASCADE,
             ChannelId TEXT NOT NULL, UpdatedAt TEXT NOT NULL, Payload TEXT NOT NULL,
             PRIMARY KEY(ProfileId,ChannelId));
+        CREATE TABLE IF NOT EXISTS MediaTrackPreferences (
+            ProfileId TEXT NOT NULL REFERENCES Profiles(Id) ON DELETE CASCADE,
+            ContentKey TEXT NOT NULL,
+            Kind INTEGER NOT NULL,
+            UpdatedAt TEXT NOT NULL,
+            Payload TEXT NOT NULL,
+            PRIMARY KEY(ProfileId,ContentKey));
         CREATE INDEX IX_MediaProgress_Recent ON MediaProgress(ProfileId,UpdatedAt DESC);
         UPDATE SchemaVersion SET Version=4;
         """;
