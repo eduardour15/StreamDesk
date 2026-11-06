@@ -19,6 +19,16 @@ public sealed class SqliteViewerStore(string path, bool pooling = true) : IViewe
         var favorites = new HashSet<string>(StringComparer.Ordinal);
         using (var reader = command.ExecuteReader())
             while (reader.Read()) { cancellationToken.ThrowIfCancellationRequested(); favorites.Add(reader.GetString(0)); }
+        var movieFavorites = new HashSet<string>(StringComparer.Ordinal);
+        var seriesFavorites = new HashSet<string>(StringComparer.Ordinal);
+        command.CommandText = "SELECT ContentType,ContentId FROM MediaFavorites WHERE ProfileId=$profile;";
+        using (var reader = command.ExecuteReader())
+            while (reader.Read())
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                if (reader.GetString(0) == "movie") movieFavorites.Add(reader.GetString(1));
+                else if (reader.GetString(0) == "series") seriesFavorites.Add(reader.GetString(1));
+            }
         command.CommandText = "SELECT ChannelId,PlayedAt FROM PlaybackHistory WHERE ProfileId=$profile AND ContentType='live' ORDER BY PlayedAt DESC,ChannelId LIMIT 50;";
         var recents = new List<RecentChannel>();
         using (var reader = command.ExecuteReader())
@@ -27,15 +37,30 @@ public sealed class SqliteViewerStore(string path, bool pooling = true) : IViewe
         command.CommandText = "SELECT AutoPlayLast, AmplificationDb FROM ProfilePreferences WHERE ProfileId=$profile;";
         var (autoPlay, amplificationDb) = ReadPreferences(command);
         cancellationToken.ThrowIfCancellationRequested(); transaction.Commit();
-        return new ViewerLibrary(favorites, recents, autoPlay, amplificationDb);
+        return new ViewerLibrary(favorites, recents, autoPlay, amplificationDb)
+        {
+            MovieFavorites = movieFavorites,
+            SeriesFavorites = seriesFavorites
+        };
     }, cancellationToken);
 
-    public Task SetFavoriteAsync(string profileId, string contentType, string channelId, bool favorite, CancellationToken cancellationToken = default) =>
-        WriteAsync(profileId, contentType, channelId, favorite ? """
+    public Task SetFavoriteAsync(string profileId, string contentType, string channelId, bool favorite, CancellationToken cancellationToken = default)
+    {
+        if (contentType is "movie" or "series")
+        {
+            if (string.IsNullOrWhiteSpace(channelId)) return Task.FromException(new ArgumentException("Identificador de contenido vacío.", nameof(channelId)));
+            return WriteAsync(profileId, contentType, channelId, favorite ? """
+                INSERT INTO MediaFavorites(ProfileId,ContentType,ContentId,CreatedAt)
+                VALUES($profile,$type,$channel,$date)
+                ON CONFLICT(ProfileId,ContentType,ContentId) DO NOTHING;
+                """ : "DELETE FROM MediaFavorites WHERE ProfileId=$profile AND ContentType=$type AND ContentId=$channel;", DateTimeOffset.UtcNow, cancellationToken);
+        }
+        return WriteAsync(profileId, contentType, channelId, favorite ? """
             INSERT INTO Favorites(ProfileId,ContentType,ChannelId,CreatedAt)
             SELECT $profile,$type,$channel,$date WHERE EXISTS (SELECT 1 FROM Channels WHERE ProfileId=$profile AND ContentType=$type AND ProviderId=$channel)
             ON CONFLICT(ProfileId,ContentType,ChannelId) DO NOTHING;
             """ : "DELETE FROM Favorites WHERE ProfileId=$profile AND ContentType=$type AND ChannelId=$channel;", DateTimeOffset.UtcNow, cancellationToken);
+    }
 
     public Task RecordPlayedAsync(string profileId, string contentType, string channelId, DateTimeOffset playedAt, CancellationToken cancellationToken = default) =>
         WriteAsync(profileId, contentType, channelId, """
@@ -137,7 +162,11 @@ public sealed class SqliteViewerStore(string path, bool pooling = true) : IViewe
         using var connection = Open();
         using var command = connection.CreateCommand();
         command.Parameters.AddWithValue("$profile", profileId);
-        command.CommandText = "SELECT ContentType, ChannelId, CreatedAt FROM Favorites WHERE ProfileId=$profile;";
+        command.CommandText = """
+            SELECT ContentType, ChannelId, CreatedAt FROM Favorites WHERE ProfileId=$profile
+            UNION ALL
+            SELECT ContentType, ContentId, CreatedAt FROM MediaFavorites WHERE ProfileId=$profile;
+            """;
         var list = new List<SyncFavoriteItem>();
         using var reader = command.ExecuteReader();
         while (reader.Read())

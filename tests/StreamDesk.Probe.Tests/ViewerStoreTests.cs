@@ -14,18 +14,35 @@ public sealed class ViewerStoreTests
         Assert.False((await store.LoadAsync("first")).AutoPlayLast);
         await store.SetFavoriteAsync("first", "live", "000003", true);
         await store.SetFavoriteAsync("first", "live", "000003", true);
+        await store.SetFavoriteAsync("first", "movie", "movie-1", true);
+        await store.SetFavoriteAsync("first", "series", "series-1", true);
         await store.SetFavoriteAsync("first", "vod", "000003", true);
         await store.SetAutoPlayAsync("first", true); await store.SetLastProfileAsync("first");
         var restarted = new SqliteViewerStore(db.PathName, false);
         var library = await restarted.LoadAsync("first"); Assert.Equal("000003", Assert.Single(library.Favorites));
+        Assert.Equal("movie-1", Assert.Single(library.MovieFavorites));
+        Assert.Equal("series-1", Assert.Single(library.SeriesFavorites));
+        var syncFavorites = await restarted.GetFavoritesForSyncAsync("first");
+        Assert.Contains(syncFavorites, item => item.ContentType == "movie" && item.ChannelId == "movie-1");
+        Assert.Contains(syncFavorites, item => item.ContentType == "series" && item.ChannelId == "series-1");
         Assert.True(library.AutoPlayLast); Assert.Equal("first", await restarted.GetLastProfileAsync());
-        Assert.Empty((await restarted.LoadAsync("second")).Favorites); Assert.False((await restarted.LoadAsync("second")).AutoPlayLast);
+        var secondLibrary = await restarted.LoadAsync("second");
+        Assert.Empty(secondLibrary.Favorites); Assert.Empty(secondLibrary.MovieFavorites); Assert.Empty(secondLibrary.SeriesFavorites);
+        Assert.False(secondLibrary.AutoPlayLast);
         await restarted.SetFavoriteAsync("first", "live", "000003", false);
-        using var connection = db.Open(); using var command = connection.CreateCommand();
-        command.CommandText = "SELECT COUNT(*) FROM Favorites WHERE ContentType='vod';"; Assert.Equal(1L, command.ExecuteScalar());
         Assert.Empty((await restarted.LoadAsync("first")).Favorites);
+        using (var connection = db.Open())
+        using (var command = connection.CreateCommand())
+        {
+            command.CommandText = "SELECT COUNT(*) FROM Favorites WHERE ContentType='vod';";
+            Assert.Equal(1L, command.ExecuteScalar());
+        }
+        await restarted.SetFavoriteAsync("first", "movie", "movie-1", false);
+        Assert.Empty((await restarted.LoadAsync("first")).MovieFavorites);
         await db.Settings.DeleteProfileAsync("first"); Assert.Null(await restarted.GetLastProfileAsync());
-        Assert.Empty((await restarted.LoadAsync("first")).Favorites); Assert.False((await restarted.LoadAsync("first")).AutoPlayLast);
+        var deleted = await restarted.LoadAsync("first");
+        Assert.Empty(deleted.Favorites); Assert.Empty(deleted.MovieFavorites); Assert.Empty(deleted.SeriesFavorites);
+        Assert.False(deleted.AutoPlayLast);
     }
 
     [Fact]

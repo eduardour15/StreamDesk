@@ -22,6 +22,9 @@ public sealed partial class MainViewModel
         : FavoritesOnly ? "Pulsa ⭐ en cualquier canal para guardarlo aquí."
         : "No hay canales en esta categoría.";
     public IReadOnlySet<string> FavoriteChannelIds => _hasImportedPlaylist ? _playlistFavoriteIds : _snapshot?.FavoriteChannelIds ?? _library.Favorites;
+    public IReadOnlySet<string> MediaMovieFavoriteIds => _library.MovieFavorites;
+    public IReadOnlySet<string> MediaSeriesFavoriteIds => _library.SeriesFavorites;
+    public bool CanFavoriteMedia => !_disposed && !_libraryBusy && _viewer is not null && ActiveProfile is not null && _catalogOwnerId == ActiveProfile.Id;
     public bool CanFavorite => !_disposed && (_hasImportedPlaylist
         ? !IsBusy && !IsCatalogLoading && _snapshot is not null
         : !_libraryBusy && _viewer is not null && ActiveProfile is not null && _catalogOwnerId == ActiveProfile.Id && _snapshot is not null);
@@ -61,6 +64,42 @@ public sealed partial class MainViewModel
         catch (OperationCanceledException) { }
         catch (Exception exception) { _logger.LogError("favorite_write", exception); if (version == _sessionVersion) StatusMessage = "No se pudo guardar el favorito. Vuelve a intentarlo."; }
         finally { _libraryBusy = false; OnPropertyChanged(nameof(CanFavorite)); NotifySelection(); OnPropertyChanged(nameof(FavoriteChannelIds)); }
+    }
+
+    public async Task ToggleMediaFavoriteAsync(MediaItem? item)
+    {
+        if (item is null || item.Kind is not (ContentKind.Movie or ContentKind.Series) || !CanFavoriteMedia) return;
+        var profileId = ActiveProfile!.Id;
+        var version = _sessionVersion;
+        var type = item.Kind == ContentKind.Movie ? "movie" : "series";
+        var favorites = item.Kind == ContentKind.Movie ? _library.MovieFavorites : _library.SeriesFavorites;
+        var add = !favorites.Contains(item.Id);
+        _libraryBusy = true;
+        OnPropertyChanged(nameof(CanFavorite));
+        OnPropertyChanged(nameof(CanFavoriteMedia));
+        try
+        {
+            await _viewer!.SetFavoriteAsync(profileId, type, item.Id, add, _session.Token);
+            if (version != _sessionVersion || _disposed) return;
+            await LoadLibraryAsync(profileId, version, _session.Token);
+            await FilterMediaAsync();
+            if (version == _sessionVersion && !_disposed)
+                StatusMessage = add ? "Título guardado en favoritos." : "Título eliminado de favoritos.";
+        }
+        catch (OperationCanceledException) { }
+        catch (Exception exception)
+        {
+            _logger.LogError("media_favorite_write", exception);
+            if (version == _sessionVersion && !_disposed) StatusMessage = "No se pudo guardar el favorito. Vuelve a intentarlo.";
+        }
+        finally
+        {
+            _libraryBusy = false;
+            OnPropertyChanged(nameof(CanFavorite));
+            OnPropertyChanged(nameof(CanFavoriteMedia));
+            OnPropertyChanged(nameof(MediaMovieFavoriteIds));
+            OnPropertyChanged(nameof(MediaSeriesFavoriteIds));
+        }
     }
 
     public async Task SetAutoPlayAsync(bool enabled)
@@ -117,7 +156,8 @@ public sealed partial class MainViewModel
     private void NotifySelection() { OnPropertyChanged(nameof(SelectedIsFavorite)); OnPropertyChanged(nameof(FavoriteAction)); }
     private void NotifyLibrary()
     {
-        OnPropertyChanged(nameof(FavoriteChannelIds)); OnPropertyChanged(nameof(CanFavorite)); NotifySelection();
+        OnPropertyChanged(nameof(FavoriteChannelIds)); OnPropertyChanged(nameof(MediaMovieFavoriteIds)); OnPropertyChanged(nameof(MediaSeriesFavoriteIds));
+        OnPropertyChanged(nameof(CanFavorite)); OnPropertyChanged(nameof(CanFavoriteMedia)); NotifySelection();
         OnPropertyChanged(nameof(AutoPlayLast)); OnPropertyChanged(nameof(LastChannel)); OnPropertyChanged(nameof(HasLastChannel)); OnPropertyChanged(nameof(LastChannelLabel));
         RefreshFrequentCategories();
     }

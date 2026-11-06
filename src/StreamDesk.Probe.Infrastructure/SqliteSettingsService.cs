@@ -6,7 +6,7 @@ namespace StreamDesk.Probe.Infrastructure;
 
 public sealed class SqliteSettingsService : ISettingsService
 {
-    private const int CurrentSchemaVersion = 5;
+    private const int CurrentSchemaVersion = 6;
     private readonly string _connectionString;
 
     public SqliteSettingsService(string databasePath, bool pooling = true)
@@ -139,6 +139,12 @@ public sealed class SqliteSettingsService : ISettingsService
             }
 
             command.CommandText = ProfileAndSettingsMigration.Sql;
+            await command.ExecuteNonQueryAsync(cancellationToken);
+            version = 5;
+        }
+        if (version == 5)
+        {
+            command.CommandText = MediaFavoritesMigration.Sql;
             await command.ExecuteNonQueryAsync(cancellationToken);
         }
         await EnsureAmplificationColumnAsync(command, cancellationToken);

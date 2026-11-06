@@ -33,9 +33,9 @@ public sealed class ProfileStorageTests
             await connection.OpenAsync();
             await using var command = connection.CreateCommand();
             command.CommandText = "SELECT Version FROM SchemaVersion;";
-            Assert.Equal(5L, (long)(await command.ExecuteScalarAsync())!);
-            command.CommandText = "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name IN ('Profiles','Categories','Channels','Favorites','PlaybackHistory');";
-            Assert.Equal(5L, (long)(await command.ExecuteScalarAsync())!);
+            Assert.Equal(6L, (long)(await command.ExecuteScalarAsync())!);
+            command.CommandText = "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name IN ('Profiles','Categories','Channels','Favorites','PlaybackHistory','MediaFavorites');";
+            Assert.Equal(6L, (long)(await command.ExecuteScalarAsync())!);
         }
         finally { Directory.Delete(root, recursive: true); }
     }

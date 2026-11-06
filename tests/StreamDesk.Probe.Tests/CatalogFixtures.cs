@@ -86,13 +86,21 @@ internal sealed class FixturePlayback : IPlaybackService
     public bool IsReady => true;
     public bool HasActiveMedia { get; private set; }
     public PlaybackSnapshot Snapshot { get; private set; } = new(0, PlaybackState.Idle);
+    public bool FailNextPlay { get; set; }
     public PlaybackOptions Options { get; set; } = new();
     public int Volume { get; set; } = 75;
     public bool IsMuted { get; set; }
     public event EventHandler<PlaybackSnapshot>? StateChanged;
     public Task InitializeAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
     public Task PlayAsync(Uri streamUri, CancellationToken cancellationToken = default)
-    { HasActiveMedia = true; Snapshot = new(Snapshot.Sequence + 1, PlaybackState.Playing); StateChanged?.Invoke(this, Snapshot); return Task.CompletedTask; }
+    {
+        var failed = FailNextPlay;
+        FailNextPlay = false;
+        Snapshot = new(Snapshot.Sequence + 1, failed ? PlaybackState.Failed : PlaybackState.Playing);
+        HasActiveMedia = Snapshot.IsActive;
+        StateChanged?.Invoke(this, Snapshot);
+        return Task.CompletedTask;
+    }
     public Task StopAsync()
     { HasActiveMedia = false; Snapshot = new(Snapshot.Sequence + 1, PlaybackState.Stopped); StateChanged?.Invoke(this, Snapshot); return Task.CompletedTask; }
     public Task PauseAsync()

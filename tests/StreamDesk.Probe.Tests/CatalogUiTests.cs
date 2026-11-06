@@ -187,9 +187,17 @@ public sealed partial class CatalogUiTests
             vm.MediaCategorySearch = "ficcion"; Assert.Contains(vm.VisibleMediaCategories, category => category.Id == "fiction");
             vm.MediaCategory = vm.VisibleMediaCategories.Single(category => category.Id == "fiction");
             await Dispatcher.Yield(DispatcherPriority.ApplicationIdle); window.UpdateLayout();
+            Assert.True(vm.IsMediaGridView);
+            var grid = (ListBox)window.FindName("MediaGridList");
+            var realizedGrid = Enumerable.Range(0, vm.VisibleMediaItems.Count).Count(index => grid.ItemContainerGenerator.ContainerFromIndex(index) is not null);
+            Assert.InRange(realizedGrid, 1, 48);
+
+            vm.IsMediaListView = true;
+            await Dispatcher.Yield(DispatcherPriority.ApplicationIdle); window.UpdateLayout();
             var list = (ListBox)window.FindName("MediaList");
-            var realized = Enumerable.Range(0, 5000).Count(index => list.ItemContainerGenerator.ContainerFromIndex(index) is not null);
-            Assert.InRange(realized, 1, 100);
+            var realizedList = Enumerable.Range(0, 5000).Count(index => list.ItemContainerGenerator.ContainerFromIndex(index) is not null);
+            Assert.InRange(realizedList, 1, 100);
+            vm.IsMediaGridView = true;
             vm.MediaSearch = "pelicula aguila"; await WaitAsync(() => vm.MediaItems.Count == 1);
             vm.SelectedMedia = vm.MediaItems[0]; Assert.True(vm.ShowMovieDetails); Assert.True(vm.ShowPlayerPane); await WaitAsync(() => vm.MediaDescription.Contains("Sin sinopsis", StringComparison.Ordinal));
             Assert.Equal(Visibility.Visible, ((FrameworkElement)window.FindName("MovieDetailsPane")).Visibility);

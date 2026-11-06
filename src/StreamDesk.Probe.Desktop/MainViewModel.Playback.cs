@@ -290,6 +290,8 @@ public sealed partial class MainViewModel
             OnPropertyChanged(nameof(PlayPauseIcon)); OnPropertyChanged(nameof(PlayPauseSymbol)); OnPropertyChanged(nameof(PlayPauseAction)); OnPropertyChanged(nameof(PlayPauseToolTip));
             OnPropertyChanged(nameof(PlayAction)); OnPropertyChanged(nameof(PlayActionIcon));
             OnPropertyChanged(nameof(IsLivePlayback));
+            OnPropertyChanged(nameof(CanBrowseEpisodes));
+            if (IsEpisodesDrawerOpen) RefreshDrawerEpisodes();
             if (media is not null && ReferenceEquals(media, _mediaWatch) && snapshot.Sequence > media.AfterSequence)
             {
                 if (snapshot.State == PlaybackState.Playing) media.Played = true;

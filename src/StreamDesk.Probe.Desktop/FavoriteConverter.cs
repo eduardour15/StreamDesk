@@ -12,6 +12,23 @@ public sealed class FavoriteConverter : IMultiValueConverter
         targetTypes.Select(_ => DependencyProperty.UnsetValue).ToArray();
 }
 
+public sealed class MediaFavoriteConverter : IMultiValueConverter
+{
+    public object Convert(object[] values, Type targetType, object parameter, CultureInfo culture)
+    {
+        if (values.Length < 4 || values[0] is not string id || values[1] is not StreamDesk.Probe.Core.ContentKind kind) return false;
+        return kind switch
+        {
+            StreamDesk.Probe.Core.ContentKind.Movie when values[2] is IReadOnlySet<string> movies => movies.Contains(id),
+            StreamDesk.Probe.Core.ContentKind.Series when values[3] is IReadOnlySet<string> series => series.Contains(id),
+            _ => false
+        };
+    }
+
+    public object[] ConvertBack(object value, Type[] targetTypes, object parameter, CultureInfo culture) =>
+        targetTypes.Select(_ => DependencyProperty.UnsetValue).ToArray();
+}
+
 public sealed class EqualityConverter : IMultiValueConverter
 {
     public object Convert(object[] values, Type targetType, object parameter, CultureInfo culture)

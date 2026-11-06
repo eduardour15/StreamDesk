@@ -27,7 +27,15 @@ public sealed record DrawerEpisodeItem(
 
 public sealed partial class MainViewModel
 {
-    public bool CanBrowseEpisodes => _mediaWatch?.Item.Kind == ContentKind.Episode;
+    public bool CanBrowseEpisodes => _mediaWatch is { Item.Kind: ContentKind.Episode } watch &&
+        !string.IsNullOrWhiteSpace(watch.Item.SeriesId) && IsMediaWatchActive(watch);
+
+    private bool IsMediaWatchActive(MediaWatch? watch)
+    {
+        var snapshot = _playbackService.Snapshot;
+        return watch is not null && ReferenceEquals(watch, _mediaWatch) &&
+            snapshot.Sequence > watch.AfterSequence && snapshot.IsActive;
+    }
 
     private bool _isEpisodesDrawerOpen;
     public bool IsEpisodesDrawerOpen
@@ -227,7 +235,8 @@ public sealed partial class MainViewModel
             var num = ep.Episode > 0 ? ep.Episode : i + 1;
             var title = string.IsNullOrWhiteSpace(ep.Name) ? $"Episodio {num}" : ep.Name;
             var displayTitle = $"{num}. {title}";
-            var isPlaying = _mediaWatch is not null &&
+            var isPlaying = IsMediaWatchActive(_mediaWatch) &&
+                            _mediaWatch is not null &&
                             (_mediaWatch.Item.StorageKey == ep.StorageKey || _mediaWatch.Item.Id == ep.Id);
             var playStatusText = isPlaying ? "Reproduciendo" : "";
 
@@ -266,15 +275,23 @@ public sealed partial class MainViewModel
     {
         if (_disposed) return;
 
+        if (!IsPlayableEpisode(episode))
+        {
+            DrawerStatusMessage = "Este episodio no está disponible para reproducirse.";
+            return;
+        }
+
         // If clicking the episode that is already playing, do NOT restart/reload video!
         if (_mediaWatch is not null &&
-            (_mediaWatch.Item.StorageKey == episode.StorageKey || _mediaWatch.Item.Id == episode.Id))
+            (_mediaWatch.Item.StorageKey == episode.StorageKey || _mediaWatch.Item.Id == episode.Id) &&
+            IsMediaWatchActive(_mediaWatch))
         {
             return;
         }
 
         CancelNextEpisodeAutoPlay();
         SelectedEpisode = episode;
+        var previousSequence = _playbackService.Snapshot.Sequence;
 
         var targetSeason = Seasons.FirstOrDefault(s => s.Id == episode.CategoryId || ExtractSeasonNumber(s.Name, s.Id) == episode.Season);
         if (targetSeason is not null && _season?.Id != targetSeason.Id)
@@ -287,7 +304,18 @@ public sealed partial class MainViewModel
         try
         {
             await PlayMediaItemAsync(episode);
-            CloseEpisodesDrawer();
+            var startedWatch = _mediaWatch;
+            var snapshot = _playbackService.Snapshot;
+            if (startedWatch?.Item.StorageKey == episode.StorageKey &&
+                snapshot.Sequence > previousSequence && snapshot.IsActive)
+            {
+                RefreshDrawerEpisodes();
+                CloseEpisodesDrawer();
+                return;
+            }
+
+            RefreshDrawerEpisodes();
+            DrawerStatusMessage = "No se pudo reproducir el episodio seleccionado.";
         }
         catch (Exception error)
         {

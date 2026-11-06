@@ -39,7 +39,8 @@ public sealed partial class CatalogUiTests
                 await vm.ProbeContentAsync();
                 vm.CurrentTabIndex = 5;
                 await WaitAsync(() => vm.MediaItems.Count == count);
-                var list = (ListBox)window.FindName("MediaList");
+                var list = (ListBox)window.FindName("MediaGridList");
+                Assert.True(vm.IsMediaGridView);
                 var searchBox = (TextBox)window.FindName("MediaSearchBox");
                 var filterTimes = new List<double>();
                 var visibleTimes = new List<double>();

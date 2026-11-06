@@ -6,7 +6,9 @@
     WindowStartupLocation="CenterScreen" WindowStyle="SingleBorderWindow" ResizeMode="CanResize" ExtendsContentIntoTitleBar="False" Background="{DynamicResource CanvasBrush}">
     <ui:FluentWindow.Resources>
         <local:FavoriteConverter x:Key="FavoriteConverter" />
+        <local:MediaFavoriteConverter x:Key="MediaFavoriteConverter" />
         <local:InverseBooleanToVisibilityConverter x:Key="InverseBooleanToVisibilityConverter" />
+        <local:EpisodesDrawerWidthConverter x:Key="EpisodesDrawerWidthConverter" />
         <Style TargetType="TextBox">
             <Setter Property="MinHeight" Value="36"/><Setter Property="Padding" Value="10,6"/>
             <Setter Property="Background" Value="{DynamicResource SurfaceRaisedBrush}"/><Setter Property="Foreground" Value="{DynamicResource TextPrimaryBrush}"/>
@@ -676,14 +678,9 @@
                     </Grid>
                     <Border x:Name="MediaBrowsePane" Grid.ColumnSpan="2" Background="{DynamicResource SurfaceBrush}" CornerRadius="10" Padding="18" Visibility="Collapsed">
                         <Grid>
-                            <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
-                            <Grid Grid.Row="0" Margin="0,0,0,12">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="*"/>
-                                    <ColumnDefinition Width="Auto"/>
-                                </Grid.ColumnDefinitions>
-                                <Grid Grid.Column="0" Margin="0,0,10,0">
+                            <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+                            <WrapPanel Grid.Row="0" Margin="0,0,0,10" VerticalAlignment="Center">
+                                <Grid Width="220" Margin="0,0,8,6">
                                     <TextBox x:Name="MediaSearchBox" Text="{Binding MediaSearch, UpdateSourceTrigger=PropertyChanged}"
                                              Tag="Buscar título..." Padding="10,6,32,6" AutomationProperties.Name="Buscar películas o series"/>
                                     <Button Click="ClearMediaSearch_Click" Visibility="{Binding HasMediaSearch, Converter={StaticResource BooleanToVisibilityConverter}}"
@@ -692,16 +689,83 @@
                                         <ui:SymbolIcon Symbol="Dismiss24" FontSize="12" Foreground="{DynamicResource TextMutedBrush}"/>
                                     </Button>
                                 </Grid>
-                                <ComboBox x:Name="MediaCategoryFilter" Grid.Column="1" Margin="0,0,10,0"
+                                <ComboBox x:Name="MediaCategoryFilter" Width="176" Margin="0,0,8,6"
                                           ItemsSource="{Binding VisibleMediaCategories}" DisplayMemberPath="Name"
                                           SelectedItem="{Binding MediaCategory, Mode=TwoWay}"
                                           Template="{StaticResource SearchableMediaCategoryComboTemplate}"
                                           DropDownOpened="MediaCategoryFilter_DropDownOpened"
                                           AutomationProperties.Name="Categoría del catálogo"/>
-                                <ui:Button Grid.Column="2" Content="Ver todos" Click="ClearMediaFilters_Click"
-                                           Padding="14,6" MinHeight="36" VerticalAlignment="Center" ToolTip="Restablecer filtros"/>
-                            </Grid>
-                            <ListBox Grid.Row="1" x:Name="MediaList" ItemsSource="{Binding MediaItems}" SelectedItem="{Binding SelectedMedia, Mode=TwoWay}" Background="Transparent" BorderThickness="0"
+                                <ComboBox Width="150" Margin="0,0,8,6" ItemsSource="{Binding MediaSortOptions}"
+                                          DisplayMemberPath="Label" SelectedValuePath="Value" SelectedValue="{Binding SelectedSortOrder, Mode=TwoWay}"
+                                          AutomationProperties.Name="Ordenar catálogo" ToolTip="El proveedor no entrega año o fecha de incorporación fiables para este catálogo"/>
+                                <RadioButton GroupName="MediaView" Content="Pósteres" IsChecked="{Binding IsMediaGridView, Mode=TwoWay}"
+                                             AutomationProperties.Name="Vista de pósteres" VerticalAlignment="Center" Margin="2,0,8,6"/>
+                                <RadioButton GroupName="MediaView" Content="Lista" IsChecked="{Binding IsMediaListView, Mode=TwoWay}"
+                                             AutomationProperties.Name="Vista de lista compacta" VerticalAlignment="Center" Margin="2,0,8,6"/>
+                                <CheckBox Content="Favoritos" IsChecked="{Binding MediaFavoritesOnly, Mode=TwoWay}"
+                                          AutomationProperties.Name="Mostrar solo favoritos" VerticalAlignment="Center" Margin="2,0,10,6"/>
+                                <ui:Button Content="Ver todos" Click="ClearMediaFilters_Click"
+                                           Padding="14,6" MinHeight="36" VerticalAlignment="Center" Margin="0,0,0,6" ToolTip="Restablecer filtros"/>
+                            </WrapPanel>
+                            <DockPanel Grid.Row="1" Margin="0,0,0,8">
+                                <TextBlock DockPanel.Dock="Left" Text="{Binding HeaderSummary}" FontSize="12" Foreground="{DynamicResource TextMutedBrush}" VerticalAlignment="Center"/>
+                                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center"
+                                            Visibility="{Binding IsMediaGridView, Converter={StaticResource BooleanToVisibilityConverter}}">
+                                    <ui:Button Content="‹" Click="PreviousMediaPage_Click" IsEnabled="{Binding CanPreviousMediaPage}"
+                                               MinWidth="32" MinHeight="28" Padding="4,0" ToolTip="Página anterior" AutomationProperties.Name="Página anterior"/>
+                                    <TextBlock Text="{Binding MediaPageSummary}" FontSize="11" Foreground="{DynamicResource TextMutedBrush}"
+                                               VerticalAlignment="Center" Margin="8,0" AutomationProperties.Name="Página actual"/>
+                                    <ui:Button Content="›" Click="NextMediaPage_Click" IsEnabled="{Binding CanNextMediaPage}"
+                                               MinWidth="32" MinHeight="28" Padding="4,0" ToolTip="Página siguiente" AutomationProperties.Name="Página siguiente"/>
+                                </StackPanel>
+                            </DockPanel>
+                            <ListBox Grid.Row="2" x:Name="MediaGridList" ItemsSource="{Binding VisibleMediaItems}" SelectedItem="{Binding SelectedMedia, Mode=TwoWay}"
+                                     Background="Transparent" BorderThickness="0" Visibility="{Binding IsMediaGridView, Converter={StaticResource BooleanToVisibilityConverter}}"
+                                     PreviewMouseLeftButtonUp="Media_MouseUp" MouseDoubleClick="Media_DoubleClick" KeyDown="Media_KeyDown"
+                                     ScrollViewer.VerticalScrollBarVisibility="Auto" ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                                     AutomationProperties.Name="Catálogo en cuadrícula de pósteres">
+                                <ListBox.ItemsPanel><ItemsPanelTemplate><WrapPanel ItemWidth="184" ItemHeight="326"/></ItemsPanelTemplate></ListBox.ItemsPanel>
+                                <ListBox.ItemContainerStyle>
+                                    <Style TargetType="ListBoxItem" BasedOn="{StaticResource {x:Type ListBoxItem}}">
+                                        <Setter Property="Width" Value="184"/><Setter Property="Height" Value="326"/><Setter Property="Margin" Value="0,0,8,8"/>
+                                        <Setter Property="Padding" Value="0"/><Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+                                    </Style>
+                                </ListBox.ItemContainerStyle>
+                                <ListBox.ItemTemplate><DataTemplate>
+                                    <Border Background="{DynamicResource SurfaceRaisedBrush}" BorderBrush="#25FFFFFF" BorderThickness="1" CornerRadius="9" Padding="7">
+                                        <Grid>
+                                            <Grid.RowDefinitions><RowDefinition Height="220"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+                                            <Border Grid.Row="0" Width="148" CornerRadius="6" ClipToBounds="True" Background="{DynamicResource SurfaceBrush}" HorizontalAlignment="Center">
+                                                <Grid>
+                                                    <local:ChannelLogo Url="{Binding PosterUrl}" Loader="{Binding LogoLoader, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+                                                                       Stretch="UniformToFill" DecodeWidth="296" DecodeHeight="440"/>
+                                                    <ui:SymbolIcon Symbol="MoviesAndTv24" FontSize="24" Foreground="#45FFFFFF" HorizontalAlignment="Center" VerticalAlignment="Center" IsHitTestVisible="False"/>
+                                                    <ToggleButton Style="{StaticResource StarToggle}" Click="MediaFavorite_Click" IsEnabled="{Binding DataContext.CanFavoriteMedia, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+                                                                  HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,6,6,0" ToolTip="Guardar o quitar de favoritos"
+                                                                  AutomationProperties.Name="Cambiar favorito del título">
+                                                        <ToggleButton.IsChecked><MultiBinding Converter="{StaticResource MediaFavoriteConverter}" Mode="OneWay">
+                                                            <Binding Path="Id"/><Binding Path="Kind"/>
+                                                            <Binding Path="DataContext.MediaMovieFavoriteIds" RelativeSource="{RelativeSource AncestorType={x:Type Window}}"/>
+                                                            <Binding Path="DataContext.MediaSeriesFavoriteIds" RelativeSource="{RelativeSource AncestorType={x:Type Window}}"/>
+                                                        </MultiBinding></ToggleButton.IsChecked>
+                                                    </ToggleButton>
+                                                    <ui:Button Click="PlayMedia_Click" ToolTip="Reproducir" AutomationProperties.Name="Reproducir título"
+                                                               HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,8,8" Padding="8" MinWidth="34" MinHeight="34"
+                                                               Background="#E610141D" BorderThickness="0">
+                                                        <ui:SymbolIcon Symbol="Play24" FontSize="14" Foreground="{DynamicResource AccentBrush}"/>
+                                                    </ui:Button>
+                                                </Grid>
+                                            </Border>
+                                            <TextBlock Grid.Row="1" Text="{Binding Name}" FontSize="13" FontWeight="SemiBold" Foreground="White"
+                                                       TextTrimming="CharacterEllipsis" Margin="2,8,2,2" ToolTip="{Binding Name}"/>
+                                            <TextBlock Grid.Row="2" Text="{Binding Description}" FontSize="11" Foreground="{DynamicResource TextMutedBrush}"
+                                                       TextWrapping="Wrap" TextTrimming="CharacterEllipsis" MaxHeight="34" Margin="2,2,2,0"/>
+                                        </Grid>
+                                    </Border>
+                                </DataTemplate></ListBox.ItemTemplate>
+                            </ListBox>
+                            <ListBox Grid.Row="2" x:Name="MediaList" ItemsSource="{Binding MediaItems}" SelectedItem="{Binding SelectedMedia, Mode=TwoWay}"
+                                     Background="Transparent" BorderThickness="0" Visibility="{Binding IsMediaListView, Converter={StaticResource BooleanToVisibilityConverter}}"
                                      PreviewMouseLeftButtonUp="Media_MouseUp" MouseDoubleClick="Media_DoubleClick" KeyDown="Media_KeyDown"
                                      VirtualizingPanel.IsVirtualizing="True" VirtualizingPanel.VirtualizationMode="Recycling" ScrollViewer.CanContentScroll="True" AutomationProperties.Name="Películas o series">
                                 <ListBox.ItemContainerStyle><Style TargetType="ListBoxItem" BasedOn="{StaticResource {x:Type ListBoxItem}}"><Setter Property="Height" Value="112"/><Setter Property="HorizontalContentAlignment" Value="Stretch"/><Setter Property="Padding" Value="4"/></Style></ListBox.ItemContainerStyle>
@@ -712,6 +776,7 @@
                                                 <ColumnDefinition Width="74"/>
                                                 <ColumnDefinition Width="*"/>
                                                 <ColumnDefinition Width="Auto"/>
+                                            <ColumnDefinition Width="Auto"/>
                                             </Grid.ColumnDefinitions>
                                             <Border Background="{DynamicResource SurfaceBrush}" CornerRadius="6" ClipToBounds="True">
                                                 <Grid>
@@ -723,7 +788,16 @@
                                                 <TextBlock Text="{Binding Name}" FontSize="16" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" Foreground="White"/>
                                                 <TextBlock Text="{Binding Description}" FontSize="12" Foreground="{DynamicResource TextMutedBrush}" TextWrapping="Wrap" MaxHeight="38" Margin="0,5,0,0"/>
                                             </StackPanel>
-                                            <ui:Button Grid.Column="2" Click="PlayMedia_Click" ToolTip="Reproducir ahora" VerticalAlignment="Center" Padding="10,6" Margin="4,0,4,0">
+                                            <ToggleButton Grid.Column="2" Style="{StaticResource StarToggle}" Click="MediaFavorite_Click"
+                                                          IsEnabled="{Binding DataContext.CanFavoriteMedia, RelativeSource={RelativeSource AncestorType={x:Type Window}}}"
+                                                          ToolTip="Guardar o quitar de favoritos" AutomationProperties.Name="Cambiar favorito del título">
+                                                <ToggleButton.IsChecked><MultiBinding Converter="{StaticResource MediaFavoriteConverter}" Mode="OneWay">
+                                                    <Binding Path="Id"/><Binding Path="Kind"/>
+                                                    <Binding Path="DataContext.MediaMovieFavoriteIds" RelativeSource="{RelativeSource AncestorType={x:Type Window}}"/>
+                                                    <Binding Path="DataContext.MediaSeriesFavoriteIds" RelativeSource="{RelativeSource AncestorType={x:Type Window}}"/>
+                                                </MultiBinding></ToggleButton.IsChecked>
+                                            </ToggleButton>
+                                            <ui:Button Grid.Column="3" Click="PlayMedia_Click" ToolTip="Reproducir ahora" VerticalAlignment="Center" Padding="10,6" Margin="4,0,4,0">
                                                 <ui:SymbolIcon Symbol="Play24" FontSize="14" Foreground="{DynamicResource AccentBrush}"/>
                                             </ui:Button>
                                         </Grid>
@@ -1492,7 +1566,7 @@
                                     <!-- Netflix-style Seasons & Episodes Right-side Drawer Panel -->
                                     <Border x:Name="EpisodesDrawerOverlay"
                                         HorizontalAlignment="Right" VerticalAlignment="Stretch"
-                                        Width="440" MaxWidth="520"
+                                        Width="{Binding ActualWidth, ElementName=PlayerOverlay, Converter={StaticResource EpisodesDrawerWidthConverter}}" MaxWidth="520"
                                         Background="#F510141D" BorderBrush="#40FFFFFF" BorderThickness="1,0,0,0"
                                         Visibility="{Binding IsEpisodesDrawerOpen, Converter={StaticResource BooleanToVisibilityConverter}}">
                                         <Border.Effect>

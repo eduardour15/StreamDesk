@@ -111,6 +111,16 @@ public sealed class EpisodesDrawerTests
     }
 
     [Fact]
+    public void EpisodesDrawerWidth_AdaptsToAvailablePlayerWidth()
+    {
+        var converter = new EpisodesDrawerWidthConverter();
+
+        Assert.Equal(380d, converter.Convert(900d, typeof(double), string.Empty, System.Globalization.CultureInfo.InvariantCulture));
+        Assert.Equal(520d, converter.Convert(1600d, typeof(double), string.Empty, System.Globalization.CultureInfo.InvariantCulture));
+        Assert.Equal(200d, converter.Convert(200d, typeof(double), string.Empty, System.Globalization.CultureInfo.InvariantCulture));
+    }
+
+    [Fact]
     public async Task EpisodesDrawer_Navigation_And_CurrentEpisodeIdentification()
     {
         using var db = new TestDatabase();
@@ -119,10 +129,10 @@ public sealed class EpisodesDrawerTests
 
         var episodesList = new List<MediaItem>
         {
-            new("ep-101", "Episodio 1", ContentKind.Episode, CategoryId: "1", SeriesId: "series-1", Season: 1, Episode: 1, Plot: "Inicio de la aventura"),
-            new("ep-102", "Episodio 2", ContentKind.Episode, CategoryId: "1", SeriesId: "series-1", Season: 1, Episode: 2, Plot: "El misterio crece"),
-            new("ep-201", "Episodio 1 S2", ContentKind.Episode, CategoryId: "2", SeriesId: "series-1", Season: 2, Episode: 1, Plot: "Nueva temporada"),
-            new("ep-202", "Episodio 2 S2", ContentKind.Episode, CategoryId: "2", SeriesId: "series-1", Season: 2, Episode: 2, Plot: "Desenlace")
+            new("ep-101", "Episodio 1", ContentKind.Episode, CategoryId: "1", Extension: "mp4", SeriesId: "series-1", Season: 1, Episode: 1, Plot: "Inicio de la aventura"),
+            new("ep-102", "Episodio 2", ContentKind.Episode, CategoryId: "1", Extension: "mp4", SeriesId: "series-1", Season: 1, Episode: 2, Plot: "El misterio crece"),
+            new("ep-201", "Episodio 1 S2", ContentKind.Episode, CategoryId: "2", Extension: "mp4", SeriesId: "series-1", Season: 2, Episode: 1, Plot: "Nueva temporada"),
+            new("ep-202", "Episodio 2 S2", ContentKind.Episode, CategoryId: "2", Extension: "mp4", SeriesId: "series-1", Season: 2, Episode: 2, Plot: "Desenlace")
         };
 
         var catalog = new MediaCatalog(
@@ -178,6 +188,12 @@ public sealed class EpisodesDrawerTests
         var startSequence = playback.Snapshot.Sequence;
         await vm.PlayEpisodeFromDrawerAsync(episodesList[2]); // Ep 201
         Assert.Equal(startSequence, playback.Snapshot.Sequence); // No new playback request
+
+        playback.FailNextPlay = true;
+        await vm.PlayEpisodeFromDrawerAsync(episodesList[0]); // Simulate an unavailable episode
+        Assert.True(vm.IsEpisodesDrawerOpen); // Keep the drawer available for retry/navigation
+        Assert.Equal("No se pudo reproducir el episodio seleccionado.", vm.DrawerStatusMessage);
+        Assert.DoesNotContain(vm.DrawerEpisodes, item => item.IsPlaying);
 
         // 6. Click a different episode: should play it, cancel auto-play countdown, and close drawer
         vm.IsNextEpisodeOverlayOpen = true; // Simulating auto-play open

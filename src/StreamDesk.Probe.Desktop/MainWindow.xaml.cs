@@ -153,7 +153,23 @@ public partial class MainWindow : FluentWindow
     private async void PlayLast_Click(object sender, RoutedEventArgs e) => await _viewModel.PlayLastAsync();
     private async void AutoPlay_Click(object sender, RoutedEventArgs e) => await _viewModel.SetAutoPlayAsync(AutoPlayCheckBox.IsChecked == true);
     private async void ProbeContent_Click(object sender, RoutedEventArgs e) => await _viewModel.ProbeContentAsync();
-    private async void PlayMedia_Click(object sender, RoutedEventArgs e) => await _viewModel.PlayMediaAsync();
+    private async void PlayMedia_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is FrameworkElement { DataContext: MediaItem media })
+        {
+            _viewModel.SelectedMedia = media;
+            if (media.Kind == ContentKind.Series) return;
+        }
+        await _viewModel.PlayMediaAsync();
+    }
+    private async void MediaFavorite_Click(object sender, RoutedEventArgs e)
+    {
+        e.Handled = true;
+        if (sender is FrameworkElement { DataContext: MediaItem media })
+            await _viewModel.ToggleMediaFavoriteAsync(media);
+    }
+    private void PreviousMediaPage_Click(object sender, RoutedEventArgs e) => _viewModel.PreviousMediaPage();
+    private void NextMediaPage_Click(object sender, RoutedEventArgs e) => _viewModel.NextMediaPage();
     private async void PlayRandomEpisode_Click(object sender, RoutedEventArgs e) => await _viewModel.PlayRandomEpisodeAsync();
     private void CycleAmplification_Click(object sender, RoutedEventArgs e) => _viewModel.CycleAmplification();
     private async void RestartMedia_Click(object sender, RoutedEventArgs e) => await _viewModel.PlayMediaAsync(true);
@@ -388,6 +404,7 @@ public partial class MainWindow : FluentWindow
         _viewModel.MediaSearch = "";
         _viewModel.MediaCategorySearch = "";
         _viewModel.MediaCategory = null;
+        _viewModel.MediaFavoritesOnly = false;
     }
     private void CategoryFilter_DropDownOpened(object sender, EventArgs e)
     {
