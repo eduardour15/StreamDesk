@@ -111,6 +111,8 @@ public sealed partial class MainViewModel
                 _playlistStreams = imported.StreamUris.ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal);
                 _hasImportedPlaylist = true;
                 await ApplySnapshotAsync(imported.Catalog, version, token);
+                if (version == _sessionVersion && profile is not null && _viewer is not null)
+                    await LoadLibraryAsync(profile.Id, version, token);
                 CatalogSummary = $"{imported.Catalog.Channels.Count} canales (M3U) · guardado";
                 StatusMessage = "Lista M3U cargada.";
             }

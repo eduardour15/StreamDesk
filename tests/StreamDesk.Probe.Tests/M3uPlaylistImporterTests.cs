@@ -183,6 +183,41 @@ public sealed class M3uPlaylistImporterTests
         Assert.Null(await db.Store.LoadAsync("playlist-profile"));
     }
 
+    [Fact]
+    public async Task SavedM3uAccountKeepsChannelFavoritesAfterRestart()
+    {
+        using var db = new TestDatabase();
+        await db.Settings.InitializeAsync();
+        await db.Settings.AddProfileAsync(new Profile("playlist-profile", "Lista guardada", "https://public.example/list.m3u",
+            "playlist-profile", DateTimeOffset.UtcNow, "m3u"));
+        var credentials = new FixtureCredentials();
+        var catalog = new CatalogSnapshot([], [new XtreamChannel("m3u-fixture", "Canal de prueba", null, "live", "ts")], DateTimeOffset.UtcNow);
+        var importer = new FixturePlaylistImporter(new ImportedPlaylist(catalog,
+            new Dictionary<string, Uri> { ["m3u-fixture"] = new Uri("https://public.example/live/1.ts") }));
+        var viewer = new SqliteViewerStore(db.PathName, pooling: false);
+
+        await using (var vm = new MainViewModel((_, _, _) => throw new InvalidOperationException("M3U profiles must not authenticate as Xtream."),
+            new PlaybackService(new ControlledBackend()), new ProfileService(db.Settings, credentials), new FixtureLogger(),
+            new CatalogService(db.Store), credentials, viewer, playlistImporter: importer))
+        {
+            await vm.InitializePlaybackAsync();
+            await vm.LoadProfilesAsync();
+            Assert.True(vm.HasImportedPlaylist);
+            Assert.Equal("playlist-profile", vm.ActiveProfile?.Id);
+            var channel = Assert.Single(vm.Channels);
+            await vm.ToggleFavoriteAsync(channel);
+            Assert.Contains(channel.Id, (await viewer.LoadAsync("playlist-profile")).M3uFavorites);
+        }
+
+        var restartedViewer = new SqliteViewerStore(db.PathName, pooling: false);
+        await using var restarted = new MainViewModel((_, _, _) => throw new InvalidOperationException("M3U profiles must not authenticate as Xtream."),
+            new PlaybackService(new ControlledBackend()), new ProfileService(db.Settings, credentials), new FixtureLogger(),
+            new CatalogService(db.Store), credentials, restartedViewer, playlistImporter: importer);
+        await restarted.InitializePlaybackAsync();
+        await restarted.LoadProfilesAsync();
+        Assert.Contains("m3u-fixture", restarted.FavoriteChannelIds);
+    }
+
     private sealed class FixturePlaylistImporter(ImportedPlaylist result) : IPlaylistImporter
     {
         public Uri? ValidatedUri { get; private set; }

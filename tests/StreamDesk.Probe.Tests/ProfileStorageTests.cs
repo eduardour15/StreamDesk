@@ -33,9 +33,9 @@ public sealed class ProfileStorageTests
             await connection.OpenAsync();
             await using var command = connection.CreateCommand();
             command.CommandText = "SELECT Version FROM SchemaVersion;";
-            Assert.Equal(6L, (long)(await command.ExecuteScalarAsync())!);
-            command.CommandText = "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name IN ('Profiles','Categories','Channels','Favorites','PlaybackHistory','MediaFavorites');";
-            Assert.Equal(6L, (long)(await command.ExecuteScalarAsync())!);
+            Assert.Equal(7L, (long)(await command.ExecuteScalarAsync())!);
+            command.CommandText = "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name IN ('Profiles','Categories','Channels','Favorites','PlaybackHistory','MediaFavorites','M3uChannelFavorites');";
+            Assert.Equal(7L, (long)(await command.ExecuteScalarAsync())!);
         }
         finally { Directory.Delete(root, recursive: true); }
     }
@@ -82,6 +82,32 @@ public sealed class ProfileStorageTests
 
             Assert.Empty(await settings.GetProfilesAsync());
             Assert.Null(await credentials.GetAsync(created.CredentialKey));
+        }
+        finally { Directory.Delete(root, recursive: true); }
+    }
+
+    [Fact]
+    public async Task ProfileServiceEditsAccountAndKeepsProtectedAccessDataWhenFieldsAreBlank()
+    {
+        var root = CreateTempDirectory();
+        try
+        {
+            var settings = new SqliteSettingsService(Path.Combine(root, "streamdesk.db"), pooling: false);
+            var credentials = new DpapiCredentialStore(Path.Combine(root, "secrets"));
+            await settings.InitializeAsync();
+            var profiles = new ProfileService(settings, credentials);
+            await profiles.CreateAsync("Fixture", "https://provider.invalid", "user-fixture", "password-fixture");
+            var saved = Assert.Single(await settings.GetProfilesAsync());
+
+            await profiles.UpdateConnectionAsync(saved, "Fixture actualizada", "https://new-provider.invalid", "", "");
+
+            var updated = Assert.Single(await settings.GetProfilesAsync());
+            Assert.Equal("Fixture actualizada", updated.Name);
+            Assert.Equal("https://new-provider.invalid", updated.BaseUrl);
+            Assert.Equal(new StoredCredentials("user-fixture", "password-fixture"), await credentials.GetAsync(updated.CredentialKey));
+
+            await profiles.UpdateConnectionAsync(updated, updated.Name, updated.BaseUrl, "new-user-fixture", "new-password-fixture");
+            Assert.Equal(new StoredCredentials("new-user-fixture", "new-password-fixture"), await credentials.GetAsync(updated.CredentialKey));
         }
         finally { Directory.Delete(root, recursive: true); }
     }

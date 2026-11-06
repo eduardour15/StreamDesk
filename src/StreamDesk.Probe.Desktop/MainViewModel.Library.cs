@@ -12,8 +12,10 @@ public sealed partial class MainViewModel
     private WatchRequest? _watch;
     private string? _catalogOwnerId;
     public bool ShowHome => CurrentTabIndex == 0;
-    public bool ShowTv => CurrentTabIndex is >= 1 and <= 3 or >= 5 and <= 7;
+    public bool ShowTv => CurrentTabIndex is 1 or 3 or >= 5 and <= 7;
+    public bool ShowFavorites => CurrentTabIndex == 2;
     public bool ShowSettings => CurrentTabIndex == 4;
+    public bool ShowCatalogSplitter => ShowLiveCatalog || ShowMovieDetails || ShowSeriesDetails || ShowContinueWatching;
     public string SectionTitle => CurrentTabIndex switch { 2 => "Favoritos", 3 => "Recientes", 5 => "Películas", 6 => "Series", 7 => "Continuar viendo", _ => "TV en vivo" };
     public string ResultSummary => $"{Channels.Count} canales";
     public string EmptyMessage => _snapshot is null ? "Pulsa Actualizar canales para cargar tu lista."
@@ -21,11 +23,120 @@ public sealed partial class MainViewModel
         : _recentsOnly ? "Aún no has visto canales en este perfil."
         : FavoritesOnly ? "Pulsa ⭐ en cualquier canal para guardarlo aquí."
         : "No hay canales en esta categoría.";
-    public IReadOnlySet<string> FavoriteChannelIds => _hasImportedPlaylist ? _playlistFavoriteIds : _snapshot?.FavoriteChannelIds ?? _library.Favorites;
+    private bool UsesSessionPlaylistFavorites => _hasImportedPlaylist && (_catalogOwnerId is null || _viewer is null);
+    public IReadOnlySet<string> FavoriteChannelIds => UsesSessionPlaylistFavorites ? _playlistFavoriteIds
+        : _hasImportedPlaylist ? _library.M3uFavorites : _snapshot?.FavoriteChannelIds ?? _library.Favorites;
     public IReadOnlySet<string> MediaMovieFavoriteIds => _library.MovieFavorites;
     public IReadOnlySet<string> MediaSeriesFavoriteIds => _library.SeriesFavorites;
+    public IReadOnlyList<XtreamChannel> FavoriteChannels => (_snapshot?.Channels ?? [])
+        .Where(channel => FavoriteChannelIds.Contains(channel.Id))
+        .OrderBy(channel => channel.Name, StringComparer.CurrentCultureIgnoreCase)
+        .ToArray();
+    public IReadOnlyList<MediaItem> FavoriteMovies => (_movies?.Items ?? [])
+        .Where(item => _library.MovieFavorites.Contains(item.Id))
+        .ToArray();
+    public IReadOnlyList<MediaItem> FavoriteSeries => (_series?.Items ?? [])
+        .Where(item => _library.SeriesFavorites.Contains(item.Id))
+        .ToArray();
+    public IReadOnlyList<MediaItem> FavoriteMediaItems => SelectedFavoriteTab switch
+    {
+        2 => FavoriteMovies,
+        3 => FavoriteSeries,
+        _ => FavoriteMovies.Concat(FavoriteSeries).ToArray()
+    };
+    private const int FavoriteMediaPageSize = 48;
+    private int _favoriteMediaPageIndex;
+    public IReadOnlyList<MediaItem> VisibleFavoriteMediaItems => FavoriteMediaItems.Skip(_favoriteMediaPageIndex * FavoriteMediaPageSize).Take(FavoriteMediaPageSize).ToArray();
+    public int FavoriteMediaPageCount => Math.Max(1, (FavoriteMediaItems.Count + FavoriteMediaPageSize - 1) / FavoriteMediaPageSize);
+    public string FavoriteMediaPageSummary => FavoriteMediaItems.Count == 0 ? "0 títulos" : $"{FavoriteMediaItems.Count} títulos · página {_favoriteMediaPageIndex + 1} de {FavoriteMediaPageCount}";
+    public bool CanPreviousFavoriteMediaPage => _favoriteMediaPageIndex > 0;
+    public bool CanNextFavoriteMediaPage => _favoriteMediaPageIndex + 1 < FavoriteMediaPageCount;
+    public int FavoriteCount => FavoriteChannelIds.Count + _library.MovieFavorites.Count + _library.SeriesFavorites.Count;
+    public bool HasFavoriteContent => FavoriteCount > 0;
+    public bool HasResolvedFavoriteContent => FavoriteChannels.Count > 0 || FavoriteMovies.Count > 0 || FavoriteSeries.Count > 0;
+    public int UnresolvedFavoriteCount => Math.Max(0, FavoriteCount - FavoriteChannels.Count - FavoriteMovies.Count - FavoriteSeries.Count);
+    public bool HasMissingFavoriteContent => UnresolvedFavoriteCount > 0;
+    public bool HasMissingFavoriteChannels => FavoriteChannelIds.Count > FavoriteChannels.Count;
+    public bool HasMissingFavoriteMedia => _library.MovieFavorites.Count > FavoriteMovies.Count || _library.SeriesFavorites.Count > FavoriteSeries.Count;
+    private int StoredFavoriteCountForTab => SelectedFavoriteTab switch
+    {
+        1 => FavoriteChannelIds.Count,
+        2 => _library.MovieFavorites.Count,
+        3 => _library.SeriesFavorites.Count,
+        _ => FavoriteCount
+    };
+    private int ResolvedFavoriteCountForTab => SelectedFavoriteTab switch
+    {
+        1 => FavoriteChannels.Count,
+        2 => FavoriteMovies.Count,
+        3 => FavoriteSeries.Count,
+        _ => FavoriteChannels.Count + FavoriteMovies.Count + FavoriteSeries.Count
+    };
+    public bool HasSelectedFavoriteContent => StoredFavoriteCountForTab > 0;
+    public bool HasResolvedSelectedFavoriteContent => ResolvedFavoriteCountForTab > 0;
+    public bool HasMissingSelectedFavoriteContent => StoredFavoriteCountForTab > ResolvedFavoriteCountForTab;
+    public bool ShowFavoriteChannelsGroup => SelectedFavoriteTab == 1 || SelectedFavoriteTab == 0 && FavoriteChannels.Count > 0;
+    public bool ShowFavoriteMediaGroup => SelectedFavoriteTab is 2 or 3 || SelectedFavoriteTab == 0 && FavoriteMediaItems.Count > 0;
+    public string FavoriteEmptyTitle => HasFavoriteContent ? SelectedFavoriteTab switch
+    {
+        1 => "Todavía no tienes canales favoritos",
+        2 => "Todavía no tienes películas favoritas",
+        3 => "Todavía no tienes series favoritas",
+        _ => "Todavía no tienes favoritos"
+    } : "Todavía no tienes favoritos";
+    public string FavoriteEmptyDescription => HasFavoriteContent
+        ? "Guarda contenido de esta categoría para encontrarlo fácilmente aquí."
+        : "Guarda tus canales, películas y series preferidas para encontrarlos fácilmente aquí.";
+    public int SelectedFavoriteTab
+    {
+        get => _selectedFavoriteTab;
+        set
+        {
+            if (!SetProperty(ref _selectedFavoriteTab, Math.Clamp(value, 0, 3))) return;
+            OnPropertyChanged(nameof(IsFavoriteAllSelected));
+            OnPropertyChanged(nameof(IsFavoriteChannelsSelected));
+            OnPropertyChanged(nameof(IsFavoriteMoviesSelected));
+            OnPropertyChanged(nameof(IsFavoriteSeriesSelected));
+            OnPropertyChanged(nameof(FavoriteMediaItems));
+            OnPropertyChanged(nameof(ShowFavoriteChannelsGroup));
+            OnPropertyChanged(nameof(ShowFavoriteMediaGroup));
+            OnPropertyChanged(nameof(HasSelectedFavoriteContent));
+            OnPropertyChanged(nameof(HasResolvedSelectedFavoriteContent));
+            OnPropertyChanged(nameof(HasMissingSelectedFavoriteContent));
+            OnPropertyChanged(nameof(FavoriteEmptyTitle));
+            OnPropertyChanged(nameof(FavoriteEmptyDescription));
+            _favoriteMediaPageIndex = 0;
+            NotifyFavoriteMediaPaging();
+        }
+    }
+    private int _selectedFavoriteTab;
+    public bool IsFavoriteAllSelected => SelectedFavoriteTab == 0;
+    public bool IsFavoriteChannelsSelected => SelectedFavoriteTab == 1;
+    public bool IsFavoriteMoviesSelected => SelectedFavoriteTab == 2;
+    public bool IsFavoriteSeriesSelected => SelectedFavoriteTab == 3;
+    public void PreviousFavoriteMediaPage() { if (_favoriteMediaPageIndex > 0) { _favoriteMediaPageIndex--; NotifyFavoriteMediaPaging(); } }
+    public void NextFavoriteMediaPage() { if (CanNextFavoriteMediaPage) { _favoriteMediaPageIndex++; NotifyFavoriteMediaPaging(); } }
+    public async Task RefreshFavoriteCatalogsAsync()
+    {
+        var tab = SelectedFavoriteTab;
+        if (tab is 0 or 1 && HasMissingFavoriteChannels)
+        {
+            if (ActiveProfile?.ProviderType == "m3u") await LoadProfileCacheAsync(ActiveProfile);
+            else await LoadCatalogAsync();
+        }
+        if (tab is 0 or 2 or 3 && HasMissingFavoriteMedia)
+            await ProbeContentAsync();
+    }
+    private void NotifyFavoriteMediaPaging()
+    {
+        OnPropertyChanged(nameof(VisibleFavoriteMediaItems));
+        OnPropertyChanged(nameof(FavoriteMediaPageCount));
+        OnPropertyChanged(nameof(FavoriteMediaPageSummary));
+        OnPropertyChanged(nameof(CanPreviousFavoriteMediaPage));
+        OnPropertyChanged(nameof(CanNextFavoriteMediaPage));
+    }
     public bool CanFavoriteMedia => !_disposed && !_libraryBusy && _viewer is not null && ActiveProfile is not null && _catalogOwnerId == ActiveProfile.Id;
-    public bool CanFavorite => !_disposed && (_hasImportedPlaylist
+    public bool CanFavorite => !_disposed && (UsesSessionPlaylistFavorites
         ? !IsBusy && !IsCatalogLoading && _snapshot is not null
         : !_libraryBusy && _viewer is not null && ActiveProfile is not null && _catalogOwnerId == ActiveProfile.Id && _snapshot is not null);
     public bool SelectedIsFavorite => SelectedChannel is not null && FavoriteChannelIds.Contains(SelectedChannel.Id);
@@ -40,7 +151,7 @@ public sealed partial class MainViewModel
     {
         channel ??= SelectedChannel;
         if (!CanFavorite || channel is null) return;
-        if (_hasImportedPlaylist)
+        if (UsesSessionPlaylistFavorites)
         {
             if (_playlistFavoriteIds.Contains(channel.Id)) _playlistFavoriteIds.Remove(channel.Id);
             else _playlistFavoriteIds.Add(channel.Id);
@@ -53,10 +164,11 @@ public sealed partial class MainViewModel
         }
         var profileId = ActiveProfile!.Id; var version = _sessionVersion; var token = _session.Token;
         var add = !FavoriteChannelIds.Contains(channel.Id);
+        var contentType = _hasImportedPlaylist ? "m3u-live" : "live";
         _libraryBusy = true; OnPropertyChanged(nameof(CanFavorite));
         try
         {
-            await _viewer!.SetFavoriteAsync(profileId, "live", channel.Id, add, token);
+            await _viewer!.SetFavoriteAsync(profileId, contentType, channel.Id, add, token);
             if (version != _sessionVersion || _disposed) return;
             await LoadLibraryAsync(profileId, version, token);
             StatusMessage = add ? "Canal guardado en favoritos." : "Canal eliminado de favoritos.";
@@ -157,6 +269,14 @@ public sealed partial class MainViewModel
     private void NotifyLibrary()
     {
         OnPropertyChanged(nameof(FavoriteChannelIds)); OnPropertyChanged(nameof(MediaMovieFavoriteIds)); OnPropertyChanged(nameof(MediaSeriesFavoriteIds));
+        OnPropertyChanged(nameof(FavoriteChannels)); OnPropertyChanged(nameof(FavoriteMovies)); OnPropertyChanged(nameof(FavoriteSeries));
+        OnPropertyChanged(nameof(FavoriteMediaItems)); OnPropertyChanged(nameof(FavoriteCount)); OnPropertyChanged(nameof(HasFavoriteContent));
+        OnPropertyChanged(nameof(HasResolvedFavoriteContent)); OnPropertyChanged(nameof(UnresolvedFavoriteCount)); OnPropertyChanged(nameof(HasMissingFavoriteContent));
+        OnPropertyChanged(nameof(HasMissingFavoriteChannels)); OnPropertyChanged(nameof(HasMissingFavoriteMedia));
+        OnPropertyChanged(nameof(HasSelectedFavoriteContent)); OnPropertyChanged(nameof(HasResolvedSelectedFavoriteContent)); OnPropertyChanged(nameof(HasMissingSelectedFavoriteContent));
+        OnPropertyChanged(nameof(ShowFavoriteChannelsGroup)); OnPropertyChanged(nameof(ShowFavoriteMediaGroup));
+        OnPropertyChanged(nameof(FavoriteEmptyTitle)); OnPropertyChanged(nameof(FavoriteEmptyDescription));
+        NotifyFavoriteMediaPaging();
         OnPropertyChanged(nameof(CanFavorite)); OnPropertyChanged(nameof(CanFavoriteMedia)); NotifySelection();
         OnPropertyChanged(nameof(AutoPlayLast)); OnPropertyChanged(nameof(LastChannel)); OnPropertyChanged(nameof(HasLastChannel)); OnPropertyChanged(nameof(LastChannelLabel));
         RefreshFrequentCategories();

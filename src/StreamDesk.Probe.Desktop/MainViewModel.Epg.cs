@@ -9,6 +9,10 @@ public sealed partial class MainViewModel
     private readonly IEpgImporter? _epgImporter;
     private IReadOnlyList<EpgProgram> _epgPrograms = [];
     private Task _epgTask = Task.CompletedTask;
+    private bool _hasCurrentEpgProgram;
+    private double _epgProgressPercent;
+    public bool HasCurrentEpgProgram { get => _hasCurrentEpgProgram; private set => SetProperty(ref _hasCurrentEpgProgram, value); }
+    public double EpgProgressPercent { get => _epgProgressPercent; private set => SetProperty(ref _epgProgressPercent, value); }
     public Task RefreshEpgAsync(bool force = false) => _epgTask = RefreshEpgCoreAsync(force);
     private async Task RefreshEpgCoreAsync(bool force = false)
     {
@@ -57,10 +61,16 @@ public sealed partial class MainViewModel
     public void UpdateEpgLabels()
     {
         var now = DateTimeOffset.UtcNow;
-        var current = _epgPrograms.LastOrDefault(item => item.StartUtc <= now && item.EndUtc > now)?.Label ?? "Sin programación actual.";
-        var next = _epgPrograms.FirstOrDefault(item => item.StartUtc > now)?.Label ?? "Sin programación siguiente.";
+        var currentProgram = _epgPrograms.LastOrDefault(item => item.StartUtc <= now && item.EndUtc > now);
+        var nextProgram = _epgPrograms.FirstOrDefault(item => item.StartUtc > now);
+        var current = currentProgram?.Label ?? "Sin programación actual.";
+        var next = nextProgram?.Label ?? "Sin programación siguiente.";
         if (EpgNow != current) { EpgNow = current; OnPropertyChanged(nameof(EpgNow)); }
         if (EpgNext != next) { EpgNext = next; OnPropertyChanged(nameof(EpgNext)); }
+        HasCurrentEpgProgram = currentProgram is not null;
+        EpgProgressPercent = currentProgram is { } program && program.EndUtc > program.StartUtc
+            ? Math.Clamp((now - program.StartUtc).TotalMilliseconds / (program.EndUtc - program.StartUtc).TotalMilliseconds * 100d, 0d, 100d)
+            : 0d;
     }
 
     private void ClearEpgForPlaylist()

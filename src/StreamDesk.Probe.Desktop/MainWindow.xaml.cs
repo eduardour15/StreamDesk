@@ -17,6 +17,7 @@ namespace StreamDesk.Probe.Desktop;
 
 public partial class MainWindow : FluentWindow
 {
+    private static readonly int[] NavigationRouteOrder = [0, 1, 5, 6, 2, 3, 7, 4];
     private const int WindowStyleIndex = -16;
     private const int SystemMenuStyle = 0x00080000;
     private const uint FrameChanged = 0x0020, NoMove = 0x0002, NoSize = 0x0001, NoZOrder = 0x0004;
@@ -26,6 +27,7 @@ public partial class MainWindow : FluentWindow
     private readonly DispatcherTimer _controlsTimer = new() { Interval = TimeSpan.FromMilliseconds(100) };
     private readonly DispatcherTimer _mediaTimer = new() { Interval = TimeSpan.FromSeconds(2) };
     private readonly DispatcherTimer _osdTimer = new() { Interval = TimeSpan.FromMilliseconds(1800) };
+    private readonly DispatcherTimer _toastTimer = new() { Interval = TimeSpan.FromSeconds(5) };
     private readonly DispatcherTimer _videoClickTimer = new() { Interval = TimeSpan.FromMilliseconds(280) };
     private bool _readingMedia;
     private DateTime _lastInteraction = DateTime.UtcNow;
@@ -63,6 +65,8 @@ public partial class MainWindow : FluentWindow
         LogoLoader = logoLoader;
         SelectedDisplay = Displays.FirstOrDefault();
         InitializeComponent();
+        for (var index = 0; index < Math.Min(NavigationTabs.Items.Count, NavigationRouteOrder.Length); index++)
+            if (NavigationTabs.Items[index] is ListBoxItem item) item.Tag = NavigationRouteOrder[index];
         VideoView.IsVisibleChanged += (_, _) => UpdatePlayerOverlayVisibility();
         // VideoView moves this content to its own foreground window, outside this visual tree.
         PlayerOverlay.Resources.MergedDictionaries.Add(Resources);
@@ -91,6 +95,11 @@ public partial class MainWindow : FluentWindow
         {
             _osdTimer.Stop();
             _viewModel.ShowOsd = false;
+        };
+        _toastTimer.Tick += (_, _) =>
+        {
+            _toastTimer.Stop();
+            if (!_statusIsSticky) StatusBar.Visibility = Visibility.Collapsed;
         };
         _mediaTimer.Tick += async (_, _) =>
         {
@@ -125,6 +134,40 @@ public partial class MainWindow : FluentWindow
         await _viewModel.CreateProfileAsync(password);
     }
 
+    private void SavedProfile_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_viewModel.SelectedProfile is not { } profile) return;
+        _viewModel.ProfileName = profile.Name;
+        _viewModel.ProfileBaseUrl = profile.BaseUrl;
+        _viewModel.ProfileUsername = string.Empty;
+        ProfilePasswordBox.Clear();
+    }
+
+    private void NewProfile_Click(object sender, RoutedEventArgs e)
+    {
+        SavedProfilesList.SelectedItem = null;
+        _viewModel.ProfileName = string.Empty;
+        _viewModel.ProfileBaseUrl = string.Empty;
+        _viewModel.ProfileUsername = string.Empty;
+        ProfilePasswordBox.Clear();
+    }
+
+    private async void UpdateSelectedProfile_Click(object sender, RoutedEventArgs e)
+    {
+        var password = ProfilePasswordBox.Password;
+        ProfilePasswordBox.Clear();
+        await _viewModel.UpdateSelectedProfileAsync(_viewModel.ProfileName, _viewModel.ProfileBaseUrl, _viewModel.ProfileUsername, password);
+    }
+
+    private async void DeleteProfile_Click(object sender, RoutedEventArgs e)
+    {
+        if (_viewModel.SelectedProfile is not { } profile) return;
+        var answer = System.Windows.MessageBox.Show(this,
+            $"¿Eliminar la cuenta «{profile.Name}» de este equipo? También se eliminarán sus favoritos e historial guardados.",
+            "Eliminar cuenta", System.Windows.MessageBoxButton.YesNo, MessageBoxImage.Warning, System.Windows.MessageBoxResult.No);
+        if (answer == System.Windows.MessageBoxResult.Yes) await _viewModel.DeleteSelectedProfileAsync();
+    }
+
     private async void SaveAndWatch_Click(object sender, RoutedEventArgs e)
     {
         var password = ProfilePasswordBox.Password;
@@ -157,6 +200,13 @@ public partial class MainWindow : FluentWindow
     {
         if (sender is FrameworkElement { DataContext: MediaItem media })
         {
+            if (_viewModel.ShowFavorites)
+            {
+                _viewModel.CurrentTabIndex = media.Kind == ContentKind.Series ? 6 : 5;
+                _viewModel.SelectedMedia = media;
+                if (media.Kind == ContentKind.Movie) await _viewModel.PlayMediaAsync();
+                return;
+            }
             _viewModel.SelectedMedia = media;
             if (media.Kind == ContentKind.Series) return;
         }
@@ -372,7 +422,57 @@ public partial class MainWindow : FluentWindow
         var factor = scale switch { "115%" => 1.15, "130%" => 1.30, _ => 1.0 };
         if (Shell is not null) Shell.LayoutTransform = factor == 1.0 ? Transform.Identity : new ScaleTransform(factor, factor);
     }
-    private void Navigate_Click(object sender, RoutedEventArgs e) => _viewModel.CurrentTabIndex = int.Parse((string)((FrameworkElement)sender).Tag);
+    private void Navigate_Click(object sender, RoutedEventArgs e) => _viewModel.CurrentTabIndex = int.Parse(Convert.ToString(((FrameworkElement)sender).Tag, System.Globalization.CultureInfo.InvariantCulture)!);
+    private void ManageAccounts_Click(object sender, RoutedEventArgs e)
+    {
+        _viewModel.CurrentTabIndex = 4;
+        SettingsTabs.SelectedIndex = 0;
+    }
+    private void AccountOptions_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not System.Windows.Controls.Button { ContextMenu: { } menu } button) return;
+        menu.PlacementTarget = button;
+        menu.IsOpen = true;
+    }
+    private void ChangeAccount_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not System.Windows.Controls.MenuItem { Parent: ContextMenu { PlacementTarget: System.Windows.Controls.Button button } } ||
+            button.Parent is not System.Windows.Controls.Panel panel || panel.Children.OfType<ComboBox>().FirstOrDefault() is not { } selector) return;
+        selector.Focus();
+        selector.IsDropDownOpen = true;
+    }
+    private void FavoriteTab_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is FrameworkElement element && int.TryParse(Convert.ToString(element.Tag, System.Globalization.CultureInfo.InvariantCulture), out var tab))
+            _viewModel.SelectedFavoriteTab = tab;
+    }
+    private async void PlayFavoriteChannel_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not FrameworkElement { DataContext: XtreamChannel channel }) return;
+        _viewModel.CurrentTabIndex = 1;
+        _viewModel.SelectedChannel = channel;
+        await _viewModel.PlaySelectedAsync();
+    }
+    private void FavoriteMedia_MouseUp(object sender, MouseButtonEventArgs e)
+    {
+        if (HasInteractiveOrScrollAncestor(e.OriginalSource as DependencyObject) ||
+            FindAncestor<ListBoxItem>(e.OriginalSource as DependencyObject) is not { DataContext: MediaItem media }) return;
+        _viewModel.CurrentTabIndex = media.Kind == ContentKind.Series ? 6 : 5;
+        _viewModel.SelectedMedia = media;
+    }
+    private void ExploreFavorites_Click(object sender, RoutedEventArgs e)
+    {
+        _viewModel.CurrentTabIndex = _viewModel.SelectedFavoriteTab switch
+        {
+            1 => 1,
+            2 => 5,
+            3 => 6,
+            _ => _viewModel.HasMovies ? 5 : 1
+        };
+    }
+    private void PreviousFavoriteMediaPage_Click(object sender, RoutedEventArgs e) => _viewModel.PreviousFavoriteMediaPage();
+    private void NextFavoriteMediaPage_Click(object sender, RoutedEventArgs e) => _viewModel.NextFavoriteMediaPage();
+    private async void RefreshFavorites_Click(object sender, RoutedEventArgs e) => await _viewModel.RefreshFavoriteCatalogsAsync();
     private void ClearFilters_Click(object sender, RoutedEventArgs e) => _viewModel.ClearFilters();
     private void ClearSearch_Click(object sender, RoutedEventArgs e) => _viewModel.SearchText = "";
     private void ClearMediaSearch_Click(object sender, RoutedEventArgs e) => _viewModel.MediaSearch = "";
@@ -669,6 +769,7 @@ public partial class MainWindow : FluentWindow
     private void ViewModelChanged(object? sender, PropertyChangedEventArgs args)
     {
         if (_closing) return;
+        if (args.PropertyName == nameof(MainViewModel.StatusMessage)) ShowStatusToast();
         if (args.PropertyName == nameof(MainViewModel.PlayerHandle)) VideoView_Loaded(this, new RoutedEventArgs());
         if (args.PropertyName is nameof(MainViewModel.OsdText) or nameof(MainViewModel.ShowOsd) && _viewModel.ShowOsd)
         {
@@ -682,6 +783,22 @@ public partial class MainWindow : FluentWindow
         }
         if (args.PropertyName is nameof(MainViewModel.CurrentTabIndex) or nameof(MainViewModel.ShowMediaBrowse) or nameof(MainViewModel.ShowMovieDetails) or nameof(MainViewModel.ShowSeriesDetails) or nameof(MainViewModel.ShowPlayerPane) or nameof(MainViewModel.IsEpisodePlayerFocus) or nameof(MainViewModel.IsImmersiveMode)) UpdateLayoutMode();
         if (args.PropertyName is nameof(MainViewModel.CanHideControls) or nameof(MainViewModel.CurrentTabIndex)) { RevealControls(); UpdateTimers(); }
+    }
+
+    private bool _statusIsSticky;
+
+    private void ShowStatusToast()
+    {
+        var message = _viewModel.FooterStatus;
+        if (string.IsNullOrWhiteSpace(message)) return;
+        _statusIsSticky = message.StartsWith("No se pudo", StringComparison.OrdinalIgnoreCase) ||
+                          message.Contains("error", StringComparison.OrdinalIgnoreCase) ||
+                          message.Contains("falló", StringComparison.OrdinalIgnoreCase) ||
+                          message.Contains("no se encontraron", StringComparison.OrdinalIgnoreCase);
+        if (_statusIsSticky) _toastTimer.Stop();
+        else { _toastTimer.Stop(); _toastTimer.Start(); }
+        if (!_displays.IsFullscreen && !_displays.IsPictureInPicture && !_viewModel.IsImmersiveMode)
+            StatusBar.Visibility = Visibility.Visible;
     }
 
     private async void WindowKeyDown(object sender, KeyEventArgs args)
@@ -838,9 +955,15 @@ public partial class MainWindow : FluentWindow
         var hideChrome = compact || immersive;
         if (AppTitleBar is not null) AppTitleBar.Visibility = compact ? Visibility.Collapsed : Visibility.Visible;
         Shell.Margin = new Thickness(fullscreen ? 0 : picture ? 0 : 16);
-        Sidebar.Visibility = TvHeader.Visibility = ConnectionNotices.Visibility = CatalogPane.Visibility = StatusBar.Visibility = hideChrome ? Visibility.Collapsed : Visibility.Visible;
+        Sidebar.Visibility = TvHeader.Visibility = ConnectionNotices.Visibility = CatalogPane.Visibility = hideChrome ? Visibility.Collapsed : Visibility.Visible;
+        if (hideChrome) StatusBar.Visibility = Visibility.Collapsed;
+        else if (_statusIsSticky) StatusBar.Visibility = Visibility.Visible;
         NowPlayingTitle.Visibility = compact ? Visibility.Collapsed : Visibility.Visible;
         SidebarColumn.Width = new GridLength(hideChrome ? 0 : ActualWidth < 1050 ? 150 : 176);
+        CatalogColumn.MinWidth = hideChrome ? 0 : 252;
+        TvLayout.ColumnDefinitions[1].Width = new GridLength(hideChrome ? 0 : 6);
+        TvCatalogSplitter.Width = hideChrome ? 0 : 6;
+        TvCatalogSplitter.IsEnabled = !hideChrome;
         var mediaDetails = (_viewModel.ShowMovieDetails || _viewModel.ShowSeriesDetails) && !immersive;
         var fullContinue = _viewModel.ShowContinueWatching && !_viewModel.ShowPlayerPane;
         CatalogColumn.Width = new GridLength(hideChrome ? 0 : fullContinue ? 1 : mediaDetails ? ActualWidth < 1050 ? 260 : 360 : ActualWidth < 1050 ? 234 : 284, fullContinue ? GridUnitType.Star : GridUnitType.Pixel);
@@ -1020,6 +1143,7 @@ public partial class MainWindow : FluentWindow
         _controlsTimer.Stop();
         _mediaTimer.Stop();
         _osdTimer.Stop();
+        _toastTimer.Stop();
         _videoClickTimer.Stop();
         _categoryFocusOperation?.Abort();
         _viewModel.ThemeChanged -= ApplyTheme;

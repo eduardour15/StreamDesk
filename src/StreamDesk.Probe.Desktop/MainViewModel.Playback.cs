@@ -27,6 +27,12 @@ public sealed partial class MainViewModel
         (_playback.WillRetry && _playback.RetryCount is > 0 and <= 2 && _playback.Failure is PlaybackFailure.Network or PlaybackFailure.Timeout
             ? $" · Reintento {_playback.RetryCount}/2" : "");
     public bool ShowPlaybackPlaceholder => !_playback.IsActive;
+    public bool HasPlaybackContext => _playback.IsActive || _watch is not null || _mediaWatch is not null;
+    public bool ShowPlayerChrome => HasPlaybackContext;
+    public bool ShowPlayerEmptyState => CurrentTabIndex == 1 && !HasPlaybackContext;
+    public string PlayerEmptyMessage => ShowPlayerEmptyState
+        ? "Selecciona un canal para comenzar a ver televisión"
+        : "Selecciona contenido para comenzar a reproducir";
     public bool ShowPlaybackCaption => !ShowPlaybackPlaceholder || _playback.State == PlaybackState.Failed || _playback.WillRetry;
     public bool CanRetryPlayback => _playback.State == PlaybackState.Failed && !_playback.WillRetry;
     public bool IsPlaying => _playback.State == PlaybackState.Playing;
@@ -156,8 +162,21 @@ public sealed partial class MainViewModel
             _playbackService.Options = (_playbackService.Options with { BufferMilliseconds = value }).Validate();
             OnPropertyChanged();
             OnPropertyChanged(nameof(StabilityLabel));
+            OnPropertyChanged(nameof(BufferPreference));
             if (previous != value) _ = SavePreferencesAsync();
         }
+    }
+    public IReadOnlyList<string> BufferPreferenceChoices { get; } = ["Automática (recomendada)", "Menor retraso", "Mayor estabilidad"];
+    public string BufferPreference
+    {
+        get => BufferMilliseconds <= 1500 ? BufferPreferenceChoices[1]
+            : BufferMilliseconds <= 4000 ? BufferPreferenceChoices[0] : BufferPreferenceChoices[2];
+        set => BufferMilliseconds = value switch
+        {
+            "Menor retraso" => 1000,
+            "Mayor estabilidad" => 5000,
+            _ => 3500
+        };
     }
     public string StabilityLabel => BufferMilliseconds switch
     {
@@ -175,6 +194,7 @@ public sealed partial class MainViewModel
         _playbackService.Options = (_playbackService.Options with { BufferMilliseconds = next }).Validate();
         OnPropertyChanged(nameof(BufferMilliseconds));
         OnPropertyChanged(nameof(StabilityLabel));
+        OnPropertyChanged(nameof(BufferPreference));
         await SavePreferencesAsync();
         TriggerOsd($"Búfer en vivo: {StabilityLabel}");
         if (_watch is { } activeWatch && _mediaWatch is null && _playback.IsActive)
@@ -244,6 +264,7 @@ public sealed partial class MainViewModel
         }
         OnPropertyChanged(nameof(PlayingChannelId));
         OnPropertyChanged(nameof(NowPlaying));
+        NotifyPlayerContext();
         try { await _playbackService.StopAsync(); }
         catch (Exception exception) { _logger.LogError("playback_stop", exception); }
     }
@@ -286,6 +307,7 @@ public sealed partial class MainViewModel
             NotifyPlaybackLoadingState();
             StatusMessage = PlaybackStatus;
             OnPropertyChanged(nameof(PlaybackStatus)); OnPropertyChanged(nameof(ShowPlaybackPlaceholder)); OnPropertyChanged(nameof(ShowPlaybackCaption)); OnPropertyChanged(nameof(CanRetryPlayback));
+            NotifyPlayerContext();
             OnPropertyChanged(nameof(IsPlaying)); OnPropertyChanged(nameof(IsPaused)); OnPropertyChanged(nameof(CanStopPlayback)); OnPropertyChanged(nameof(CanHideControls));
             OnPropertyChanged(nameof(PlayPauseIcon)); OnPropertyChanged(nameof(PlayPauseSymbol)); OnPropertyChanged(nameof(PlayPauseAction)); OnPropertyChanged(nameof(PlayPauseToolTip));
             OnPropertyChanged(nameof(PlayAction)); OnPropertyChanged(nameof(PlayActionIcon));
@@ -334,5 +356,13 @@ public sealed partial class MainViewModel
             }
         }
         if (_ui is not null && SynchronizationContext.Current != _ui) _ui.Post(_ => Apply(), null); else Apply();
+    }
+
+    private void NotifyPlayerContext()
+    {
+        OnPropertyChanged(nameof(HasPlaybackContext));
+        OnPropertyChanged(nameof(ShowPlayerChrome));
+        OnPropertyChanged(nameof(ShowPlayerEmptyState));
+        OnPropertyChanged(nameof(PlayerEmptyMessage));
     }
 }

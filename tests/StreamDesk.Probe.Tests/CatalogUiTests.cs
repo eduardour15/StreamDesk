@@ -102,6 +102,11 @@ public sealed partial class CatalogUiTests
         {
             window.Show(); vm.CurrentTabIndex = 1;
             await WaitAsync(() => vm.Channels.Count == 5000 && !vm.IsCatalogLoading && !vm.IsBusy);
+            var navigation = (ListBox)window.FindName("NavigationTabs");
+            Assert.Equal(new[] { 0, 1, 5, 6, 2, 3, 7, 4 }, navigation.Items.Cast<ListBoxItem>().Select(item => (int)item.Tag));
+            vm.CurrentTabIndex = 2; await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
+            Assert.Equal(4, navigation.SelectedIndex);
+            vm.CurrentTabIndex = 1; await Dispatcher.Yield(DispatcherPriority.ApplicationIdle);
             await Dispatcher.Yield(DispatcherPriority.ApplicationIdle); window.UpdateLayout();
             var list = (ListBox)window.FindName("ChannelsList");
             int Realized() => Enumerable.Range(0, list.Items.Count).Count(index => list.ItemContainerGenerator.ContainerFromIndex(index) is not null);

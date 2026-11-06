@@ -5,4 +5,5 @@ public sealed record ViewerLibrary(IReadOnlySet<string> Favorites, IReadOnlyList
 {
     public IReadOnlySet<string> MovieFavorites { get; init; } = new HashSet<string>(StringComparer.Ordinal);
     public IReadOnlySet<string> SeriesFavorites { get; init; } = new HashSet<string>(StringComparer.Ordinal);
+    public IReadOnlySet<string> M3uFavorites { get; init; } = new HashSet<string>(StringComparer.Ordinal);
 }

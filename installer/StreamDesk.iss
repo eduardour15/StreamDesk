@@ -2,7 +2,7 @@
 ; Versión Autocontenida (Windows x64)
 
 #define MyAppName "StreamDesk IPTV"
-#define MyAppVersion "0.5.2"
+#define MyAppVersion "0.5.3"
 #define MyAppPublisher "eduardour15"
 #define MyAppExeName "StreamDesk.Probe.Desktop.exe"
 

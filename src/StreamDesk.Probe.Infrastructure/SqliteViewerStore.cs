@@ -21,6 +21,7 @@ public sealed class SqliteViewerStore(string path, bool pooling = true) : IViewe
             while (reader.Read()) { cancellationToken.ThrowIfCancellationRequested(); favorites.Add(reader.GetString(0)); }
         var movieFavorites = new HashSet<string>(StringComparer.Ordinal);
         var seriesFavorites = new HashSet<string>(StringComparer.Ordinal);
+        var m3uFavorites = new HashSet<string>(StringComparer.Ordinal);
         command.CommandText = "SELECT ContentType,ContentId FROM MediaFavorites WHERE ProfileId=$profile;";
         using (var reader = command.ExecuteReader())
             while (reader.Read())
@@ -29,6 +30,9 @@ public sealed class SqliteViewerStore(string path, bool pooling = true) : IViewe
                 if (reader.GetString(0) == "movie") movieFavorites.Add(reader.GetString(1));
                 else if (reader.GetString(0) == "series") seriesFavorites.Add(reader.GetString(1));
             }
+        command.CommandText = "SELECT ChannelId FROM M3uChannelFavorites WHERE ProfileId=$profile;";
+        using (var reader = command.ExecuteReader())
+            while (reader.Read()) { cancellationToken.ThrowIfCancellationRequested(); m3uFavorites.Add(reader.GetString(0)); }
         command.CommandText = "SELECT ChannelId,PlayedAt FROM PlaybackHistory WHERE ProfileId=$profile AND ContentType='live' ORDER BY PlayedAt DESC,ChannelId LIMIT 50;";
         var recents = new List<RecentChannel>();
         using (var reader = command.ExecuteReader())
@@ -40,12 +44,22 @@ public sealed class SqliteViewerStore(string path, bool pooling = true) : IViewe
         return new ViewerLibrary(favorites, recents, autoPlay, amplificationDb)
         {
             MovieFavorites = movieFavorites,
-            SeriesFavorites = seriesFavorites
+            SeriesFavorites = seriesFavorites,
+            M3uFavorites = m3uFavorites
         };
     }, cancellationToken);
 
     public Task SetFavoriteAsync(string profileId, string contentType, string channelId, bool favorite, CancellationToken cancellationToken = default)
     {
+        if (contentType == "m3u-live")
+        {
+            if (string.IsNullOrWhiteSpace(channelId)) return Task.FromException(new ArgumentException("Identificador de contenido vacío.", nameof(channelId)));
+            return WriteAsync(profileId, contentType, channelId, favorite ? """
+                INSERT INTO M3uChannelFavorites(ProfileId,ChannelId,CreatedAt)
+                VALUES($profile,$channel,$date)
+                ON CONFLICT(ProfileId,ChannelId) DO NOTHING;
+                """ : "DELETE FROM M3uChannelFavorites WHERE ProfileId=$profile AND ChannelId=$channel;", DateTimeOffset.UtcNow, cancellationToken);
+        }
         if (contentType is "movie" or "series")
         {
             if (string.IsNullOrWhiteSpace(channelId)) return Task.FromException(new ArgumentException("Identificador de contenido vacío.", nameof(channelId)));
@@ -165,7 +179,9 @@ public sealed class SqliteViewerStore(string path, bool pooling = true) : IViewe
         command.CommandText = """
             SELECT ContentType, ChannelId, CreatedAt FROM Favorites WHERE ProfileId=$profile
             UNION ALL
-            SELECT ContentType, ContentId, CreatedAt FROM MediaFavorites WHERE ProfileId=$profile;
+            SELECT ContentType, ContentId, CreatedAt FROM MediaFavorites WHERE ProfileId=$profile
+            UNION ALL
+            SELECT 'm3u-live', ChannelId, CreatedAt FROM M3uChannelFavorites WHERE ProfileId=$profile;
             """;
         var list = new List<SyncFavoriteItem>();
         using var reader = command.ExecuteReader();

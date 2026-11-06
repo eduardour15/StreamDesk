@@ -181,6 +181,37 @@ public sealed partial class MainViewModel
         finally { SetProfileBusy(false); }
     }
 
+    public async Task<bool> UpdateSelectedProfileAsync(string name, string baseUrl, string username, string password)
+    {
+        var profile = SelectedProfile;
+        if (profile is null || _disposed || IsBusy) return false;
+        var updateActive = ActiveProfile?.Id == profile.Id;
+        SetProfileBusy(true);
+        try
+        {
+            await _profilesService.UpdateConnectionAsync(profile, name, baseUrl, username, password, _shutdown.Token);
+            await ReloadProfilesCoreAsync(_shutdown.Token);
+            if (updateActive && Profiles.FirstOrDefault(item => item.Id == profile.Id) is { } updated)
+            {
+                ActiveProfile = updated;
+                await _profileLoad;
+            }
+            ProfileStatus = "✓ Cuenta actualizada. La contraseña se conserva si dejaste ese campo vacío.";
+        }
+        catch (ArgumentException exception) { ProfileStatus = exception.Message; return false; }
+        catch (Exception exception)
+        {
+            _logger.LogError("profile_update", exception);
+            ProfileStatus = "No se pudo actualizar la cuenta. Revisa los datos e inténtalo de nuevo.";
+            return false;
+        }
+        finally { SetProfileBusy(false); }
+
+        if (updateActive && ActiveProfile?.ProviderType != "m3u")
+            await LoadCatalogAsync();
+        return true;
+    }
+
     public async Task<bool> ExportSyncAsync(string targetFilePath)
     {
         if (_syncService is null)
@@ -351,6 +382,7 @@ public sealed partial class MainViewModel
             { BufferMilliseconds = clampedBuffer, Hardware = targetHardware, PrioritizeContinuity = settings.PrioritizeContinuity, LiveQuality = settings.LiveQuality }).Validate();
             OnPropertyChanged(nameof(BufferMilliseconds));
             OnPropertyChanged(nameof(StabilityLabel));
+            OnPropertyChanged(nameof(BufferPreference));
             OnPropertyChanged(nameof(SoftwareDecoding));
             OnPropertyChanged(nameof(PrioritizeContinuity));
             OnPropertyChanged(nameof(LiveQuality));

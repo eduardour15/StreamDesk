@@ -63,13 +63,26 @@ public sealed class MediaCatalogGridTests
         vm.MediaFavoritesOnly = false;
         await (Task)filter.Invoke(vm, [false])!;
 
-        await vm.ToggleMediaFavoriteAsync(new MediaItem("series-1", "Series", ContentKind.Series));
+        var seriesItem = new MediaItem("series-1", "Series", ContentKind.Series);
+        typeof(MainViewModel).GetField("_series", BindingFlags.NonPublic | BindingFlags.Instance)!
+            .SetValue(vm, new MediaCatalog([], [seriesItem], DateTimeOffset.UtcNow));
+        await vm.ToggleMediaFavoriteAsync(seriesItem);
         Assert.Contains("series-1", (await viewer.LoadAsync(vm.ActiveProfile!.Id)).SeriesFavorites);
+        Assert.Equal("movie-010", Assert.Single(vm.FavoriteMovies).Id);
+        Assert.Equal("series-1", Assert.Single(vm.FavoriteSeries).Id);
 
         vm.IsMediaListView = true;
         Assert.True(vm.IsMediaListView);
         Assert.False(vm.IsMediaGridView);
         Assert.Equal(100, vm.MediaItems.Count);
+        vm.CurrentTabIndex = 2;
+        Assert.True(vm.ShowFavorites);
+        Assert.False(vm.ShowLiveCatalog);
+        Assert.Equal(2, vm.FavoriteCount);
+        vm.SelectedFavoriteTab = 2;
+        Assert.Equal("movie-010", Assert.Single(vm.FavoriteMediaItems).Id);
+        vm.SelectedFavoriteTab = 3;
+        Assert.Equal("series-1", Assert.Single(vm.FavoriteMediaItems).Id);
         await vm.DisposeAsync();
     }
 }

@@ -14,7 +14,7 @@ $IssFile = Join-Path $PSScriptRoot "StreamDesk.iss"
 # Obtener versión desde el proyecto
 [xml]$projXml = Get-Content $ProjectFile
 $Version = ($projXml.Project.PropertyGroup | Where-Object { $_.Version }).Version
-if (-not $Version) { $Version = "0.5.2" }
+if (-not $Version) { $Version = "0.5.3" }
 
 Write-Host "==> 1. Publicando StreamDesk v$Version en modo autocontenido (win-x64)..." -ForegroundColor Cyan
 dotnet publish $ProjectFile -c $Configuration -r win-x64 --self-contained true -p:VlcWindowsX64Enabled=true -p:VlcWindowsX86Enabled=false -p:VlcWindowsArm64Enabled=false -o $PublishDir

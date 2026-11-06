@@ -127,6 +127,53 @@ public sealed class ProfileService(ISettingsService settings, ICredentialStore c
         await settings.UpdateProfileAsync(profile with { Name = normalizedName }, cancellationToken);
     }
 
+    public async Task UpdateConnectionAsync(
+        Profile profile,
+        string name,
+        string baseUrl,
+        string username,
+        string? password,
+        CancellationToken cancellationToken = default)
+    {
+        if (profile is null) throw new ArgumentNullException(nameof(profile));
+        var normalizedName = name.Trim();
+        if (normalizedName.Length is < 1 or > 80)
+            throw new ArgumentException("El nombre debe tener entre 1 y 80 caracteres.", nameof(name));
+
+        var nextBaseUrl = baseUrl.Trim();
+        if (profile.ProviderType == "m3u")
+        {
+            var isHttp = nextBaseUrl.StartsWith("http://", StringComparison.OrdinalIgnoreCase) ||
+                         nextBaseUrl.StartsWith("https://", StringComparison.OrdinalIgnoreCase);
+            if (isHttp ? !Uri.TryCreate(nextBaseUrl, UriKind.Absolute, out _) : !File.Exists(nextBaseUrl))
+                throw new ArgumentException("Usa una dirección web válida o un archivo M3U que exista.", nameof(baseUrl));
+            await settings.UpdateProfileAsync(profile with { Name = normalizedName, BaseUrl = nextBaseUrl }, cancellationToken);
+            return;
+        }
+
+        if (!ProviderEndpoint.TryParse(nextBaseUrl, out var uri))
+            throw new ArgumentException("Usa una dirección HTTP o HTTPS válida, sin usuario ni contraseña.", nameof(baseUrl));
+
+        var current = await credentials.GetAsync(profile.CredentialKey, cancellationToken)
+            ?? throw new InvalidOperationException("No se encontraron los datos de acceso guardados.");
+        var nextUsername = string.IsNullOrWhiteSpace(username) ? current.Username : username.Trim();
+        var nextPassword = string.IsNullOrEmpty(password) ? current.Password : password;
+        if (nextUsername.Length is < 1 or > 256 || nextPassword.Length is < 1 or > 1024)
+            throw new ArgumentException("Revisa el usuario y la contraseña.");
+
+        var previous = current;
+        await credentials.SaveAsync(profile.CredentialKey, new StoredCredentials(nextUsername, nextPassword), cancellationToken);
+        try
+        {
+            await settings.UpdateProfileAsync(profile with { Name = normalizedName, BaseUrl = uri!.ToString().TrimEnd('/') }, cancellationToken);
+        }
+        catch
+        {
+            await credentials.SaveAsync(profile.CredentialKey, previous, CancellationToken.None);
+            throw;
+        }
+    }
+
     public async Task DeleteAsync(string id, CancellationToken cancellationToken = default)
     {
         var profile = (await settings.GetProfilesAsync(cancellationToken)).FirstOrDefault(item => item.Id == id);

@@ -18,4 +18,8 @@ F7-T02 incorpora M3U/M3U8 sin sustituir el adaptador Xtream ni alterar el esquem
 
 ## Consecuencias y límites
 
-La lista se puede reproducir y filtrar durante la sesión, pero todavía no sincroniza metadatos, logos, EPG ni favoritos al reiniciar. La validación DNS ocurre antes de llamar al motor LibVLC, que abre su propia conexión; un cambio DNS posterior no puede fijarse desde la API actual de Playback. El riesgo residual queda documentado y no se presenta la comprobación previa como garantía de pinning del stream. La conexión de la lista y la reproducción con un proveedor real requieren la prueba manual de `PRUEBA_MANUAL_F7_T02.md`.
+La lista se puede reproducir y filtrar durante la sesión, pero todavía no sincroniza metadatos, logos ni EPG. Los favoritos de una lista importada temporalmente no sobreviven al reinicio; las cuentas M3U guardadas conservan solo los IDs favoritos como se describe en el addendum. La validación DNS ocurre antes de llamar al motor LibVLC, que abre su propia conexión; un cambio DNS posterior no puede fijarse desde la API actual de Playback. El riesgo residual queda documentado y no se presenta la comprobación previa como garantía de pinning del stream. La conexión de la lista y la reproducción con un proveedor real requieren la prueba manual de `PRUEBA_MANUAL_F7_T02.md`.
+
+## Addendum 2026-11-06 — favoritos de cuentas M3U guardadas
+
+La decisión de favoritos solo temporales se conserva para una lista importada sin perfil guardado. Para una cuenta M3U guardada, la migración SQLite v7 persiste exclusivamente los IDs estables de canal en `M3uChannelFavorites`, asociados al `ProfileId`. No persiste la lista, URL base, URL de canal, query strings ni tokens. La colección participa en la importación/exportación cifrada de biblioteca, permanece separada por cuenta y no sustituye los datos Xtream ni los favoritos multimedia. Metadatos, logos y EPG de la lista siguen sin persistirse.

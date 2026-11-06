@@ -94,7 +94,17 @@ public sealed partial class MainViewModel : INotifyPropertyChanged, IDisposable,
     public string ProfileBaseUrl { get => _profileBaseUrl; set => SetProperty(ref _profileBaseUrl, value); }
     public string ProfileUsername { get => _profileUsername; set => SetProperty(ref _profileUsername, value); }
     public string ProfileStatus { get => _profileStatus; private set => SetProperty(ref _profileStatus, value); }
-    public Profile? SelectedProfile { get => _selectedProfile; set { if (SetProperty(ref _selectedProfile, value)) ((AsyncRelayCommand)DeleteProfileCommand).NotifyCanExecuteChanged(); } }
+    public Profile? SelectedProfile
+    {
+        get => _selectedProfile;
+        set
+        {
+            if (!SetProperty(ref _selectedProfile, value)) return;
+            OnPropertyChanged(nameof(HasSelectedProfile));
+            ((AsyncRelayCommand)DeleteProfileCommand).NotifyCanExecuteChanged();
+        }
+    }
+    public bool HasSelectedProfile => SelectedProfile is not null && !IsBusy;
     public XtreamChannel? SelectedChannel { get => _selectedChannel; set { if (SetProperty(ref _selectedChannel, value)) NotifySelection(); } }
     public string? SelectedFormat { get => _selectedFormat; set => SetProperty(ref _selectedFormat, value); }
     public string StatusMessage
@@ -125,8 +135,9 @@ public sealed partial class MainViewModel : INotifyPropertyChanged, IDisposable,
                 OnPropertyChanged(nameof(FavoritesOnly)); OnPropertyChanged(nameof(SearchText)); OnPropertyChanged(nameof(HasSearchText)); OnPropertyChanged(nameof(CategorySearch)); OnPropertyChanged(nameof(HasCategorySearch)); OnPropertyChanged(nameof(VisibleCategories)); OnPropertyChanged(nameof(SelectedCategory));
                 _ = ApplyFilterAsync(false);
             }
-            OnPropertyChanged(nameof(ShowHome)); OnPropertyChanged(nameof(ShowTv)); OnPropertyChanged(nameof(ShowSettings)); OnPropertyChanged(nameof(SectionTitle));
+            OnPropertyChanged(nameof(ShowHome)); OnPropertyChanged(nameof(ShowTv)); OnPropertyChanged(nameof(ShowFavorites)); OnPropertyChanged(nameof(ShowSettings)); OnPropertyChanged(nameof(SectionTitle));
             OnPropertyChanged(nameof(ShowLiveCatalog)); OnPropertyChanged(nameof(ShowMediaCatalog)); OnPropertyChanged(nameof(ShowContinueWatching));
+            OnPropertyChanged(nameof(ShowCatalogSplitter));
             if (ShowMediaCatalog)
             {
                 _mediaSearch = ""; _mediaCategorySearch = ""; _mediaCategory = null; SelectedMedia = null; MediaItems = [];
@@ -195,7 +206,7 @@ public sealed partial class MainViewModel : INotifyPropertyChanged, IDisposable,
         finally { SetProfileBusy(false); }
     }
 
-    private async Task DeleteSelectedProfileAsync()
+    public async Task DeleteSelectedProfileAsync()
     {
         if (SelectedProfile is null || IsBusy || _disposed) return;
         SetProfileBusy(true);
@@ -265,6 +276,7 @@ public sealed partial class MainViewModel : INotifyPropertyChanged, IDisposable,
             };
             OnPropertyChanged(nameof(PlayingChannelId));
             OnPropertyChanged(nameof(NowPlaying));
+            NotifyPlayerContext();
             IsImmersiveMode = true;
             await _playbackService.PlayAsync(source, token);
             IsPlaybackReady = _playbackService.IsReady;
@@ -368,7 +380,7 @@ public sealed partial class MainViewModel : INotifyPropertyChanged, IDisposable,
     private void NotifyBusyChanged()
     {
         OnPropertyChanged(nameof(IsBusy)); OnPropertyChanged(nameof(CanConnect)); OnPropertyChanged(nameof(IsWorking));
-        OnPropertyChanged(nameof(CanImportPlaylist)); OnPropertyChanged(nameof(CanPlayRandomEpisode));
+        OnPropertyChanged(nameof(CanImportPlaylist)); OnPropertyChanged(nameof(CanPlayRandomEpisode)); OnPropertyChanged(nameof(HasSelectedProfile));
         NotifyCommands();
     }
 

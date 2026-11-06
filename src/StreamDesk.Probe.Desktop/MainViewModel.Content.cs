@@ -22,7 +22,7 @@ public sealed partial class MainViewModel
     private MediaWatch? _mediaWatch;
     private IReadOnlyList<MediaProgress> _progress = [];
     private MediaPlaybackDetails _mediaDetails = MediaPlaybackDetails.Empty;
-    public bool ShowLiveCatalog => CurrentTabIndex is >= 1 and <= 3;
+    public bool ShowLiveCatalog => CurrentTabIndex is 1 or 3;
     public bool ShowMediaCatalog => CurrentTabIndex is 5 or 6;
     public bool ShowMovieBrowse => CurrentTabIndex == 5 && SelectedMedia is null;
     public bool ShowMovieDetails => CurrentTabIndex == 5 && SelectedMedia?.Kind == ContentKind.Movie;
@@ -213,7 +213,7 @@ public sealed partial class MainViewModel
             if (!SetProperty(ref _selectedMedia, value)) return;
             _selectedDetails = null; _isImmersiveMode = false; _randomCyclePlayedKeys.Clear();
             if (value is null && ShowMediaCatalog) ContentStatus = $"Películas: {_movies?.Items.Count ?? 0} · Series: {_series?.Items.Count ?? 0}";
-            foreach (var name in new[] { nameof(MediaDescription), nameof(MediaPosterUrl), nameof(MediaCategoryLabel), nameof(SeriesSummary), nameof(ShowMovieBrowse), nameof(ShowMovieDetails), nameof(ShowSeriesBrowse), nameof(ShowSeriesDetails), nameof(ShowMediaBrowse), nameof(ShowPlayerPane), nameof(NowPlaying), nameof(IsEpisodePlayerFocus), nameof(IsImmersiveMode), nameof(ImmersiveReturnLabel), nameof(CanPlayRandomEpisode) }) OnPropertyChanged(name);
+            foreach (var name in new[] { nameof(MediaDescription), nameof(MediaPosterUrl), nameof(MediaCategoryLabel), nameof(SeriesSummary), nameof(ShowMovieBrowse), nameof(ShowMovieDetails), nameof(ShowSeriesBrowse), nameof(ShowSeriesDetails), nameof(ShowMediaBrowse), nameof(ShowPlayerPane), nameof(ShowCatalogSplitter), nameof(NowPlaying), nameof(IsEpisodePlayerFocus), nameof(IsImmersiveMode), nameof(ImmersiveReturnLabel), nameof(CanPlayRandomEpisode) }) OnPropertyChanged(name);
             _detailTask = LoadMediaDetailsAsync(value);
         }
     }
@@ -489,6 +489,7 @@ public sealed partial class MainViewModel
             OnPropertyChanged(nameof(PlayingChannelId));
             _mediaDetails = MediaPlaybackDetails.Empty; NotifyMediaDetails();
             _mediaWatch = new(item, _connectedProfileId, version, _playbackService.Snapshot.Sequence) { Position = position, Length = resume?.DurationMilliseconds ?? 0 };
+            NotifyPlayerContext();
 
             if (_contentStore is not null && _connectedProfileId is not null)
             {
@@ -710,7 +711,8 @@ public sealed partial class MainViewModel
     private void NotifyContent()
     {
         SelectedProgress ??= ContinueWatching.FirstOrDefault();
-        foreach (var name in new[] { nameof(HasMovies), nameof(HasSeries), nameof(HasNoMediaItems), nameof(MediaCategories), nameof(VisibleMediaCategories), nameof(MediaCategoryLabel), nameof(ContinueWatching), nameof(SelectedProgress) }) OnPropertyChanged(name);
+        foreach (var name in new[] { nameof(HasMovies), nameof(HasSeries), nameof(HasNoMediaItems), nameof(MediaCategories), nameof(VisibleMediaCategories), nameof(MediaCategoryLabel), nameof(ContinueWatching), nameof(SelectedProgress), nameof(FavoriteMovies), nameof(FavoriteSeries), nameof(FavoriteMediaItems), nameof(HasResolvedFavoriteContent), nameof(UnresolvedFavoriteCount), nameof(HasMissingFavoriteContent), nameof(HasMissingFavoriteMedia), nameof(ShowFavoriteMediaGroup), nameof(HasResolvedSelectedFavoriteContent), nameof(HasMissingSelectedFavoriteContent), nameof(FavoriteEmptyTitle), nameof(FavoriteEmptyDescription) }) OnPropertyChanged(name);
+        NotifyFavoriteMediaPaging();
     }
     private void ResetContent()
     {
