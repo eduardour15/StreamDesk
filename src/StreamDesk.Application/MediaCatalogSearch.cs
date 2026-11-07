@@ -23,14 +23,18 @@ public sealed class MediaCatalogSearch
     public IReadOnlyList<MediaItem> Filter(string query, string? categoryId, IReadOnlySet<string>? restrictedCategories,
         CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         var key = CatalogSearch.Normalize(query);
-        var result = new List<MediaItem>();
+        var hasCategory = !string.IsNullOrEmpty(categoryId);
+        var hasRestricted = restrictedCategories is { Count: > 0 };
+        var hasQuery = key.Length > 0;
+        var result = new List<MediaItem>(!hasCategory && !hasRestricted && !hasQuery ? _index.Length : Math.Min(_index.Length, 256));
         foreach (var (item, name) in _index)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            if (!string.IsNullOrEmpty(categoryId) && item.CategoryId != categoryId) continue;
-            if (restrictedCategories?.Contains(item.CategoryId ?? "") == true) continue;
-            if (name.Contains(key, StringComparison.Ordinal)) result.Add(item);
+            if (hasCategory && item.CategoryId != categoryId) continue;
+            if (hasRestricted && restrictedCategories!.Contains(item.CategoryId ?? "")) continue;
+            if (!hasQuery || name.Contains(key, StringComparison.Ordinal)) result.Add(item);
         }
         return result;
     }

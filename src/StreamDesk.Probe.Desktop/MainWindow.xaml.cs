@@ -247,6 +247,35 @@ public partial class MainWindow : FluentWindow
         OpenHomeMedia(media);
         e.Handled = true;
     }
+    private async void HomeMediaCard_KeyDown(object sender, KeyEventArgs e)
+    {
+        if (sender is not FrameworkElement { DataContext: MediaItem media } element) return;
+        if (e.Key is Key.Enter or Key.Space)
+        {
+            OpenHomeMedia(media);
+            if (media.Kind == ContentKind.Movie) await _viewModel.PlayMediaAsync();
+            e.Handled = true;
+        }
+        else if (e.Key is Key.Left or Key.Right)
+        {
+            var direction = e.Key == Key.Left ? FocusNavigationDirection.Left : FocusNavigationDirection.Right;
+            element.MoveFocus(new TraversalRequest(direction));
+            if (Keyboard.FocusedElement is FrameworkElement focused)
+                focused.BringIntoView();
+            e.Handled = true;
+        }
+    }
+    private void ScrollHomeCarousel_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not FrameworkElement { Tag: string spec }) return;
+        var parts = spec.Split(':');
+        if (parts.Length != 2 || !int.TryParse(parts[1], out var dir)) return;
+        if (FindName(parts[0]) is ScrollViewer viewer && viewer.ScrollableWidth > 0)
+        {
+            var step = Math.Max(320, viewer.ViewportWidth * 0.72);
+            viewer.ScrollToHorizontalOffset(Math.Clamp(viewer.HorizontalOffset + dir * step, 0, viewer.ScrollableWidth));
+        }
+    }
     private async void HomePosterAction_Click(object sender, RoutedEventArgs e)
     {
         if (sender is not FrameworkElement { DataContext: MediaItem media }) return;
@@ -262,9 +291,13 @@ public partial class MainWindow : FluentWindow
     }
     private void HomeCarousel_MouseWheel(object sender, MouseWheelEventArgs e)
     {
-        if (sender is not ScrollViewer viewer || viewer.ScrollableWidth <= 0) return;
-        viewer.ScrollToHorizontalOffset(Math.Clamp(viewer.HorizontalOffset - e.Delta, 0, viewer.ScrollableWidth));
-        e.Handled = true;
+        if (Keyboard.Modifiers != ModifierKeys.Shift || sender is not ScrollViewer viewer || viewer.ScrollableWidth <= 0) return;
+        var target = Math.Clamp(viewer.HorizontalOffset - e.Delta, 0, viewer.ScrollableWidth);
+        if (Math.Abs(target - viewer.HorizontalOffset) > 0.5)
+        {
+            viewer.ScrollToHorizontalOffset(target);
+            e.Handled = true;
+        }
     }
     private async void AutoPlay_Click(object sender, RoutedEventArgs e) => await _viewModel.SetAutoPlayAsync(AutoPlayCheckBox.IsChecked == true);
     private async void ProbeContent_Click(object sender, RoutedEventArgs e) => await _viewModel.ProbeContentAsync();
@@ -472,19 +505,19 @@ public partial class MainWindow : FluentWindow
         var isLight = string.Equals(theme, "Light", StringComparison.OrdinalIgnoreCase);
         Wpf.Ui.Appearance.ApplicationThemeManager.Apply(isLight ? Wpf.Ui.Appearance.ApplicationTheme.Light : Wpf.Ui.Appearance.ApplicationTheme.Dark,
             WindowBackdropType.None, false);
-        Resources["CanvasBrush"] = new SolidColorBrush(isLight ? Color.FromRgb(243, 244, 246) : Color.FromRgb(11, 13, 18));
-        Resources["BackgroundBrush"] = new SolidColorBrush(isLight ? Color.FromRgb(243, 244, 246) : Color.FromRgb(11, 13, 18));
+        Resources["CanvasBrush"] = new SolidColorBrush(isLight ? Color.FromRgb(243, 243, 243) : Color.FromRgb(11, 13, 18));
+        Resources["BackgroundBrush"] = new SolidColorBrush(isLight ? Color.FromRgb(243, 243, 243) : Color.FromRgb(11, 13, 18));
         Resources["SurfaceBrush"] = new SolidColorBrush(isLight ? Color.FromRgb(255, 255, 255) : Color.FromRgb(23, 26, 33));
-        Resources["SurfaceSecondaryBrush"] = new SolidColorBrush(isLight ? Color.FromRgb(242, 244, 247) : Color.FromRgb(32, 36, 45));
-        Resources["SurfaceRaisedBrush"] = new SolidColorBrush(isLight ? Color.FromRgb(242, 244, 247) : Color.FromRgb(32, 36, 45));
+        Resources["SurfaceSecondaryBrush"] = new SolidColorBrush(isLight ? Color.FromRgb(235, 235, 235) : Color.FromRgb(32, 36, 45));
+        Resources["SurfaceRaisedBrush"] = new SolidColorBrush(isLight ? Color.FromRgb(235, 235, 235) : Color.FromRgb(32, 36, 45));
         Resources["TextPrimaryBrush"] = new SolidColorBrush(isLight ? Color.FromRgb(26, 26, 26) : Color.FromRgb(248, 250, 252));
         Resources["TextMutedBrush"] = new SolidColorBrush(isLight ? Color.FromRgb(80, 88, 100) : Color.FromRgb(156, 163, 175));
-        Resources["ControlBorderBrush"] = new SolidColorBrush(isLight ? Color.FromRgb(120, 128, 140) : Color.FromArgb(32, 255, 255, 255));
+        Resources["ControlBorderBrush"] = new SolidColorBrush(isLight ? Color.FromRgb(120, 128, 140) : Color.FromArgb(20, 255, 255, 255));
         Resources["HoverBrush"] = new SolidColorBrush(isLight ? Color.FromRgb(224, 231, 238) : Color.FromRgb(42, 48, 59));
         Resources["PressedBrush"] = new SolidColorBrush(isLight ? Color.FromRgb(205, 221, 232) : Color.FromRgb(52, 60, 73));
         Resources["SelectionBrush"] = new SolidColorBrush(isLight ? Color.FromRgb(213, 232, 247) : Color.FromArgb(38, 56, 189, 248));
         Resources["TextSecondaryBrush"] = new SolidColorBrush(isLight ? Color.FromRgb(102, 102, 102) : Color.FromRgb(160, 160, 160));
-        Resources["BorderBrush"] = new SolidColorBrush(isLight ? Color.FromRgb(220, 220, 220) : Color.FromArgb(32, 255, 255, 255));
+        Resources["BorderBrush"] = new SolidColorBrush(isLight ? Color.FromRgb(220, 220, 220) : Color.FromArgb(20, 255, 255, 255));
         Resources["AccentBrush"] = new SolidColorBrush(isLight ? Color.FromRgb(0, 120, 212) : Color.FromRgb(56, 189, 248));
         // FluentWindow also changes its local background on theme updates.
         SetResourceReference(BackgroundProperty, "CanvasBrush");
@@ -1069,7 +1102,7 @@ public partial class MainWindow : FluentWindow
         var picture = _displays.IsPictureInPicture;
         if (!fullscreen) EnsureNativeCaptionButtons();
         var compact = fullscreen || picture;
-        var immersive = !compact && _viewModel.IsImmersiveMode;
+        var immersive = !compact && _viewModel.IsImmersiveMode && !_viewModel.ShowLiveCatalog;
         var hideChrome = compact || immersive;
         var sidebarCompact = ActualWidth < 1100;
         var collapseLiveCatalog = !hideChrome && _viewModel.ShowLiveCatalog && _liveChannelsCollapsed;
@@ -1083,7 +1116,7 @@ public partial class MainWindow : FluentWindow
         else if (_statusIsSticky) StatusBar.Visibility = Visibility.Visible;
         NowPlayingTitle.Visibility = compact || _viewModel.ShowLiveCatalog ? Visibility.Collapsed : Visibility.Visible;
         SidebarColumn.Width = new GridLength(hideChrome ? 0 : sidebarCompact ? 64 : 176);
-        CatalogColumn.MinWidth = hideChrome || collapseLiveCatalog ? 0 : _viewModel.ShowLiveCatalog ? 300 : 252;
+        CatalogColumn.MinWidth = hideChrome || collapseLiveCatalog ? 0 : _viewModel.ShowLiveCatalog ? (ActualWidth < 980 ? 276 : 300) : 252;
         CatalogColumn.MaxWidth = _viewModel.ShowLiveCatalog ? 340 : 520;
         TvLayout.ColumnDefinitions[1].Width = new GridLength(showCatalogSplitter ? 6 : 0);
         TvCatalogSplitter.Width = showCatalogSplitter ? 6 : 0;
@@ -1091,10 +1124,14 @@ public partial class MainWindow : FluentWindow
         TvCatalogSplitter.IsEnabled = showCatalogSplitter;
         var mediaDetails = (_viewModel.ShowMovieDetails || _viewModel.ShowSeriesDetails) && !immersive;
         var fullContinue = _viewModel.ShowContinueWatching && !_viewModel.ShowPlayerPane;
-        var liveCatalogWidth = ActualWidth < 980 ? 300 : 320;
+        var liveCatalogWidth = ActualWidth < 980 ? 276 : ActualWidth < 1440 ? 308 : 332;
         CatalogColumn.Width = new GridLength(hideChrome || collapseLiveCatalog ? 0 : fullContinue ? 1 : _viewModel.ShowLiveCatalog ? liveCatalogWidth : mediaDetails ? ActualWidth < 1050 ? 260 : 340 : ActualWidth < 1050 ? 252 : 284,
             fullContinue ? GridUnitType.Star : GridUnitType.Pixel);
         Workspace.Margin = new Thickness(hideChrome ? 0 : sidebarCompact ? 12 : 20, 0, 0, 0);
+        if (HomeHeroBanner is not null)
+        {
+            HomeHeroBanner.Height = ActualHeight < 700 ? 280 : ActualHeight < 840 ? 328 : 356;
+        }
 
 
 
@@ -1194,6 +1231,8 @@ public partial class MainWindow : FluentWindow
         _lastInteraction = DateTime.UtcNow;
         PlayerOverlay.Cursor = Cursors.Arrow;
         PlayerChrome.Visibility = PlayerControls.Visibility = Visibility.Visible;
+        if (PlayerBottomGradient is not null) PlayerBottomGradient.Opacity = 1;
+        if (LiveTopInfoOverlay is not null) LiveTopInfoOverlay.Opacity = 1;
         if (_displays.IsPictureInPicture) PipHeader.Visibility = Visibility.Visible;
     }
     private void Player_MouseMove(object sender, MouseEventArgs e) => RevealControls();
@@ -1243,6 +1282,8 @@ public partial class MainWindow : FluentWindow
         if (DateTime.UtcNow - _lastInteraction >= TimeSpan.FromSeconds(2.5))
         {
             PlayerChrome.Visibility = PlayerControls.Visibility = Visibility.Collapsed;
+            if (PlayerBottomGradient is not null) PlayerBottomGradient.Opacity = 0;
+            if (LiveTopInfoOverlay is not null) LiveTopInfoOverlay.Opacity = 0;
             PipHeader.Visibility = Visibility.Collapsed;
             PlayerOverlay.Cursor = isCursorInsidePlayer ? Cursors.None : Cursors.Arrow;
         }

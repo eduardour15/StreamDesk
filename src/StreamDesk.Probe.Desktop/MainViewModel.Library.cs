@@ -28,19 +28,79 @@ public sealed partial class MainViewModel
         : _hasImportedPlaylist ? _library.M3uFavorites : _snapshot?.FavoriteChannelIds ?? _library.Favorites;
     public IReadOnlySet<string> MediaMovieFavoriteIds => _library.MovieFavorites;
     public IReadOnlySet<string> MediaSeriesFavoriteIds => _library.SeriesFavorites;
-    public IReadOnlyList<XtreamChannel> FavoriteChannels => (_snapshot?.Channels ?? [])
-        .Where(channel => FavoriteChannelIds.Contains(channel.Id))
-        .OrderBy(channel => channel.Name, StringComparer.CurrentCultureIgnoreCase)
-        .ToArray();
-    public IReadOnlyList<XtreamChannel> HomeFavoriteChannels => (_snapshot?.Channels ?? [])
-        .Where(channel => FavoriteChannelIds.Contains(channel.Id)).Take(8).ToArray();
+    private object? _libCacheSnapshotRef, _libCacheLibraryRef, _libCacheMoviesRef, _libCacheSeriesRef, _libCacheFavIdsRef;
+    private int _libCacheFavIdsCount = -1;
+    private IReadOnlyList<XtreamChannel> _cachedFavoriteChannels = [];
+    private IReadOnlyList<XtreamChannel> _cachedHomeFavoriteChannels = [];
+    private IReadOnlyList<MediaItem> _cachedFavoriteMovies = [];
+    private IReadOnlyList<MediaItem> _cachedFavoriteSeries = [];
+    private XtreamChannel? _cachedLastChannel;
+
+    private void EnsureLibraryCaches()
+    {
+        var favIds = FavoriteChannelIds;
+        if (ReferenceEquals(_libCacheSnapshotRef, _snapshot) &&
+            ReferenceEquals(_libCacheLibraryRef, _library) &&
+            ReferenceEquals(_libCacheMoviesRef, _movies) &&
+            ReferenceEquals(_libCacheSeriesRef, _series) &&
+            ReferenceEquals(_libCacheFavIdsRef, favIds) &&
+            _libCacheFavIdsCount == favIds.Count)
+        {
+            return;
+        }
+        _libCacheSnapshotRef = _snapshot;
+        _libCacheLibraryRef = _library;
+        _libCacheMoviesRef = _movies;
+        _libCacheSeriesRef = _series;
+        _libCacheFavIdsRef = favIds;
+        _libCacheFavIdsCount = favIds.Count;
+
+        var channels = _snapshot?.Channels ?? [];
+        if (favIds.Count == 0 || channels.Count == 0)
+        {
+            _cachedFavoriteChannels = [];
+            _cachedHomeFavoriteChannels = [];
+        }
+        else
+        {
+            var favList = new List<XtreamChannel>(Math.Min(favIds.Count, channels.Count));
+            var homeFavs = new List<XtreamChannel>(8);
+            foreach (var ch in channels)
+            {
+                if (favIds.Contains(ch.Id))
+                {
+                    favList.Add(ch);
+                    if (homeFavs.Count < 8) homeFavs.Add(ch);
+                }
+            }
+            favList.Sort(static (a, b) => StringComparer.CurrentCultureIgnoreCase.Compare(a.Name, b.Name));
+            _cachedFavoriteChannels = favList;
+            _cachedHomeFavoriteChannels = homeFavs;
+        }
+
+        var movieItems = _movies?.Items ?? [];
+        var movieFavIds = _library.MovieFavorites;
+        _cachedFavoriteMovies = movieFavIds.Count == 0 || movieItems.Count == 0
+            ? []
+            : movieItems.Where(item => movieFavIds.Contains(item.Id)).ToArray();
+
+        var seriesItems = _series?.Items ?? [];
+        var seriesFavIds = _library.SeriesFavorites;
+        _cachedFavoriteSeries = seriesFavIds.Count == 0 || seriesItems.Count == 0
+            ? []
+            : seriesItems.Where(item => seriesFavIds.Contains(item.Id)).ToArray();
+
+        var lastId = _library.Recents.FirstOrDefault()?.ChannelId;
+        _cachedLastChannel = string.IsNullOrEmpty(lastId) || channels.Count == 0
+            ? null
+            : channels.FirstOrDefault(item => item.Id == lastId);
+    }
+
+    public IReadOnlyList<XtreamChannel> FavoriteChannels { get { EnsureLibraryCaches(); return _cachedFavoriteChannels; } }
+    public IReadOnlyList<XtreamChannel> HomeFavoriteChannels { get { EnsureLibraryCaches(); return _cachedHomeFavoriteChannels; } }
     public bool HasHomeFavoriteChannels => HomeFavoriteChannels.Count > 0;
-    public IReadOnlyList<MediaItem> FavoriteMovies => (_movies?.Items ?? [])
-        .Where(item => _library.MovieFavorites.Contains(item.Id))
-        .ToArray();
-    public IReadOnlyList<MediaItem> FavoriteSeries => (_series?.Items ?? [])
-        .Where(item => _library.SeriesFavorites.Contains(item.Id))
-        .ToArray();
+    public IReadOnlyList<MediaItem> FavoriteMovies { get { EnsureLibraryCaches(); return _cachedFavoriteMovies; } }
+    public IReadOnlyList<MediaItem> FavoriteSeries { get { EnsureLibraryCaches(); return _cachedFavoriteSeries; } }
     public IReadOnlyList<MediaItem> FavoriteMediaItems => SelectedFavoriteTab switch
     {
         2 => FavoriteMovies,
@@ -145,7 +205,7 @@ public sealed partial class MainViewModel
     public bool SelectedIsFavorite => SelectedChannel is not null && FavoriteChannelIds.Contains(SelectedChannel.Id);
     public string FavoriteAction => SelectedIsFavorite ? "★ Quitar favorito" : "☆ Favorito";
     public bool AutoPlayLast => _library.AutoPlayLast;
-    public XtreamChannel? LastChannel => _snapshot?.Channels.FirstOrDefault(item => item.Id == _library.Recents.FirstOrDefault()?.ChannelId);
+    public XtreamChannel? LastChannel { get { EnsureLibraryCaches(); return _cachedLastChannel; } }
     public bool HasLastChannel => LastChannel is not null;
     public string LastChannelLabel => LastChannel?.Name ?? "Elige tu primer canal en TV en vivo";
     public IReadOnlyList<XtreamCategory> FrequentCategories { get; private set; } = [];
@@ -198,7 +258,7 @@ public sealed partial class MainViewModel
             await _viewer!.SetFavoriteAsync(profileId, type, item.Id, add, _session.Token);
             if (version != _sessionVersion || _disposed) return;
             await LoadLibraryAsync(profileId, version, _session.Token);
-            await FilterMediaAsync();
+            if (ShowMediaCatalog && MediaFavoritesOnly) await FilterMediaAsync();
             if (version == _sessionVersion && !_disposed)
                 StatusMessage = add ? "Título guardado en favoritos." : "Título eliminado de favoritos.";
         }
@@ -269,7 +329,13 @@ public sealed partial class MainViewModel
         catch (Exception exception) { _logger.LogError("history_write", exception); if (!_disposed) StatusMessage = "La reproducción continúa, pero no se pudo guardar el reciente."; }
     }
 
-    private void NotifySelection() { OnPropertyChanged(nameof(SelectedIsFavorite)); OnPropertyChanged(nameof(FavoriteAction)); }
+    private void NotifySelection()
+    {
+        OnPropertyChanged(nameof(SelectedIsFavorite));
+        OnPropertyChanged(nameof(FavoriteAction));
+        OnPropertyChanged(nameof(PlayingChannelLogoUrl));
+        OnPropertyChanged(nameof(HasPlayingChannelLogo));
+    }
     private void NotifyLibrary()
     {
         OnPropertyChanged(nameof(FavoriteChannelIds)); OnPropertyChanged(nameof(MediaMovieFavoriteIds)); OnPropertyChanged(nameof(MediaSeriesFavoriteIds));

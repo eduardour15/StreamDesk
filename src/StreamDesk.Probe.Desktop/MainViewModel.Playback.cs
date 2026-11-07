@@ -26,17 +26,27 @@ public sealed partial class MainViewModel
     public string PlaybackStatus => _playback.Message + (_playback.UsingSoftware ? " · Modo compatible" : "") +
         (_playback.WillRetry && _playback.RetryCount is > 0 and <= 2 && _playback.Failure is PlaybackFailure.Network or PlaybackFailure.Timeout
             ? $" · Reintento {_playback.RetryCount}/2" : "");
-    public bool ShowPlaybackPlaceholder => !_playback.IsActive;
+    public bool ShowPlaybackPlaceholder => !_playback.IsActive && !IsVideoLoading;
     public bool HasPlaybackContext => _playback.IsActive || _watch is not null || _mediaWatch is not null;
-    public bool ShowPlayerChrome => HasPlaybackContext;
+    public bool ShowPlayerChrome => HasPlaybackContext && !IsPlaybackErrorState;
+    public bool IsPlaybackErrorState => _playback.State == PlaybackState.Failed && !_playback.WillRetry;
+    public bool IsNoSignalState => IsPlaybackErrorState && _playback.Failure is PlaybackFailure.NotFound or PlaybackFailure.Network or PlaybackFailure.Timeout;
+    public string? PlayingChannelLogoUrl => (_watch?.Channel ?? SelectedChannel)?.LogoUrl;
+    public bool HasPlayingChannelLogo => !string.IsNullOrWhiteSpace(PlayingChannelLogoUrl);
     public bool ShowPlayerEmptyState => CurrentTabIndex == 1 && !HasPlaybackContext;
-    public string PlayerEmptyMessage => ShowPlayerEmptyState
-        ? "Selecciona un canal"
-        : "Selecciona contenido para comenzar a reproducir";
-    public string PlayerEmptyDescription => ShowPlayerEmptyState
-        ? "Elige un canal de la lista para empezar a ver televisión."
-        : "Cuando elijas contenido, la reproducción aparecerá aquí.";
-    public bool ShowPlaybackCaption => !ShowPlaybackPlaceholder || _playback.State == PlaybackState.Failed || _playback.WillRetry;
+    public string PlayerEmptyMessage => IsNoSignalState
+        ? "Sin señal disponible"
+        : IsPlaybackErrorState
+            ? "No se pudo reproducir"
+            : ShowPlayerEmptyState
+                ? "Selecciona un canal"
+                : "Selecciona contenido para comenzar a reproducir";
+    public string PlayerEmptyDescription => IsPlaybackErrorState
+        ? _playback.Message
+        : ShowPlayerEmptyState
+            ? "Elige un canal de la lista para empezar a ver televisión."
+            : "Cuando elijas contenido, la reproducción aparecerá aquí.";
+    public bool ShowPlaybackCaption => _playback.UsingSoftware || _playback.WillRetry;
     public bool CanRetryPlayback => _playback.State == PlaybackState.Failed && !_playback.WillRetry;
     public bool IsPlaying => _playback.State == PlaybackState.Playing;
     public bool IsPaused => _playback.State == PlaybackState.Paused;
@@ -365,6 +375,11 @@ public sealed partial class MainViewModel
     {
         OnPropertyChanged(nameof(HasPlaybackContext));
         OnPropertyChanged(nameof(ShowPlayerChrome));
+        OnPropertyChanged(nameof(ShowPlaybackPlaceholder));
+        OnPropertyChanged(nameof(IsPlaybackErrorState));
+        OnPropertyChanged(nameof(IsNoSignalState));
+        OnPropertyChanged(nameof(PlayingChannelLogoUrl));
+        OnPropertyChanged(nameof(HasPlayingChannelLogo));
         OnPropertyChanged(nameof(ShowPlayerEmptyState));
         OnPropertyChanged(nameof(PlayerEmptyMessage));
         OnPropertyChanged(nameof(PlayerEmptyDescription));

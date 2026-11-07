@@ -14,14 +14,17 @@ public sealed class CatalogSearch
     public IReadOnlyList<XtreamChannel> Filter(string query, string? categoryId, bool favoritesOnly,
         IReadOnlySet<string>? favorites, CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         var key = Normalize(query);
-        var result = new List<XtreamChannel>();
+        var hasCategory = !string.IsNullOrEmpty(categoryId);
+        var hasQuery = key.Length > 0;
+        var result = new List<XtreamChannel>(!hasCategory && !favoritesOnly && !hasQuery ? _index.Length : Math.Min(_index.Length, 256));
         foreach (var entry in _index)
         {
             cancellationToken.ThrowIfCancellationRequested();
-            if (!string.IsNullOrEmpty(categoryId) && entry.Channel.CategoryId != categoryId) continue;
+            if (hasCategory && entry.Channel.CategoryId != categoryId) continue;
             if (favoritesOnly && favorites?.Contains(entry.Channel.Id) != true) continue;
-            if (entry.Key.Contains(key, StringComparison.Ordinal)) result.Add(entry.Channel);
+            if (!hasQuery || entry.Key.Contains(key, StringComparison.Ordinal)) result.Add(entry.Channel);
         }
         return result;
     }

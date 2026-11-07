@@ -6,8 +6,11 @@ public enum ContentKind { Movie, Series, Episode }
 public sealed record MediaItem(string Id, string Name, ContentKind Kind, string? CategoryId = null,
     string? Extension = null, string? PosterUrl = null, string? Plot = null, string? SeriesId = null, int Season = 0, int Episode = 0)
 {
+    private string? _releaseYear;
     public string StorageKey => Kind == ContentKind.Episode ? $"{SeriesId?.Length ?? 0}:{SeriesId}:{Season}:{Id}" : Id;
     public string Description => string.IsNullOrWhiteSpace(Plot) ? "Sin sinopsis disponible." : Plot;
+    public string ReleaseYear => _releaseYear ??= MediaMetadata.ExtractReleaseYear(Name);
+    public bool HasReleaseYear => ReleaseYear.Length > 0;
 }
 public sealed record MediaCatalog(IReadOnlyList<XtreamCategory> Categories, IReadOnlyList<MediaItem> Items, DateTimeOffset SyncedAt);
 public sealed record MediaProgress(MediaItem Item, long PositionMilliseconds, long DurationMilliseconds, DateTimeOffset UpdatedAt, bool Completed = false)
@@ -70,5 +73,12 @@ public static class MediaMetadata
         if (!Identifier(item.Id) || !Enum.IsDefined(item.Kind) || (item.Kind == ContentKind.Episode && !Identifier(item.SeriesId))) throw new ArgumentException("Identificador de contenido no válido.");
         return item with { Name = Text(item.Name, 512), Plot = Text(item.Plot), PosterUrl = SafeImage(item.PosterUrl) ? item.PosterUrl : null,
             Extension = SafeExtension(item.Extension) ? item.Extension : null };
+    }
+
+    public static string ExtractReleaseYear(string? title)
+    {
+        if (string.IsNullOrWhiteSpace(title)) return string.Empty;
+        var match = Regex.Match(title, @"(?:[\(\[\-\s])((?:19|20)\d{2})(?:[\)\]\s]|$)", RegexOptions.CultureInvariant, TimeSpan.FromMilliseconds(100));
+        return match.Success ? match.Groups[1].Value : string.Empty;
     }
 }

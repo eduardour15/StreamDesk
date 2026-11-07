@@ -129,10 +129,6 @@ public sealed partial class MainViewModel
                 else CatalogSummary = "Sin canales guardados. Pulsa Actualizar canales.";
                 await LoadLibraryAsync(profile?.Id, version, token);
                 await LoadContentCacheAsync(profile?.Id, version, token);
-                if (profile is not null && profile.ProviderType != "m3u")
-                {
-                    _ = AutoSyncCatalogAsync(false);
-                }
             }
             if (profile is not null && _viewer is not null && version == _sessionVersion)
                 await _viewer.SetLastProfileAsync(profile.Id, token);
@@ -255,7 +251,15 @@ public sealed partial class MainViewModel
         if (version != _sessionVersion || _disposed) return;
         _snapshot = snapshot; _search = index;
         Categories = new[] { new XtreamCategory("", "Todas las categorías") }.Concat(snapshot.Categories).ToArray();
+        var categoryMap = new Dictionary<string, string>(snapshot.Categories.Count, StringComparer.Ordinal);
+        foreach (var cat in snapshot.Categories)
+        {
+            if (!string.IsNullOrEmpty(cat.Id) && !categoryMap.ContainsKey(cat.Id))
+                categoryMap[cat.Id] = cat.Name;
+        }
+        CategoryNamesById = categoryMap;
         OnPropertyChanged(nameof(Categories));
+        OnPropertyChanged(nameof(CategoryNamesById));
         OnPropertyChanged(nameof(VisibleCategories));
         _selectedCategory = Categories.FirstOrDefault(item => item.Id == _selectedCategory?.Id) ?? Categories[0];
         OnPropertyChanged(nameof(SelectedCategory));
@@ -271,7 +275,9 @@ public sealed partial class MainViewModel
         _filter = filter;
         var index = _search; var snapshot = _snapshot; var version = _sessionVersion;
         var query = SearchText; var category = SelectedCategory?.Id; var favoritesOnly = FavoritesOnly; var recentsOnly = _recentsOnly;
-        var recentOrder = _library.Recents.Select((item, order) => (item.ChannelId, order)).ToDictionary(item => item.ChannelId, item => item.order);
+        var recentOrder = recentsOnly
+            ? _library.Recents.Select((item, order) => (item.ChannelId, order)).ToDictionary(item => item.ChannelId, item => item.order)
+            : null;
         try
         {
             if (debounce) await Task.Delay(120, filter.Token);
@@ -287,12 +293,19 @@ public sealed partial class MainViewModel
                     if (restrictedIds.Count > 0)
                         matches = matches.Where(item => item.CategoryId is null || !restrictedIds.Contains(item.CategoryId)).ToArray();
                 }
-                return recentsOnly ? matches.Where(item => recentOrder.ContainsKey(item.Id)).OrderBy(item => recentOrder[item.Id]).ToArray() : matches;
+                return recentsOnly && recentOrder is not null
+                    ? matches.Where(item => recentOrder.ContainsKey(item.Id)).OrderBy(item => recentOrder[item.Id]).ToArray()
+                    : matches;
             }, filter.Token);
             if (version != _sessionVersion || _disposed || !ReferenceEquals(_filter, filter)) return;
             var selectedId = SelectedChannel?.Id;
-            Channels = result;
-            OnPropertyChanged(nameof(Channels)); OnPropertyChanged(nameof(HasNoChannels)); OnPropertyChanged(nameof(ResultSummary)); OnPropertyChanged(nameof(EmptyMessage));
+            var sameSequence = Channels.Count > 0 && Channels.Count == result.Count && Channels.SequenceEqual(result);
+            if (!sameSequence)
+            {
+                Channels = result;
+                OnPropertyChanged(nameof(Channels));
+            }
+            OnPropertyChanged(nameof(HasNoChannels)); OnPropertyChanged(nameof(ResultSummary)); OnPropertyChanged(nameof(EmptyMessage));
             SelectedChannel = result.FirstOrDefault(item => item.Id == selectedId);
         }
         catch (OperationCanceledException) { }

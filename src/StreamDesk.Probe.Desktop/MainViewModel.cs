@@ -79,6 +79,7 @@ public sealed partial class MainViewModel : INotifyPropertyChanged, IDisposable,
 
     public event PropertyChangedEventHandler? PropertyChanged;
     public IReadOnlyList<XtreamCategory> Categories { get; private set; } = [];
+    public IReadOnlyDictionary<string, string> CategoryNamesById { get; private set; } = new Dictionary<string, string>(StringComparer.Ordinal);
     public IReadOnlyList<XtreamChannel> Channels { get; private set; } = [];
     public ObservableCollection<string> AvailableFormats { get; } = [];
     public bool HasMultipleFormats => AvailableFormats.Count > 1;
@@ -152,9 +153,9 @@ public sealed partial class MainViewModel : INotifyPropertyChanged, IDisposable,
                 OnPropertyChanged(nameof(SelectedProgress));
             }
             OnPropertyChanged(nameof(MediaCategories)); OnPropertyChanged(nameof(VisibleMediaCategories));
-            OnPropertyChanged(nameof(ShowMovieBrowse)); OnPropertyChanged(nameof(ShowMovieDetails)); OnPropertyChanged(nameof(ShowSeriesBrowse)); OnPropertyChanged(nameof(ShowSeriesDetails)); OnPropertyChanged(nameof(ShowMediaBrowse)); OnPropertyChanged(nameof(ShowPlayerPane)); OnPropertyChanged(nameof(IsEpisodePlayerFocus)); OnPropertyChanged(nameof(IsImmersiveMode)); OnPropertyChanged(nameof(ImmersiveReturnLabel)); OnPropertyChanged(nameof(CanPlayRandomEpisode));
+            OnPropertyChanged(nameof(ShowMovieBrowse)); OnPropertyChanged(nameof(ShowMovieDetails)); OnPropertyChanged(nameof(ShowSeriesBrowse)); OnPropertyChanged(nameof(ShowSeriesDetails)); OnPropertyChanged(nameof(ShowMediaBrowse)); OnPropertyChanged(nameof(ShowPlayerPane)); OnPropertyChanged(nameof(IsEpisodePlayerFocus)); OnPropertyChanged(nameof(IsImmersiveMode)); OnPropertyChanged(nameof(CanReturnFromMediaImmersive)); OnPropertyChanged(nameof(ImmersiveReturnLabel)); OnPropertyChanged(nameof(CanPlayRandomEpisode));
             OnPropertyChanged(nameof(HeaderSummary)); OnPropertyChanged(nameof(NowPlaying)); OnPropertyChanged(nameof(FooterStatus));
-            _ = FilterMediaAsync();
+            if (ShowMediaCatalog) _ = FilterMediaAsync();
         }
     }
 
@@ -357,8 +358,10 @@ public sealed partial class MainViewModel : INotifyPropertyChanged, IDisposable,
         _catalogOwnerId = null;
         _search = new CatalogSearch([]);
         Categories = [];
+        CategoryNamesById = new Dictionary<string, string>(StringComparer.Ordinal);
         Channels = [];
         OnPropertyChanged(nameof(Categories));
+        OnPropertyChanged(nameof(CategoryNamesById));
         OnPropertyChanged(nameof(VisibleCategories));
         OnPropertyChanged(nameof(Channels));
         OnPropertyChanged(nameof(HasNoChannels));

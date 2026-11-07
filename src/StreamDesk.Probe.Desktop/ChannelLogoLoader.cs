@@ -63,6 +63,20 @@ public sealed class ChannelLogoLoader(HttpClient client, TimeProvider? clock = n
         return GetAsync(url, 64, 64, cancellationToken);
     }
 
+    public bool TryGetCached(string? url, int decodeWidth, int decodeHeight, out BitmapSource? image)
+    {
+        image = null;
+        var width = Math.Clamp(decodeWidth <= 0 ? 64 : decodeWidth, 16, 480);
+        var height = Math.Clamp(decodeHeight <= 0 ? 64 : decodeHeight, 16, 720);
+        if (!IsSafeImageUrl(url, out _)) return false;
+        var key = $"{width}x{height}:{url}";
+        lock (_sync)
+        {
+            if (_disposed) return false;
+            return TryGet(key, out image);
+        }
+    }
+
     public async Task<BitmapSource?> GetAsync(string? url, int decodeWidth, int decodeHeight,
         CancellationToken cancellationToken)
     {

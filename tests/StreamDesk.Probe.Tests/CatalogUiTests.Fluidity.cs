@@ -14,6 +14,7 @@ public sealed partial class CatalogUiTests
     private static async Task VerifyFluidityAsync(string directory, StreamDesk.Probe.Desktop.ChannelLogoLoader logos)
     {
         await VerifyFluidityStatesAsync(directory, logos);
+        await VerifyRedesignAndPerformanceAsync(directory, logos);
         var measurements = new List<object>();
         foreach (var count in new[] { 5000, 20000 })
         {
@@ -150,6 +151,199 @@ public sealed partial class CatalogUiTests
             categorySearch.RaiseEvent(new System.Windows.Input.KeyEventArgs(System.Windows.Input.Keyboard.PrimaryDevice,
                 PresentationSource.FromVisual(window), 0, System.Windows.Input.Key.Escape) { RoutedEvent = System.Windows.Input.Keyboard.PreviewKeyDownEvent });
             Assert.False(combo.IsDropDownOpen);
+        }
+        finally { window.Close(); await WaitAsync(() => !window.IsVisible); }
+    }
+
+    private static async Task VerifyRedesignAndPerformanceAsync(string directory, StreamDesk.Probe.Desktop.ChannelLogoLoader logos)
+    {
+        using var db = new TestDatabase();
+        await db.AddProfileAsync("first");
+        var snapshot = CatalogFixtures.Create(500);
+        await db.Store.ReplaceAsync("first", snapshot);
+        db.Execute("INSERT INTO Favorites VALUES('first','live','000001','2026-10-17T12:00:00Z'); INSERT INTO Favorites VALUES('first','live','000002','2026-10-17T12:00:00Z'); INSERT INTO Favorites VALUES('first','live','000003','2026-10-17T12:00:00Z');");
+        db.Execute("INSERT INTO PlaybackHistory VALUES('first','live','000002','2026-10-17T12:05:00Z');");
+
+        var contentStore = new StreamDesk.Probe.Infrastructure.SqliteContentStore(db.PathName, false);
+        var movies = Enumerable.Range(1, 24).Select(i => new MediaItem(
+            $"m-{i}",
+            $"Horizonte Galáctico ({2020 + (i % 6)}) #{i}",
+            ContentKind.Movie,
+            "fiction",
+            "mp4",
+            Plot: "Una expedición interestelar descubre una señal ancestral en los confines del sistema exterior mientras la tripulación lucha por regresar.")).ToArray();
+        var series = Enumerable.Range(1, 24).Select(i => new MediaItem(
+            $"s-{i}",
+            $"Crónicas del Norte ({2019 + (i % 6)}) #{i}",
+            ContentKind.Series,
+            "fiction",
+            Plot: "Drama de misterio ambientado en una estación polar aislada durante el invierno ártico.")).ToArray();
+        await contentStore.SaveCatalogAsync("first", ContentKind.Movie, "", new MediaCatalog([new("fiction", "Ciencia Ficción")], movies, DateTimeOffset.UtcNow));
+        await contentStore.SaveCatalogAsync("first", ContentKind.Series, "", new MediaCatalog([new("fiction", "Drama")], series, DateTimeOffset.UtcNow));
+        await contentStore.SaveProgressAsync("first", new MediaProgress(movies[0], 3600_000, 7200_000, DateTimeOffset.UtcNow));
+        await contentStore.SaveProgressAsync("first", new MediaProgress(new MediaItem("ep-104", "Crónicas del Norte", ContentKind.Episode, "1", "mp4", SeriesId: "s-1", Season: 1, Episode: 4), 1500_000, 3000_000, DateTimeOffset.UtcNow.AddMinutes(-5)));
+
+        var credentials = new FixtureCredentials();
+        var backend = new ControlledBackend();
+        var viewerStore = new StreamDesk.Probe.Infrastructure.SqliteViewerStore(db.PathName, false);
+        var startupSw = Stopwatch.StartNew();
+        var vm = new StreamDesk.Probe.Desktop.MainViewModel(
+            (_, _, _) => new LargeMediaProvider(500),
+            new PlaybackService(backend),
+            new ProfileService(db.Settings, credentials),
+            new FixtureLogger(),
+            new CatalogService(db.Store),
+            credentials,
+            viewerStore,
+            contentStore,
+            settings: db.Settings);
+        var window = new StreamDesk.Probe.Desktop.MainWindow(vm, logos)
+        {
+            Left = -20000, Top = -20000, ShowActivated = false, ShowInTaskbar = false, Width = 1366, Height = 768
+        };
+        try
+        {
+            window.Show();
+            await WaitAsync(() => vm.Channels.Count == 500 && vm.HasMovies && vm.HasSeries && !vm.IsWorking);
+            startupSw.Stop();
+
+            void SaveShot(string fileName)
+            {
+                var w = (int)window.ActualWidth;
+                var h = (int)window.ActualHeight;
+                var rootVisual = (Visual)window.Content;
+                var bmp = new System.Windows.Media.Imaging.RenderTargetBitmap(w, h, 96, 96, PixelFormats.Pbgra32);
+                bmp.Render(rootVisual);
+                if (window.FindName("VideoSurface") is FrameworkElement videoSurface &&
+                    videoSurface.IsVisible &&
+                    videoSurface.ActualWidth > 0 &&
+                    videoSurface.ActualHeight > 0 &&
+                    window.FindName("PlayerOverlay") is FrameworkElement overlay)
+                {
+                    var bounds = videoSurface.TransformToAncestor(rootVisual).TransformBounds(new Rect(videoSurface.RenderSize));
+                    overlay.Measure(bounds.Size);
+                    overlay.Arrange(new Rect(bounds.Size));
+                    overlay.UpdateLayout();
+                    var overlayBmp = new System.Windows.Media.Imaging.RenderTargetBitmap(Math.Max(1, (int)bounds.Width), Math.Max(1, (int)bounds.Height), 96, 96, PixelFormats.Pbgra32);
+                    overlayBmp.Render(overlay);
+                    var dv = new DrawingVisual();
+                    using (var dc = dv.RenderOpen())
+                    {
+                        dc.DrawImage(bmp, new Rect(0, 0, w, h));
+                        dc.DrawImage(overlayBmp, bounds);
+                    }
+                    var combined = new System.Windows.Media.Imaging.RenderTargetBitmap(w, h, 96, 96, PixelFormats.Pbgra32);
+                    combined.Render(dv);
+                    bmp = combined;
+                }
+                var enc = new System.Windows.Media.Imaging.PngBitmapEncoder();
+                enc.Frames.Add(System.Windows.Media.Imaging.BitmapFrame.Create(bmp));
+                using var stream = File.Create(Path.Combine(directory, fileName));
+                enc.Save(stream);
+            }
+
+            // 1. Verify Home (Inicio) structure & data
+            vm.CurrentTabIndex = 0;
+            await SettleAsync(window);
+            Assert.True(vm.HasHomeFeatured);
+            Assert.True(vm.HasHomeFeaturedYear);
+            Assert.Equal("2021", vm.HomeFeaturedYear);
+            Assert.True(vm.ShowHomeResumeChannel);
+            Assert.Contains("Último canal:", vm.HomeResumeChannelLabel);
+            Assert.True(vm.HasContinueWatching);
+            Assert.True(((FrameworkElement)window.FindName("HomeContinueScroll")).IsVisible);
+            Assert.True(vm.HasHomeFavoriteChannels);
+            Assert.True(vm.HasHomeMovies);
+            Assert.True(vm.HasHomeSeries);
+            Assert.True(vm.MediaProgressMap.ContainsKey(movies[0].StorageKey));
+
+            // Measure cached property reads on Home (1,000 iterations)
+            var cacheAllocStart = GC.GetTotalAllocatedBytes(true);
+            var cacheSw = Stopwatch.StartNew();
+            for (var i = 0; i < 1000; i++)
+            {
+                _ = vm.HomeMovies;
+                _ = vm.HomeSeries;
+                _ = vm.HomeContinueWatching;
+                _ = vm.HomeFavoriteChannels;
+                _ = vm.HomeFeaturedMedia;
+                _ = vm.MediaProgressMap;
+            }
+            cacheSw.Stop();
+            var cacheAllocatedBytes = GC.GetTotalAllocatedBytes(true) - cacheAllocStart;
+            Assert.True(cacheSw.Elapsed.TotalMilliseconds < 25, $"Cached Home property reads took {cacheSw.Elapsed.TotalMilliseconds:F2}ms");
+
+            // Capture Home at 1366x768, 1600x900, 1920x1080
+            foreach (var (w, h) in new[] { (1366, 768), (1600, 900), (1920, 1080) })
+            {
+                window.Width = w; window.Height = h;
+                await SettleAsync(window);
+                SaveShot($"redesign-home-{w}x{h}.png");
+            }
+
+            // 2. Verify Live TV (TV en vivo) idle state, channel list permanence, favorite stability, and playback states
+            var navSw = Stopwatch.StartNew();
+            vm.CurrentTabIndex = 1;
+            await SettleAsync(window);
+            navSw.Stop();
+
+            window.Width = 1366; window.Height = 768;
+            await SettleAsync(window);
+            var catalogPane = (FrameworkElement)window.FindName("CatalogPane");
+            var playerChrome = (FrameworkElement)window.FindName("PlayerChrome");
+            Assert.Equal(Visibility.Visible, catalogPane.Visibility);
+            Assert.Equal("Selecciona un canal", vm.PlayerEmptyMessage);
+            Assert.Equal(0, playerChrome.Opacity);
+            SaveShot("redesign-livetv-idle-1366x768.png");
+
+            // Verify favorite toggle does NOT replace Channels list reference or change SelectedChannel
+            var channelsRefBefore = vm.Channels;
+            vm.SelectedChannel = vm.Channels[0];
+            await vm.ToggleFavoriteAsync(vm.Channels[5]);
+            Assert.Same(channelsRefBefore, vm.Channels);
+            Assert.Equal(vm.Channels[0].Id, vm.SelectedChannel?.Id);
+
+            // Verify playing a channel keeps CatalogPane visible and does NOT replace Channels list reference
+            var zappingSw = Stopwatch.StartNew();
+            await vm.PlaySelectedAsync();
+            backend.Emit(new(backend.Opens.Last().Id, PlaybackSignalKind.Playing));
+            await WaitAsync(() => vm.IsPlaying);
+            await SettleAsync(window);
+            zappingSw.Stop();
+
+            Assert.Equal(Visibility.Visible, catalogPane.Visibility);
+            Assert.Same(channelsRefBefore, vm.Channels);
+            Assert.True(vm.IsLivePlayback);
+            Assert.Equal(1, playerChrome.Opacity);
+
+            foreach (var (w, h) in new[] { (1366, 768), (1600, 900), (1920, 1080) })
+            {
+                window.Width = w; window.Height = h;
+                await SettleAsync(window);
+                Assert.Equal(Visibility.Visible, catalogPane.Visibility);
+                SaveShot($"redesign-livetv-playing-{w}x{h}.png");
+            }
+
+            // Verify No Signal / Error state with Retry button
+            backend.Emit(new(backend.Opens.Last().Id, PlaybackSignalKind.Failed, PlaybackFailure.NotFound));
+            await WaitAsync(() => vm.CanRetryPlayback && vm.IsNoSignalState);
+            await SettleAsync(window);
+            Assert.Equal("Sin señal disponible", vm.PlayerEmptyMessage);
+            Assert.True(vm.ShowPlaybackPlaceholder);
+            SaveShot("redesign-livetv-error-1920x1080.png");
+
+            await File.WriteAllTextAsync(Path.Combine(directory, "redesign-performance-evidence.json"), JsonSerializer.Serialize(new
+            {
+                TimestampUtc = DateTimeOffset.UtcNow,
+                StartupAndCacheHydrationMs = Math.Round(startupSw.Elapsed.TotalMilliseconds, 2),
+                HomeToLiveTvNavigationMs = Math.Round(navSw.Elapsed.TotalMilliseconds, 2),
+                HomeCachedReads1000IterationsMs = Math.Round(cacheSw.Elapsed.TotalMilliseconds, 3),
+                HomeCachedReadsAllocatedBytes = cacheAllocatedBytes,
+                ChannelPlayAndLayoutSettleMs = Math.Round(zappingSw.Elapsed.TotalMilliseconds, 2),
+                ChannelsReferencePreservedOnFavoriteAndPlay = true,
+                LiveTvCatalogVisibleDuringPlayback = true,
+                ResolutionsVerified = new[] { "1366x768", "1600x900", "1920x1080" }
+            }, new JsonSerializerOptions { WriteIndented = true }));
         }
         finally { window.Close(); await WaitAsync(() => !window.IsVisible); }
     }

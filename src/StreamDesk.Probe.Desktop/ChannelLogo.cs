@@ -22,8 +22,19 @@ public sealed class ChannelLogo : Image
     private static void Changed(DependencyObject sender, DependencyPropertyChangedEventArgs e) => ((ChannelLogo)sender).Reload();
     private async void Reload()
     {
-        _load?.Cancel(); Source = null;
-        if (!IsLoaded || Loader is null || string.IsNullOrEmpty(Url)) return;
+        _load?.Cancel();
+        _load = null;
+        if (!IsLoaded || Loader is null || string.IsNullOrEmpty(Url))
+        {
+            Source = null;
+            return;
+        }
+        if (Loader.TryGetCached(Url, DecodeWidth, DecodeHeight, out var cached))
+        {
+            Source = cached;
+            return;
+        }
+        Source = null;
         using var load = new CancellationTokenSource(); _load = load;
         try
         {

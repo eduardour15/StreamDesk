@@ -41,6 +41,7 @@ public sealed partial class MainViewModel
             if (SetProperty(ref _isImmersiveMode, value))
             {
                 OnPropertyChanged(nameof(IsEpisodePlayerFocus));
+                OnPropertyChanged(nameof(CanReturnFromMediaImmersive));
                 OnPropertyChanged(nameof(ImmersiveReturnLabel));
                 OnPropertyChanged(nameof(ShowPlayerPane));
                 OnPropertyChanged(nameof(ShowSeriesDetails));
@@ -48,6 +49,7 @@ public sealed partial class MainViewModel
             }
         }
     }
+    public bool CanReturnFromMediaImmersive => IsImmersiveMode && !ShowLiveCatalog;
     public bool IsEpisodePlayerFocus
     {
         get => IsImmersiveMode && ShowSeriesDetails;
@@ -75,25 +77,113 @@ public sealed partial class MainViewModel
     private IReadOnlyList<MediaItem> GetPlayableEpisodes() => (_episodes?.Items ?? []).Where(IsPlayableEpisode).ToArray();
     public bool ShowMediaBrowse => ShowMovieBrowse || ShowSeriesBrowse;
     public bool ShowPlayerPane => (!ShowMediaBrowse || IsImmersiveMode) && (!ShowContinueWatching || _playback.IsActive || _mediaWatch is not null);
+    private object? _contentCacheMoviesRef, _contentCacheSeriesRef, _contentCacheProgressRef;
+    private IReadOnlyList<MediaProgress> _cachedContinueWatching = [];
+    private IReadOnlyList<MediaProgress> _cachedHomeContinueWatching = [];
+    private IReadOnlyList<MediaItem> _cachedHomeMovies = [];
+    private IReadOnlyList<MediaItem> _cachedHomeSeries = [];
+    private MediaItem? _cachedHomeFeaturedMedia;
+    private MediaProgress? _cachedHomeFeaturedProgress;
+    private IReadOnlyDictionary<string, double> _cachedMediaProgressMap = new Dictionary<string, double>(StringComparer.Ordinal);
+
+    private void EnsureContentCaches()
+    {
+        if (ReferenceEquals(_contentCacheMoviesRef, _movies) &&
+            ReferenceEquals(_contentCacheSeriesRef, _series) &&
+            ReferenceEquals(_contentCacheProgressRef, _progress))
+        {
+            return;
+        }
+        _contentCacheMoviesRef = _movies;
+        _contentCacheSeriesRef = _series;
+        _contentCacheProgressRef = _progress;
+
+        var activeProgress = new List<MediaProgress>();
+        var progressMap = new Dictionary<string, double>(StringComparer.Ordinal);
+        foreach (var entry in _progress)
+        {
+            if (!entry.Completed && entry.PositionMilliseconds > 0)
+            {
+                activeProgress.Add(entry);
+                var fraction = entry.DurationMilliseconds > 0
+                    ? Math.Clamp((double)entry.PositionMilliseconds / entry.DurationMilliseconds, 0.04, 0.98)
+                    : 0.25;
+                progressMap[entry.Item.StorageKey] = fraction;
+                if (entry.Item.Kind == ContentKind.Episode && !string.IsNullOrEmpty(entry.Item.SeriesId))
+                    progressMap[entry.Item.SeriesId] = fraction;
+            }
+        }
+        _cachedContinueWatching = activeProgress;
+        _cachedHomeContinueWatching = activeProgress.Count <= 8 ? activeProgress : activeProgress.Take(8).ToArray();
+        _cachedMediaProgressMap = progressMap;
+
+        var movies = _movies?.Items ?? [];
+        if (movies.Count == 0)
+        {
+            _cachedHomeMovies = [];
+        }
+        else
+        {
+            var homeMovies = new List<MediaItem>(HomeCarouselLimit);
+            var seenMovies = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var item in movies)
+            {
+                if (item.Kind == ContentKind.Movie && seenMovies.Add(item.Id))
+                {
+                    homeMovies.Add(item);
+                    if (homeMovies.Count >= HomeCarouselLimit) break;
+                }
+            }
+            _cachedHomeMovies = homeMovies;
+        }
+
+        var series = _series?.Items ?? [];
+        if (series.Count == 0)
+        {
+            _cachedHomeSeries = [];
+        }
+        else
+        {
+            var homeSeries = new List<MediaItem>(HomeCarouselLimit);
+            var seenSeries = new HashSet<string>(StringComparer.Ordinal);
+            foreach (var item in series)
+            {
+                if (item.Kind == ContentKind.Series && seenSeries.Add(item.Id))
+                {
+                    homeSeries.Add(item);
+                    if (homeSeries.Count >= HomeCarouselLimit) break;
+                }
+            }
+            _cachedHomeSeries = homeSeries;
+        }
+
+        _cachedHomeFeaturedMedia = activeProgress.FirstOrDefault()?.Item
+            ?? movies.FirstOrDefault(item => item.Kind == ContentKind.Movie && !string.IsNullOrWhiteSpace(item.PosterUrl))
+            ?? series.FirstOrDefault(item => item.Kind == ContentKind.Series && !string.IsNullOrWhiteSpace(item.PosterUrl))
+            ?? movies.FirstOrDefault(item => item.Kind == ContentKind.Movie)
+            ?? series.FirstOrDefault(item => item.Kind == ContentKind.Series);
+
+        _cachedHomeFeaturedProgress = _cachedHomeFeaturedMedia is { } featured
+            ? activeProgress.FirstOrDefault(p => p.Item.Kind == featured.Kind && p.Item.StorageKey == featured.StorageKey)
+            : null;
+    }
+
     public bool ShowContinueWatching => CurrentTabIndex == 7;
     public bool HasContinueWatching => ContinueWatching.Count > 0;
-    public IReadOnlyList<MediaProgress> HomeContinueWatching => ContinueWatching.Take(8).ToArray();
-    public IReadOnlyList<MediaItem> HomeMovies => (_movies?.Items ?? [])
-        .Where(item => item.Kind == ContentKind.Movie).DistinctBy(item => item.Id).Take(HomeCarouselLimit).ToArray();
-    public IReadOnlyList<MediaItem> HomeSeries => (_series?.Items ?? [])
-        .Where(item => item.Kind == ContentKind.Series).DistinctBy(item => item.Id).Take(HomeCarouselLimit).ToArray();
+    public IReadOnlyList<MediaProgress> HomeContinueWatching { get { EnsureContentCaches(); return _cachedHomeContinueWatching; } }
+    public IReadOnlyList<MediaItem> HomeMovies { get { EnsureContentCaches(); return _cachedHomeMovies; } }
+    public IReadOnlyList<MediaItem> HomeSeries { get { EnsureContentCaches(); return _cachedHomeSeries; } }
+    public IReadOnlyDictionary<string, double> MediaProgressMap { get { EnsureContentCaches(); return _cachedMediaProgressMap; } }
     public bool HasHomeMovies => HomeMovies.Count > 0;
     public bool HasHomeSeries => HomeSeries.Count > 0;
     public bool HomeCatalogSkeletonVisible => IsCatalogSyncing && !HasHomeMovies && !HasHomeSeries;
-    public MediaItem? HomeFeaturedMedia => ContinueWatching.FirstOrDefault()?.Item
-        ?? _movies?.Items.FirstOrDefault(item => item.Kind == ContentKind.Movie && !string.IsNullOrWhiteSpace(item.PosterUrl))
-        ?? _series?.Items.FirstOrDefault(item => item.Kind == ContentKind.Series && !string.IsNullOrWhiteSpace(item.PosterUrl))
-        ?? _movies?.Items.FirstOrDefault(item => item.Kind == ContentKind.Movie)
-        ?? _series?.Items.FirstOrDefault(item => item.Kind == ContentKind.Series);
-    public MediaProgress? HomeFeaturedProgress => HomeFeaturedMedia is { } item
-        ? ContinueWatching.FirstOrDefault(progress => progress.Item.Kind == item.Kind && progress.Item.StorageKey == item.StorageKey)
-        : null;
+    public MediaItem? HomeFeaturedMedia { get { EnsureContentCaches(); return _cachedHomeFeaturedMedia; } }
+    public MediaProgress? HomeFeaturedProgress { get { EnsureContentCaches(); return _cachedHomeFeaturedProgress; } }
     public XtreamChannel? HomeFeaturedChannel => HomeFeaturedMedia is null ? LastChannel : null;
+    public bool ShowHomeResumeChannel => HasLastChannel && HomeFeaturedChannel is null;
+    public string HomeResumeChannelLabel => LastChannel is { } ch ? $"Último canal: {ch.Name}" : string.Empty;
+    public string HomeFeaturedYear => HomeFeaturedMedia?.ReleaseYear ?? string.Empty;
+    public bool HasHomeFeaturedYear => HomeFeaturedYear.Length > 0;
     public bool HasHomeFeatured => HomeFeaturedMedia is not null || HomeFeaturedChannel is not null;
     public bool HasHomeFeaturedDescription => !string.IsNullOrWhiteSpace(HomeFeaturedDescription);
     public bool HasHomeFeaturedArt => !string.IsNullOrWhiteSpace(HomeFeaturedPosterUrl);
@@ -265,7 +355,7 @@ public sealed partial class MainViewModel
     }
     public IReadOnlyList<XtreamCategory> Seasons => _episodes?.Categories ?? [];
     public IReadOnlyList<MediaItem> Episodes => (_episodes?.Items ?? []).Where(item => Season is null || item.CategoryId == Season.Id).ToArray();
-    public IReadOnlyList<MediaProgress> ContinueWatching => _progress.Where(item => !item.Completed && item.PositionMilliseconds > 0).ToArray();
+    public IReadOnlyList<MediaProgress> ContinueWatching { get { EnsureContentCaches(); return _cachedContinueWatching; } }
     public MediaProgress? SelectedProgress { get; set; }
     public MediaItem? SelectedMedia
     {
@@ -275,7 +365,7 @@ public sealed partial class MainViewModel
             if (!SetProperty(ref _selectedMedia, value)) return;
             _selectedDetails = null; _isImmersiveMode = false; _randomCyclePlayedKeys.Clear();
             if (value is null && ShowMediaCatalog) ContentStatus = $"Películas: {_movies?.Items.Count ?? 0} · Series: {_series?.Items.Count ?? 0}";
-            foreach (var name in new[] { nameof(MediaDescription), nameof(MediaPosterUrl), nameof(MediaCategoryLabel), nameof(SeriesSummary), nameof(ShowMovieBrowse), nameof(ShowMovieDetails), nameof(ShowSeriesBrowse), nameof(ShowSeriesDetails), nameof(ShowMediaBrowse), nameof(ShowPlayerPane), nameof(ShowCatalogSplitter), nameof(NowPlaying), nameof(IsEpisodePlayerFocus), nameof(IsImmersiveMode), nameof(ImmersiveReturnLabel), nameof(CanPlayRandomEpisode) }) OnPropertyChanged(name);
+            foreach (var name in new[] { nameof(MediaDescription), nameof(MediaPosterUrl), nameof(MediaCategoryLabel), nameof(SeriesSummary), nameof(ShowMovieBrowse), nameof(ShowMovieDetails), nameof(ShowSeriesBrowse), nameof(ShowSeriesDetails), nameof(ShowMediaBrowse), nameof(ShowPlayerPane), nameof(ShowCatalogSplitter), nameof(NowPlaying), nameof(IsEpisodePlayerFocus), nameof(IsImmersiveMode), nameof(CanReturnFromMediaImmersive), nameof(ImmersiveReturnLabel), nameof(CanPlayRandomEpisode) }) OnPropertyChanged(name);
             _detailTask = LoadMediaDetailsAsync(value);
         }
     }
@@ -343,7 +433,15 @@ public sealed partial class MainViewModel
     public async Task<bool> AutoSyncCatalogAsync(bool force = false)
     {
         if (_disposed || ActiveProfile is null || ActiveProfile.ProviderType == "m3u" || !CanConnect) return false;
-        if (!_syncGate.Wait(0)) return false;
+        if (force)
+        {
+            try { await _syncGate.WaitAsync(_shutdown.Token); }
+            catch (OperationCanceledException) { return false; }
+        }
+        else if (!_syncGate.Wait(0))
+        {
+            return false;
+        }
         var version = _sessionVersion;
         CancellationTokenSource? operation = null;
         try
@@ -359,7 +457,7 @@ public sealed partial class MainViewModel
 
             IsCatalogSyncing = true;
             CatalogSyncStatus = "Sincronizando catálogo en segundo plano…";
-            ContentBusy = true;
+            ContentBusy = force || (!HasMovies && !HasSeries);
 
             if (_client is null) await ConnectProfileAsync();
             if (version != _sessionVersion || _disposed) return false;
@@ -777,7 +875,7 @@ public sealed partial class MainViewModel
     private void NotifyContent()
     {
         SelectedProgress ??= ContinueWatching.FirstOrDefault();
-        foreach (var name in new[] { nameof(HasMovies), nameof(HasSeries), nameof(HasNoMediaItems), nameof(MediaCategories), nameof(VisibleMediaCategories), nameof(MediaCategoryLabel), nameof(ContinueWatching), nameof(SelectedProgress), nameof(FavoriteMovies), nameof(FavoriteSeries), nameof(FavoriteMediaItems), nameof(HasResolvedFavoriteContent), nameof(UnresolvedFavoriteCount), nameof(HasMissingFavoriteContent), nameof(HasMissingFavoriteMedia), nameof(ShowFavoriteMediaGroup), nameof(HasResolvedSelectedFavoriteContent), nameof(HasMissingSelectedFavoriteContent), nameof(FavoriteEmptyTitle), nameof(FavoriteEmptyDescription) }) OnPropertyChanged(name);
+        foreach (var name in new[] { nameof(HasMovies), nameof(HasSeries), nameof(HasNoMediaItems), nameof(MediaCategories), nameof(VisibleMediaCategories), nameof(MediaCategoryLabel), nameof(ContinueWatching), nameof(HasContinueWatching), nameof(SelectedProgress), nameof(FavoriteMovies), nameof(FavoriteSeries), nameof(FavoriteMediaItems), nameof(HasResolvedFavoriteContent), nameof(UnresolvedFavoriteCount), nameof(HasMissingFavoriteContent), nameof(HasMissingFavoriteMedia), nameof(ShowFavoriteMediaGroup), nameof(HasResolvedSelectedFavoriteContent), nameof(HasMissingSelectedFavoriteContent), nameof(FavoriteEmptyTitle), nameof(FavoriteEmptyDescription) }) OnPropertyChanged(name);
         NotifyHomeContent();
         NotifyFavoriteMediaPaging();
     }
@@ -785,10 +883,11 @@ public sealed partial class MainViewModel
     {
         foreach (var name in new[]
         {
-            nameof(HomeContinueWatching), nameof(HomeMovies), nameof(HomeSeries), nameof(HasHomeMovies), nameof(HasHomeSeries),
+            nameof(HasContinueWatching), nameof(HomeContinueWatching), nameof(HomeMovies), nameof(HomeSeries), nameof(MediaProgressMap), nameof(HasHomeMovies), nameof(HasHomeSeries),
             nameof(HomeCatalogSkeletonVisible),
             nameof(HomeFavoriteChannels),
             nameof(HomeFeaturedMedia), nameof(HomeFeaturedProgress), nameof(HomeFeaturedChannel), nameof(HasHomeFeatured),
+            nameof(ShowHomeResumeChannel), nameof(HomeResumeChannelLabel), nameof(HomeFeaturedYear), nameof(HasHomeFeaturedYear),
             nameof(HasHomeFeaturedDescription), nameof(HasHomeFeaturedArt), nameof(HomeFeaturedTitle), nameof(HomeFeaturedDescription),
             nameof(HomeFeaturedPosterUrl), nameof(HomeFeaturedTypeLabel), nameof(HomeFeaturedActionLabel), nameof(CanShowHomeFeaturedDetails),
             nameof(HomeEmptyDescription)
@@ -802,7 +901,7 @@ public sealed partial class MainViewModel
         MediaItems = []; _mediaPageIndex = 0; _mediaDetails = MediaPlaybackDetails.Empty;
         ContentStatus = "Explora películas y series de tu cuenta."; EpgStatus = "Selecciona un canal para ver la programación.";
         NotifyContent(); NotifyMediaDetails(); OnPropertyChanged(nameof(MediaItems)); NotifyMediaPaging(); OnPropertyChanged(nameof(HasNoMediaItems)); OnPropertyChanged(nameof(SelectedMedia)); OnPropertyChanged(nameof(MediaDescription)); OnPropertyChanged(nameof(MediaPosterUrl)); OnPropertyChanged(nameof(MediaCategoryLabel)); OnPropertyChanged(nameof(SeriesSummary)); OnPropertyChanged(nameof(Seasons)); OnPropertyChanged(nameof(Episodes));
-        OnPropertyChanged(nameof(ShowMovieBrowse)); OnPropertyChanged(nameof(ShowMovieDetails)); OnPropertyChanged(nameof(ShowSeriesBrowse)); OnPropertyChanged(nameof(ShowSeriesDetails)); OnPropertyChanged(nameof(ShowMediaBrowse)); OnPropertyChanged(nameof(ShowPlayerPane)); OnPropertyChanged(nameof(NowPlaying)); OnPropertyChanged(nameof(IsEpisodePlayerFocus)); OnPropertyChanged(nameof(IsImmersiveMode)); OnPropertyChanged(nameof(ImmersiveReturnLabel)); OnPropertyChanged(nameof(CanPlayRandomEpisode));
+        OnPropertyChanged(nameof(ShowMovieBrowse)); OnPropertyChanged(nameof(ShowMovieDetails)); OnPropertyChanged(nameof(ShowSeriesBrowse)); OnPropertyChanged(nameof(ShowSeriesDetails)); OnPropertyChanged(nameof(ShowMediaBrowse)); OnPropertyChanged(nameof(ShowPlayerPane)); OnPropertyChanged(nameof(NowPlaying)); OnPropertyChanged(nameof(IsEpisodePlayerFocus)); OnPropertyChanged(nameof(IsImmersiveMode)); OnPropertyChanged(nameof(CanReturnFromMediaImmersive)); OnPropertyChanged(nameof(ImmersiveReturnLabel)); OnPropertyChanged(nameof(CanPlayRandomEpisode));
         _epgPrograms = []; UpdateEpgLabels();
     }
     private sealed class MediaWatch(MediaItem item, string? profileId, int version, long afterSequence)

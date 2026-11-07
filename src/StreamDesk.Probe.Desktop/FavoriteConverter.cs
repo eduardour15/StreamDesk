@@ -92,3 +92,60 @@ public sealed class InverseBooleanToVisibilityConverter : IValueConverter
     public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture) =>
         value is not Visibility.Visible;
 }
+
+public sealed class ChannelSecondaryInfoConverter : IMultiValueConverter
+{
+    public object Convert(object[] values, Type targetType, object parameter, CultureInfo culture)
+    {
+        var channelId = values.Length > 0 ? values[0] as string : null;
+        var categoryId = values.Length > 1 ? values[1] as string : null;
+        var categories = values.Length > 2 ? values[2] as IReadOnlyDictionary<string, string> : null;
+        var playingId = values.Length > 3 ? values[3] as string : null;
+        var epgNow = values.Length > 4 ? values[4] as string : null;
+
+        string? program = null;
+        if (!string.IsNullOrEmpty(channelId) && string.Equals(channelId, playingId, StringComparison.Ordinal) &&
+            !string.IsNullOrWhiteSpace(epgNow) &&
+            !epgNow.StartsWith("Sin ", StringComparison.Ordinal) &&
+            !epgNow.StartsWith("La guía", StringComparison.Ordinal) &&
+            !epgNow.StartsWith("Cargando", StringComparison.Ordinal))
+        {
+            program = epgNow;
+        }
+
+        string? categoryName = null;
+        if (!string.IsNullOrWhiteSpace(categoryId) && categories is not null && categories.TryGetValue(categoryId, out var resolved) && !string.IsNullOrWhiteSpace(resolved))
+        {
+            categoryName = resolved;
+        }
+
+        var text = !string.IsNullOrWhiteSpace(program) ? program! : (categoryName ?? string.Empty);
+        if (targetType == typeof(Visibility))
+            return string.IsNullOrWhiteSpace(text) ? Visibility.Collapsed : Visibility.Visible;
+        return text;
+    }
+
+    public object[] ConvertBack(object value, Type[] targetTypes, object parameter, CultureInfo culture) =>
+        targetTypes.Select(_ => DependencyProperty.UnsetValue).ToArray();
+}
+
+public sealed class MediaProgressValueConverter : IMultiValueConverter
+{
+    public object Convert(object[] values, Type targetType, object parameter, CultureInfo culture)
+    {
+        var hasProgress = values.Length >= 2 &&
+                          values[0] is string key &&
+                          !string.IsNullOrEmpty(key) &&
+                          values[1] is IReadOnlyDictionary<string, double> map &&
+                          map.TryGetValue(key, out var progress) &&
+                          progress > 0;
+        if (targetType == typeof(Visibility))
+            return hasProgress ? Visibility.Visible : Visibility.Collapsed;
+        return hasProgress && values[1] is IReadOnlyDictionary<string, double> dict && values[0] is string k && dict.TryGetValue(k, out var val)
+            ? val
+            : 0d;
+    }
+
+    public object[] ConvertBack(object value, Type[] targetTypes, object parameter, CultureInfo culture) =>
+        targetTypes.Select(_ => DependencyProperty.UnsetValue).ToArray();
+}
