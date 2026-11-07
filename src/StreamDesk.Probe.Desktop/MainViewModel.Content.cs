@@ -8,6 +8,7 @@ public sealed record MediaSortOption(string Label, MainViewModel.MediaSortOrder 
 public sealed partial class MainViewModel
 {
     private const int MediaGridPageSize = 48;
+    private const int HomeCarouselLimit = 12;
     private readonly IContentStore? _contentStore;
     private MediaCatalog? _movies, _series, _episodes;
     private MediaCatalogSearch? _movieIndex, _seriesIndex;
@@ -76,6 +77,56 @@ public sealed partial class MainViewModel
     public bool ShowPlayerPane => (!ShowMediaBrowse || IsImmersiveMode) && (!ShowContinueWatching || _playback.IsActive || _mediaWatch is not null);
     public bool ShowContinueWatching => CurrentTabIndex == 7;
     public bool HasContinueWatching => ContinueWatching.Count > 0;
+    public IReadOnlyList<MediaProgress> HomeContinueWatching => ContinueWatching.Take(8).ToArray();
+    public IReadOnlyList<MediaItem> HomeMovies => (_movies?.Items ?? [])
+        .Where(item => item.Kind == ContentKind.Movie).DistinctBy(item => item.Id).Take(HomeCarouselLimit).ToArray();
+    public IReadOnlyList<MediaItem> HomeSeries => (_series?.Items ?? [])
+        .Where(item => item.Kind == ContentKind.Series).DistinctBy(item => item.Id).Take(HomeCarouselLimit).ToArray();
+    public bool HasHomeMovies => HomeMovies.Count > 0;
+    public bool HasHomeSeries => HomeSeries.Count > 0;
+    public bool HomeCatalogSkeletonVisible => IsCatalogSyncing && !HasHomeMovies && !HasHomeSeries;
+    public MediaItem? HomeFeaturedMedia => ContinueWatching.FirstOrDefault()?.Item
+        ?? _movies?.Items.FirstOrDefault(item => item.Kind == ContentKind.Movie && !string.IsNullOrWhiteSpace(item.PosterUrl))
+        ?? _series?.Items.FirstOrDefault(item => item.Kind == ContentKind.Series && !string.IsNullOrWhiteSpace(item.PosterUrl))
+        ?? _movies?.Items.FirstOrDefault(item => item.Kind == ContentKind.Movie)
+        ?? _series?.Items.FirstOrDefault(item => item.Kind == ContentKind.Series);
+    public MediaProgress? HomeFeaturedProgress => HomeFeaturedMedia is { } item
+        ? ContinueWatching.FirstOrDefault(progress => progress.Item.Kind == item.Kind && progress.Item.StorageKey == item.StorageKey)
+        : null;
+    public XtreamChannel? HomeFeaturedChannel => HomeFeaturedMedia is null ? LastChannel : null;
+    public bool HasHomeFeatured => HomeFeaturedMedia is not null || HomeFeaturedChannel is not null;
+    public bool HasHomeFeaturedDescription => !string.IsNullOrWhiteSpace(HomeFeaturedDescription);
+    public bool HasHomeFeaturedArt => !string.IsNullOrWhiteSpace(HomeFeaturedPosterUrl);
+    public string HomeFeaturedTitle => HomeFeaturedMedia?.Name ?? HomeFeaturedChannel?.Name
+        ?? (ActiveProfile is null ? "Añade una cuenta para empezar" : "Tu catálogo aparecerá aquí");
+    public string HomeFeaturedDescription => HomeFeaturedMedia?.Plot is { Length: > 0 } plot
+        ? plot[..Math.Min(plot.Length, 420)]
+        : string.Empty;
+    public string HomeFeaturedPosterUrl => HomeFeaturedMedia?.PosterUrl ?? HomeFeaturedChannel?.LogoUrl ?? string.Empty;
+    public string HomeFeaturedTypeLabel => HomeFeaturedProgress is { Item.Kind: ContentKind.Episode, Item.Season: > 0, Item.Episode: > 0 } progress
+        ? $"CONTINUAR · T{progress.Item.Season:00} E{progress.Item.Episode:00}"
+        : HomeFeaturedProgress is not null ? "CONTINUAR VIENDO"
+        : HomeFeaturedMedia?.Kind switch
+        {
+            ContentKind.Movie => "PELÍCULA",
+            ContentKind.Series => "SERIE",
+            ContentKind.Episode => "EPISODIO",
+            _ when HomeFeaturedChannel is not null => "TV EN VIVO",
+            _ => ""
+        };
+    public string HomeFeaturedActionLabel => HomeFeaturedProgress is not null ? "Continuar"
+        : HomeFeaturedMedia?.Kind switch
+        {
+            ContentKind.Movie => "Reproducir",
+            ContentKind.Series => "Ver episodios",
+            ContentKind.Episode => "Continuar",
+            _ when HomeFeaturedChannel is not null => "Ver canal",
+            _ => ActiveProfile is null ? "Configurar cuenta" : "Abrir TV en vivo"
+        };
+    public bool CanShowHomeFeaturedDetails => HomeFeaturedMedia?.Kind is ContentKind.Movie or ContentKind.Series;
+    public string HomeEmptyDescription => ActiveProfile is null
+        ? "Configura tu proveedor y aquí aparecerán los canales, películas y series disponibles."
+        : "Cuando el catálogo esté disponible, podrás retomarlo o explorar sus películas y series.";
 
     private bool _isMediaGridView = true;
     private bool _mediaFavoritesOnly;
@@ -122,6 +173,7 @@ public sealed partial class MainViewModel
         _progress = _progress.Where(p => p.Item.StorageKey != progress.Item.StorageKey).ToList();
         OnPropertyChanged(nameof(ContinueWatching));
         OnPropertyChanged(nameof(HasContinueWatching));
+        NotifyHomeContent();
     }
     public string VersionLabel => typeof(MainViewModel).Assembly.GetCustomAttributes(typeof(System.Reflection.AssemblyInformationalVersionAttribute), false)
         .OfType<System.Reflection.AssemblyInformationalVersionAttribute>().FirstOrDefault()?.InformationalVersion.Split('+')[0] ?? "Candidato";
@@ -143,7 +195,17 @@ public sealed partial class MainViewModel
         get => _contentStatus;
         private set { if (SetProperty(ref _contentStatus, value)) OnPropertyChanged(nameof(FooterStatus)); }
     }
-    public string EpgStatus { get => _epgStatus; private set => SetProperty(ref _epgStatus, value); }
+    public string EpgStatus
+    {
+        get => _epgStatus;
+        private set
+        {
+            if (SetProperty(ref _epgStatus, value)) OnPropertyChanged(nameof(EpgPanelStatus));
+        }
+    }
+    public string EpgPanelStatus => HasEpgSchedule
+        ? string.Empty
+        : EpgStatus == "Cargando guía…" ? "Cargando programación…" : "Programación no disponible";
     public string EpgNow { get; private set; } = "Sin programación actual.";
     public string EpgNext { get; private set; } = "Sin programación siguiente.";
     public IReadOnlyList<MediaItem> MediaItems { get; private set; } = [];
@@ -274,7 +336,7 @@ public sealed partial class MainViewModel
 
     private readonly SemaphoreSlim _syncGate = new(1, 1);
     private bool _isCatalogSyncing;
-    public bool IsCatalogSyncing { get => _isCatalogSyncing; private set { if (SetProperty(ref _isCatalogSyncing, value)) OnPropertyChanged(nameof(IsWorking)); } }
+    public bool IsCatalogSyncing { get => _isCatalogSyncing; private set { if (SetProperty(ref _isCatalogSyncing, value)) { OnPropertyChanged(nameof(IsWorking)); OnPropertyChanged(nameof(HomeCatalogSkeletonVisible)); } } }
     private string? _catalogSyncStatus;
     public string? CatalogSyncStatus { get => _catalogSyncStatus; private set => SetProperty(ref _catalogSyncStatus, value); }
 
@@ -636,7 +698,11 @@ public sealed partial class MainViewModel
             await _contentStore.SaveProgressAsync(watch.ProfileId, progress);
             if (_disposed || watch.Version != _sessionVersion) return;
             _progress = await _contentStore.LoadProgressAsync(watch.ProfileId);
-            if (!_disposed && watch.Version == _sessionVersion) OnPropertyChanged(nameof(ContinueWatching));
+            if (!_disposed && watch.Version == _sessionVersion)
+            {
+                OnPropertyChanged(nameof(ContinueWatching));
+                NotifyHomeContent();
+            }
         }
         catch (Exception error) { _logger.LogError("content_progress", error); }
     }
@@ -712,7 +778,21 @@ public sealed partial class MainViewModel
     {
         SelectedProgress ??= ContinueWatching.FirstOrDefault();
         foreach (var name in new[] { nameof(HasMovies), nameof(HasSeries), nameof(HasNoMediaItems), nameof(MediaCategories), nameof(VisibleMediaCategories), nameof(MediaCategoryLabel), nameof(ContinueWatching), nameof(SelectedProgress), nameof(FavoriteMovies), nameof(FavoriteSeries), nameof(FavoriteMediaItems), nameof(HasResolvedFavoriteContent), nameof(UnresolvedFavoriteCount), nameof(HasMissingFavoriteContent), nameof(HasMissingFavoriteMedia), nameof(ShowFavoriteMediaGroup), nameof(HasResolvedSelectedFavoriteContent), nameof(HasMissingSelectedFavoriteContent), nameof(FavoriteEmptyTitle), nameof(FavoriteEmptyDescription) }) OnPropertyChanged(name);
+        NotifyHomeContent();
         NotifyFavoriteMediaPaging();
+    }
+    private void NotifyHomeContent()
+    {
+        foreach (var name in new[]
+        {
+            nameof(HomeContinueWatching), nameof(HomeMovies), nameof(HomeSeries), nameof(HasHomeMovies), nameof(HasHomeSeries),
+            nameof(HomeCatalogSkeletonVisible),
+            nameof(HomeFavoriteChannels),
+            nameof(HomeFeaturedMedia), nameof(HomeFeaturedProgress), nameof(HomeFeaturedChannel), nameof(HasHomeFeatured),
+            nameof(HasHomeFeaturedDescription), nameof(HasHomeFeaturedArt), nameof(HomeFeaturedTitle), nameof(HomeFeaturedDescription),
+            nameof(HomeFeaturedPosterUrl), nameof(HomeFeaturedTypeLabel), nameof(HomeFeaturedActionLabel), nameof(CanShowHomeFeaturedDetails),
+            nameof(HomeEmptyDescription)
+        }) OnPropertyChanged(name);
     }
     private void ResetContent()
     {
@@ -720,7 +800,7 @@ public sealed partial class MainViewModel
         _movies = _series = _episodes = null; _progress = []; _selectedMedia = _selectedEpisode = _selectedDetails = null; _season = _mediaCategory = null; _isImmersiveMode = false; _randomCyclePlayedKeys.Clear();
         _movieIndex = _seriesIndex = null; IsMediaFiltering = false;
         MediaItems = []; _mediaPageIndex = 0; _mediaDetails = MediaPlaybackDetails.Empty;
-        ContentStatus = "Explora películas y series de tu cuenta."; EpgStatus = "Elige un canal para ver su programación.";
+        ContentStatus = "Explora películas y series de tu cuenta."; EpgStatus = "Selecciona un canal para ver la programación.";
         NotifyContent(); NotifyMediaDetails(); OnPropertyChanged(nameof(MediaItems)); NotifyMediaPaging(); OnPropertyChanged(nameof(HasNoMediaItems)); OnPropertyChanged(nameof(SelectedMedia)); OnPropertyChanged(nameof(MediaDescription)); OnPropertyChanged(nameof(MediaPosterUrl)); OnPropertyChanged(nameof(MediaCategoryLabel)); OnPropertyChanged(nameof(SeriesSummary)); OnPropertyChanged(nameof(Seasons)); OnPropertyChanged(nameof(Episodes));
         OnPropertyChanged(nameof(ShowMovieBrowse)); OnPropertyChanged(nameof(ShowMovieDetails)); OnPropertyChanged(nameof(ShowSeriesBrowse)); OnPropertyChanged(nameof(ShowSeriesDetails)); OnPropertyChanged(nameof(ShowMediaBrowse)); OnPropertyChanged(nameof(ShowPlayerPane)); OnPropertyChanged(nameof(NowPlaying)); OnPropertyChanged(nameof(IsEpisodePlayerFocus)); OnPropertyChanged(nameof(IsImmersiveMode)); OnPropertyChanged(nameof(ImmersiveReturnLabel)); OnPropertyChanged(nameof(CanPlayRandomEpisode));
         _epgPrograms = []; UpdateEpgLabels();

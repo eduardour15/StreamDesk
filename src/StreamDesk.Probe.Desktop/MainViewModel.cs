@@ -81,6 +81,7 @@ public sealed partial class MainViewModel : INotifyPropertyChanged, IDisposable,
     public IReadOnlyList<XtreamCategory> Categories { get; private set; } = [];
     public IReadOnlyList<XtreamChannel> Channels { get; private set; } = [];
     public ObservableCollection<string> AvailableFormats { get; } = [];
+    public bool HasMultipleFormats => AvailableFormats.Count > 1;
     public ObservableCollection<Profile> Profiles { get; } = [];
     public ICommand LoadCatalogCommand { get; }
     public ICommand ReloadProfilesCommand { get; }
@@ -136,6 +137,7 @@ public sealed partial class MainViewModel : INotifyPropertyChanged, IDisposable,
                 _ = ApplyFilterAsync(false);
             }
             OnPropertyChanged(nameof(ShowHome)); OnPropertyChanged(nameof(ShowTv)); OnPropertyChanged(nameof(ShowFavorites)); OnPropertyChanged(nameof(ShowSettings)); OnPropertyChanged(nameof(SectionTitle));
+            OnPropertyChanged(nameof(ShowPlayerEmptyState)); OnPropertyChanged(nameof(PlayerEmptyMessage)); OnPropertyChanged(nameof(PlayerEmptyDescription));
             OnPropertyChanged(nameof(ShowLiveCatalog)); OnPropertyChanged(nameof(ShowMediaCatalog)); OnPropertyChanged(nameof(ShowContinueWatching));
             OnPropertyChanged(nameof(ShowCatalogSplitter));
             if (ShowMediaCatalog)
@@ -360,7 +362,7 @@ public sealed partial class MainViewModel : INotifyPropertyChanged, IDisposable,
         OnPropertyChanged(nameof(VisibleCategories));
         OnPropertyChanged(nameof(Channels));
         OnPropertyChanged(nameof(HasNoChannels));
-        AvailableFormats.Clear(); SelectedChannel = null; SelectedFormat = null;
+        AvailableFormats.Clear(); OnPropertyChanged(nameof(HasMultipleFormats)); SelectedChannel = null; SelectedFormat = null;
         ResetLibrary();
         ResetContent();
     }

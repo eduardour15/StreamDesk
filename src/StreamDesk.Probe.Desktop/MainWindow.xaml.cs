@@ -3,6 +3,7 @@ using System.ComponentModel;
 using System.Windows.Input;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
+using System.Windows.Automation;
 using System.Windows.Media;
 using System.Windows.Threading;
 using System.Windows.Data;
@@ -34,6 +35,10 @@ public partial class MainWindow : FluentWindow
     private ScreenPoint _lastCursor;
     private bool _controlsHovered;
     private bool _keyboardControls;
+    private bool _liveChannelsCollapsed;
+    private bool _sidebarCompact;
+    private XtreamChannel? _selectedBeforeLiveFavorite;
+    private bool _hasLiveFavoriteSelectionSnapshot;
     private Window? _overlayWindow;
     private DispatcherOperation? _categoryFocusOperation;
     public IReadOnlyList<DisplayChoice> Displays { get; } = WindowDisplays.Enumerate();
@@ -194,6 +199,73 @@ public partial class MainWindow : FluentWindow
     private async void TogglePlay_Click(object sender, RoutedEventArgs e) => await _viewModel.TogglePlaybackAsync();
     private async void TogglePlayPause_Click(object sender, RoutedEventArgs e) => await _viewModel.TogglePlayPauseAsync();
     private async void PlayLast_Click(object sender, RoutedEventArgs e) => await _viewModel.PlayLastAsync();
+    private void ToggleChannelsPane_Click(object sender, RoutedEventArgs e)
+    {
+        _liveChannelsCollapsed = !_liveChannelsCollapsed;
+        ToggleChannelsPaneButton.Content = _liveChannelsCollapsed ? "›" : "‹";
+        ToggleChannelsPaneButton.ToolTip = _liveChannelsCollapsed ? "Mostrar la lista de canales" : "Contraer la lista de canales";
+        AutomationProperties.SetName(ToggleChannelsPaneButton, Convert.ToString(ToggleChannelsPaneButton.ToolTip, System.Globalization.CultureInfo.InvariantCulture));
+        UpdateLayoutMode();
+    }
+    private async void HomeFeaturedPlay_Click(object sender, RoutedEventArgs e)
+    {
+        if (_viewModel.HomeFeaturedProgress is { } progress)
+        {
+            _viewModel.SelectedProgress = progress;
+            _viewModel.CurrentTabIndex = 7;
+            await _viewModel.PlayMediaAsync();
+            return;
+        }
+        if (_viewModel.HomeFeaturedMedia is { } media)
+        {
+            OpenHomeMedia(media);
+            if (media.Kind == ContentKind.Movie) await _viewModel.PlayMediaAsync();
+            return;
+        }
+        if (_viewModel.HomeFeaturedChannel is { } channel)
+        {
+            _viewModel.CurrentTabIndex = 1;
+            _viewModel.SelectedChannel = channel;
+            await _viewModel.PlaySelectedAsync();
+            return;
+        }
+        _viewModel.CurrentTabIndex = _viewModel.ActiveProfile is null ? 4 : 1;
+    }
+    private void HomeFeaturedDetails_Click(object sender, RoutedEventArgs e)
+    {
+        if (_viewModel.HomeFeaturedMedia is { Kind: ContentKind.Movie or ContentKind.Series } media)
+            OpenHomeMedia(media);
+    }
+    private void OpenHomeMedia(MediaItem media)
+    {
+        _viewModel.CurrentTabIndex = media.Kind == ContentKind.Movie ? 5 : 6;
+        _viewModel.SelectedMedia = media;
+    }
+    private void HomeMediaCard_MouseUp(object sender, MouseButtonEventArgs e)
+    {
+        if (HasInteractiveOrScrollAncestor(e.OriginalSource as DependencyObject) || sender is not FrameworkElement { DataContext: MediaItem media }) return;
+        OpenHomeMedia(media);
+        e.Handled = true;
+    }
+    private async void HomePosterAction_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not FrameworkElement { DataContext: MediaItem media }) return;
+        OpenHomeMedia(media);
+        if (media.Kind == ContentKind.Movie) await _viewModel.PlayMediaAsync();
+    }
+    private async void HomeContinue_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not FrameworkElement { DataContext: MediaProgress progress }) return;
+        _viewModel.SelectedProgress = progress;
+        _viewModel.CurrentTabIndex = 7;
+        await _viewModel.PlayMediaAsync();
+    }
+    private void HomeCarousel_MouseWheel(object sender, MouseWheelEventArgs e)
+    {
+        if (sender is not ScrollViewer viewer || viewer.ScrollableWidth <= 0) return;
+        viewer.ScrollToHorizontalOffset(Math.Clamp(viewer.HorizontalOffset - e.Delta, 0, viewer.ScrollableWidth));
+        e.Handled = true;
+    }
     private async void AutoPlay_Click(object sender, RoutedEventArgs e) => await _viewModel.SetAutoPlayAsync(AutoPlayCheckBox.IsChecked == true);
     private async void ProbeContent_Click(object sender, RoutedEventArgs e) => await _viewModel.ProbeContentAsync();
     private async void PlayMedia_Click(object sender, RoutedEventArgs e)
@@ -400,19 +472,20 @@ public partial class MainWindow : FluentWindow
         var isLight = string.Equals(theme, "Light", StringComparison.OrdinalIgnoreCase);
         Wpf.Ui.Appearance.ApplicationThemeManager.Apply(isLight ? Wpf.Ui.Appearance.ApplicationTheme.Light : Wpf.Ui.Appearance.ApplicationTheme.Dark,
             WindowBackdropType.None, false);
-        Resources["CanvasBrush"] = new SolidColorBrush(isLight ? Color.FromRgb(243, 243, 243) : Color.FromRgb(15, 17, 21));
-        Resources["BackgroundBrush"] = new SolidColorBrush(isLight ? Color.FromRgb(243, 243, 243) : Color.FromRgb(18, 18, 18));
-        Resources["SurfaceBrush"] = new SolidColorBrush(isLight ? Color.FromRgb(255, 255, 255) : Color.FromRgb(30, 30, 30));
-        Resources["SurfaceRaisedBrush"] = new SolidColorBrush(isLight ? Color.FromRgb(235, 235, 235) : Color.FromRgb(40, 40, 40));
-        Resources["TextPrimaryBrush"] = new SolidColorBrush(isLight ? Color.FromRgb(26, 26, 26) : Color.FromRgb(255, 255, 255));
-        Resources["TextMutedBrush"] = new SolidColorBrush(isLight ? Color.FromRgb(80, 88, 100) : Color.FromRgb(185, 196, 208));
-        Resources["ControlBorderBrush"] = new SolidColorBrush(isLight ? Color.FromRgb(120, 128, 140) : Color.FromRgb(98, 107, 120));
-        Resources["HoverBrush"] = new SolidColorBrush(isLight ? Color.FromRgb(224, 231, 238) : Color.FromRgb(52, 60, 72));
-        Resources["PressedBrush"] = new SolidColorBrush(isLight ? Color.FromRgb(205, 221, 232) : Color.FromRgb(64, 82, 71));
-        Resources["SelectionBrush"] = new SolidColorBrush(isLight ? Color.FromRgb(213, 232, 247) : Color.FromRgb(38, 59, 53));
+        Resources["CanvasBrush"] = new SolidColorBrush(isLight ? Color.FromRgb(243, 244, 246) : Color.FromRgb(11, 13, 18));
+        Resources["BackgroundBrush"] = new SolidColorBrush(isLight ? Color.FromRgb(243, 244, 246) : Color.FromRgb(11, 13, 18));
+        Resources["SurfaceBrush"] = new SolidColorBrush(isLight ? Color.FromRgb(255, 255, 255) : Color.FromRgb(23, 26, 33));
+        Resources["SurfaceSecondaryBrush"] = new SolidColorBrush(isLight ? Color.FromRgb(242, 244, 247) : Color.FromRgb(32, 36, 45));
+        Resources["SurfaceRaisedBrush"] = new SolidColorBrush(isLight ? Color.FromRgb(242, 244, 247) : Color.FromRgb(32, 36, 45));
+        Resources["TextPrimaryBrush"] = new SolidColorBrush(isLight ? Color.FromRgb(26, 26, 26) : Color.FromRgb(248, 250, 252));
+        Resources["TextMutedBrush"] = new SolidColorBrush(isLight ? Color.FromRgb(80, 88, 100) : Color.FromRgb(156, 163, 175));
+        Resources["ControlBorderBrush"] = new SolidColorBrush(isLight ? Color.FromRgb(120, 128, 140) : Color.FromArgb(32, 255, 255, 255));
+        Resources["HoverBrush"] = new SolidColorBrush(isLight ? Color.FromRgb(224, 231, 238) : Color.FromRgb(42, 48, 59));
+        Resources["PressedBrush"] = new SolidColorBrush(isLight ? Color.FromRgb(205, 221, 232) : Color.FromRgb(52, 60, 73));
+        Resources["SelectionBrush"] = new SolidColorBrush(isLight ? Color.FromRgb(213, 232, 247) : Color.FromArgb(38, 56, 189, 248));
         Resources["TextSecondaryBrush"] = new SolidColorBrush(isLight ? Color.FromRgb(102, 102, 102) : Color.FromRgb(160, 160, 160));
-        Resources["BorderBrush"] = new SolidColorBrush(isLight ? Color.FromRgb(220, 220, 220) : Color.FromRgb(46, 46, 46));
-        Resources["AccentBrush"] = new SolidColorBrush(isLight ? Color.FromRgb(0, 120, 212) : Color.FromRgb(96, 205, 255));
+        Resources["BorderBrush"] = new SolidColorBrush(isLight ? Color.FromRgb(220, 220, 220) : Color.FromArgb(32, 255, 255, 255));
+        Resources["AccentBrush"] = new SolidColorBrush(isLight ? Color.FromRgb(0, 120, 212) : Color.FromRgb(56, 189, 248));
         // FluentWindow also changes its local background on theme updates.
         SetResourceReference(BackgroundProperty, "CanvasBrush");
         AppTitleBar.ApplicationTheme = isLight ? Wpf.Ui.Appearance.ApplicationTheme.Light : Wpf.Ui.Appearance.ApplicationTheme.Dark;
@@ -585,6 +658,27 @@ public partial class MainWindow : FluentWindow
     }
     private async void FavoriteRow_Click(object sender, RoutedEventArgs e)
     { e.Handled = true; await _viewModel.ToggleFavoriteAsync((XtreamChannel)((FrameworkElement)sender).DataContext); }
+    private void Channels_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        var source = e.OriginalSource as DependencyObject;
+        _hasLiveFavoriteSelectionSnapshot = FindAncestor<ToggleButton>(source) is not null &&
+                                            FindAncestor<ListBoxItem>(source) is not null;
+        _selectedBeforeLiveFavorite = _hasLiveFavoriteSelectionSnapshot ? ChannelsList.SelectedItem as XtreamChannel : null;
+    }
+    private async void LiveFavoriteRow_Click(object sender, RoutedEventArgs e)
+    {
+        e.Handled = true;
+        if (sender is not FrameworkElement { DataContext: XtreamChannel channel }) return;
+        var previousChannel = _hasLiveFavoriteSelectionSnapshot ? _selectedBeforeLiveFavorite : _viewModel.SelectedChannel;
+        try { await _viewModel.ToggleFavoriteAsync(channel); }
+        finally
+        {
+            _viewModel.SelectedChannel = previousChannel;
+            ChannelsList.SelectedItem = previousChannel;
+            _selectedBeforeLiveFavorite = null;
+            _hasLiveFavoriteSelectionSnapshot = false;
+        }
+    }
     private async void Channels_MouseUp(object sender, MouseButtonEventArgs e)
     {
         if (HasInteractiveOrScrollAncestor(e.OriginalSource as DependencyObject) || FindAncestor<ListBoxItem>(e.OriginalSource as DependencyObject) is not { DataContext: XtreamChannel channel }) return;
@@ -944,6 +1038,30 @@ public partial class MainWindow : FluentWindow
         }
         return false;
     }
+    private void SetSidebarCompact(bool compact)
+    {
+        if (_sidebarCompact == compact || Sidebar is null) return;
+        _sidebarCompact = compact;
+        Sidebar.Padding = compact ? new Thickness(6) : new Thickness(10);
+        SidebarBrand.Margin = compact ? new Thickness(0, 8, 0, 14) : new Thickness(8, 10, 0, 16);
+        SidebarBrand.HorizontalAlignment = compact ? HorizontalAlignment.Center : HorizontalAlignment.Left;
+        SidebarLogo.Margin = compact ? new Thickness(0) : new Thickness(0, 0, 8, 0);
+        SidebarBrandText.Visibility = SidebarSubtitle.Visibility = SidebarVersionLabel.Visibility = compact ? Visibility.Collapsed : Visibility.Visible;
+        SidebarSyncText.Visibility = compact ? Visibility.Collapsed : Visibility.Visible;
+        SidebarSyncBadge.Padding = compact ? new Thickness(5, 5, 5, 5) : new Thickness(8, 4, 8, 4);
+        SidebarSyncBadge.Margin = compact ? new Thickness(2, 0, 2, 8) : new Thickness(4, 0, 4, 10);
+
+        var labels = new[] { NavHomeText, NavTvText, NavMoviesText, NavSeriesText, NavFavoritesText, NavRecentsText, NavContinueText, NavSettingsText };
+        foreach (var label in labels) label.Visibility = compact ? Visibility.Collapsed : Visibility.Visible;
+        var icons = new[] { NavHomeIcon, NavTvIcon, NavMoviesIcon, NavSeriesIcon, NavFavoritesIcon, NavRecentsIcon, NavContinueIcon, NavSettingsIcon };
+        foreach (var icon in icons) icon.Margin = compact ? new Thickness(0) : new Thickness(0, 0, 10, 0);
+        foreach (var item in NavigationTabs.Items.OfType<ListBoxItem>())
+        {
+            item.Padding = compact ? new Thickness(8, 10, 8, 10) : new Thickness(12, 10, 12, 10);
+            item.HorizontalContentAlignment = compact ? HorizontalAlignment.Center : HorizontalAlignment.Stretch;
+        }
+    }
+
     private void UpdateLayoutMode()
     {
         if (Shell is null) return;
@@ -953,27 +1071,36 @@ public partial class MainWindow : FluentWindow
         var compact = fullscreen || picture;
         var immersive = !compact && _viewModel.IsImmersiveMode;
         var hideChrome = compact || immersive;
+        var sidebarCompact = ActualWidth < 1100;
+        var collapseLiveCatalog = !hideChrome && _viewModel.ShowLiveCatalog && _liveChannelsCollapsed;
+        var showCatalogSplitter = !hideChrome && !collapseLiveCatalog && _viewModel.ShowCatalogSplitter;
+        SetSidebarCompact(sidebarCompact);
         if (AppTitleBar is not null) AppTitleBar.Visibility = compact ? Visibility.Collapsed : Visibility.Visible;
         Shell.Margin = new Thickness(fullscreen ? 0 : picture ? 0 : 16);
         Sidebar.Visibility = TvHeader.Visibility = ConnectionNotices.Visibility = CatalogPane.Visibility = hideChrome ? Visibility.Collapsed : Visibility.Visible;
+        if (collapseLiveCatalog) CatalogPane.Visibility = Visibility.Collapsed;
         if (hideChrome) StatusBar.Visibility = Visibility.Collapsed;
         else if (_statusIsSticky) StatusBar.Visibility = Visibility.Visible;
-        NowPlayingTitle.Visibility = compact ? Visibility.Collapsed : Visibility.Visible;
-        SidebarColumn.Width = new GridLength(hideChrome ? 0 : ActualWidth < 1050 ? 150 : 176);
-        CatalogColumn.MinWidth = hideChrome ? 0 : 252;
-        TvLayout.ColumnDefinitions[1].Width = new GridLength(hideChrome ? 0 : 6);
-        TvCatalogSplitter.Width = hideChrome ? 0 : 6;
-        TvCatalogSplitter.IsEnabled = !hideChrome;
+        NowPlayingTitle.Visibility = compact || _viewModel.ShowLiveCatalog ? Visibility.Collapsed : Visibility.Visible;
+        SidebarColumn.Width = new GridLength(hideChrome ? 0 : sidebarCompact ? 64 : 176);
+        CatalogColumn.MinWidth = hideChrome || collapseLiveCatalog ? 0 : _viewModel.ShowLiveCatalog ? 300 : 252;
+        CatalogColumn.MaxWidth = _viewModel.ShowLiveCatalog ? 340 : 520;
+        TvLayout.ColumnDefinitions[1].Width = new GridLength(showCatalogSplitter ? 6 : 0);
+        TvCatalogSplitter.Width = showCatalogSplitter ? 6 : 0;
+        TvCatalogSplitter.Visibility = showCatalogSplitter ? Visibility.Visible : Visibility.Collapsed;
+        TvCatalogSplitter.IsEnabled = showCatalogSplitter;
         var mediaDetails = (_viewModel.ShowMovieDetails || _viewModel.ShowSeriesDetails) && !immersive;
         var fullContinue = _viewModel.ShowContinueWatching && !_viewModel.ShowPlayerPane;
-        CatalogColumn.Width = new GridLength(hideChrome ? 0 : fullContinue ? 1 : mediaDetails ? ActualWidth < 1050 ? 260 : 360 : ActualWidth < 1050 ? 234 : 284, fullContinue ? GridUnitType.Star : GridUnitType.Pixel);
-        Workspace.Margin = new Thickness(hideChrome ? 0 : 20, 0, 0, 0);
+        var liveCatalogWidth = ActualWidth < 980 ? 300 : 320;
+        CatalogColumn.Width = new GridLength(hideChrome || collapseLiveCatalog ? 0 : fullContinue ? 1 : _viewModel.ShowLiveCatalog ? liveCatalogWidth : mediaDetails ? ActualWidth < 1050 ? 260 : 340 : ActualWidth < 1050 ? 252 : 284,
+            fullContinue ? GridUnitType.Star : GridUnitType.Pixel);
+        Workspace.Margin = new Thickness(hideChrome ? 0 : sidebarCompact ? 12 : 20, 0, 0, 0);
 
 
 
         PipHeader.Visibility = PipControls.Visibility = picture ? Visibility.Visible : Visibility.Collapsed;
         StandardControls.Visibility = picture ? Visibility.Collapsed : Visibility.Visible;
-        EpgPanel.Visibility = !hideChrome ? Visibility.Visible : Visibility.Collapsed;
+        EpgPanel.Visibility = !hideChrome && _viewModel.ShowLiveCatalog ? Visibility.Visible : Visibility.Collapsed;
         MediaBrowsePane.Visibility = !hideChrome && _viewModel.ShowMediaBrowse ? Visibility.Visible : Visibility.Collapsed;
         MovieDetailsPane.Visibility = !hideChrome && _viewModel.ShowMovieDetails ? Visibility.Visible : Visibility.Collapsed;
         SeriesDetailsPane.Visibility = !hideChrome && _viewModel.ShowSeriesDetails ? Visibility.Visible : Visibility.Collapsed;

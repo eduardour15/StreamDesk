@@ -186,7 +186,7 @@ public sealed partial class MainViewModel
         token.ThrowIfCancellationRequested();
         if (version != _sessionVersion || _disposed) return;
         _client?.Dispose(); _client = null; _account = null; _connectedProfileId = null;
-        AvailableFormats.Clear(); SelectedFormat = null; ConnectionSummary = null;
+        AvailableFormats.Clear(); OnPropertyChanged(nameof(HasMultipleFormats)); SelectedFormat = null; ConnectionSummary = null;
         IIptvProvider? provider = _providerFactory(url, credentials.Username, credentials.Password);
         try
         {
@@ -199,6 +199,7 @@ public sealed partial class MainViewModel
             OnPropertyChanged(nameof(ConnectedProfileId)); OnPropertyChanged(nameof(IsConnected)); OnPropertyChanged(nameof(ActiveConnectionsInfo)); OnPropertyChanged(nameof(AccountExpirationInfo));
             ConnectionSummary = FormatAccount(account);
             foreach (var format in account.AllowedOutputFormats) AvailableFormats.Add(format);
+            OnPropertyChanged(nameof(HasMultipleFormats));
             SelectedFormat = _playbackService.Options.PrioritizeContinuity
                 ? AvailableFormats.FirstOrDefault(format => format.Equals("m3u8", StringComparison.OrdinalIgnoreCase)) ?? AvailableFormats.FirstOrDefault()
                 : AvailableFormats.FirstOrDefault();

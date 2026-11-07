@@ -31,8 +31,11 @@ public sealed partial class MainViewModel
     public bool ShowPlayerChrome => HasPlaybackContext;
     public bool ShowPlayerEmptyState => CurrentTabIndex == 1 && !HasPlaybackContext;
     public string PlayerEmptyMessage => ShowPlayerEmptyState
-        ? "Selecciona un canal para comenzar a ver televisión"
+        ? "Selecciona un canal"
         : "Selecciona contenido para comenzar a reproducir";
+    public string PlayerEmptyDescription => ShowPlayerEmptyState
+        ? "Elige un canal de la lista para empezar a ver televisión."
+        : "Cuando elijas contenido, la reproducción aparecerá aquí.";
     public bool ShowPlaybackCaption => !ShowPlaybackPlaceholder || _playback.State == PlaybackState.Failed || _playback.WillRetry;
     public bool CanRetryPlayback => _playback.State == PlaybackState.Failed && !_playback.WillRetry;
     public bool IsPlaying => _playback.State == PlaybackState.Playing;
@@ -364,5 +367,6 @@ public sealed partial class MainViewModel
         OnPropertyChanged(nameof(ShowPlayerChrome));
         OnPropertyChanged(nameof(ShowPlayerEmptyState));
         OnPropertyChanged(nameof(PlayerEmptyMessage));
+        OnPropertyChanged(nameof(PlayerEmptyDescription));
     }
 }

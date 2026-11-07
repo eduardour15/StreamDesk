@@ -4,16 +4,17 @@
                 <ui:ControlsDictionary />
             </ResourceDictionary.MergedDictionaries>
             <BooleanToVisibilityConverter x:Key="BooleanToVisibilityConverter" />
-            <SolidColorBrush x:Key="CanvasBrush" Color="#FF101116" />
-            <SolidColorBrush x:Key="SurfaceBrush" Color="#FF1B1D23" />
-            <SolidColorBrush x:Key="SurfaceRaisedBrush" Color="#FF232630" />
-            <SolidColorBrush x:Key="AccentBrush" Color="#FF70D6B2" />
-            <SolidColorBrush x:Key="TextPrimaryBrush" Color="#FFF2F4F7" />
-            <SolidColorBrush x:Key="TextMutedBrush" Color="#FFB9C4D0" />
-            <SolidColorBrush x:Key="ControlBorderBrush" Color="#FF626B78" />
-            <SolidColorBrush x:Key="HoverBrush" Color="#FF343C48" />
-            <SolidColorBrush x:Key="PressedBrush" Color="#FF405247" />
-            <SolidColorBrush x:Key="SelectionBrush" Color="#FF263B35" />
+            <SolidColorBrush x:Key="CanvasBrush" Color="#FF0B0D12" />
+            <SolidColorBrush x:Key="SurfaceBrush" Color="#FF171A21" />
+            <SolidColorBrush x:Key="SurfaceSecondaryBrush" Color="#FF20242D" />
+            <SolidColorBrush x:Key="SurfaceRaisedBrush" Color="#FF20242D" />
+            <SolidColorBrush x:Key="AccentBrush" Color="#FF38BDF8" />
+            <SolidColorBrush x:Key="TextPrimaryBrush" Color="#FFF8FAFC" />
+            <SolidColorBrush x:Key="TextMutedBrush" Color="#FF9CA3AF" />
+            <SolidColorBrush x:Key="ControlBorderBrush" Color="#20FFFFFF" />
+            <SolidColorBrush x:Key="HoverBrush" Color="#FF2A303B" />
+            <SolidColorBrush x:Key="PressedBrush" Color="#FF343C49" />
+            <SolidColorBrush x:Key="SelectionBrush" Color="#2638BDF8" />
             <Thickness x:Key="SpaceSmall">8</Thickness>
             <Thickness x:Key="SpaceMedium">16</Thickness>
             <Thickness x:Key="SpaceLarge">24</Thickness>

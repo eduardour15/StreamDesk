@@ -8,11 +8,39 @@ Este archivo registra trabajo y evidencias reales. La confirmación del usuario 
 | F1 | APROBADA | 10/10 | 2026-10-19 | Fase marcada completada por confirmación expresa del usuario; la prueba real de reproducción posterior a las correcciones no se registra como evidencia independiente. |
 | F2 | APROBADA | 10/10 | 2026-10-19 | Fase marcada completada por confirmación expresa del usuario. Se conservan los resultados automatizados registrados y la dependencia de validación real F0/F1 como nota histórica, sin atribuir pruebas no ejecutadas. |
 | F3 | APROBADA | 7/11 verificadas; cierre solicitado | 2026-10-19 | COMPLETADA por decisión expresa del usuario. Se conservan las verificaciones físicas/IPTV/mediciones pendientes de T04/T05/T10/T11; esta decisión no constituye evidencia de esas pruebas. |
-| F4 | APROBADA | 9/11 | 2026-10-19 | Fase marcada completada por confirmación expresa del usuario. T09/T10 PARCIAL: DPI físicos/dos monitores y evaluación humana/IPTV pendientes. |
+| F4 | PENDIENTE_DE_VALIDACION | 9/11 histórico | 2026-11-06 | La aprobación de 2026-10-19 se conserva como antecedente. Este rediseño reabre la validación de UX: faltan resoluciones físicas exactas, recorrido humano y reproducción con una cuenta autorizada. |
 | F5 | APROBADA | 8/9 | 2026-10-19 | Fase marcada completada por confirmación expresa del usuario; capacidades y calidad EPG/VOD reales siguen pendientes de evidencia. |
 | F6 | APROBADA | 6/12 | 2026-10-19 | Fase marcada completada por confirmación expresa del usuario. T08 sigue pendiente y T12 bloqueada hasta pruebas físicas/licencias; esta marca no constituye publicación ni aprobación de release 1.0. |
 | F7 | APROBADA | 6/6 | 2026-10-19 | Fase culminada: F7-T01 (PiP), F7-T02 (M3U), F7-T03 (Perfiles múltiples y conexiones), F7-T04 (Sincronización cifrada), F7-T05 (Personalización UI) y F7-T06 (Control parental y factibilidad) implementadas y verificadas con 170 pruebas pasadas (incluyendo incremento UX-OPT-T01..T08). Validación con credenciales y listas de proveedor real en entorno físico permanece PENDIENTE_DE_VALIDACION. |
 | F14 | PENDIENTE_DE_VALIDACION | 6/6 bloques de implementación | 2026-11-06 | 14.1–14.6 implementados; build y 252 pruebas pasan. Faltan recorrido manual, ventana/escalado físicos y playback con una cuenta autorizada. F14 no está desglosada en tareas del ROADMAP, así que no se inventan IDs. |
+
+### 2026-11-06 — Rediseño de Inicio y TV en vivo
+
+- **Alcance:** nueva composición de Inicio y TV en vivo conforme a la solicitud del usuario; se reevalúan F4-T01/T02/T03/T04/T05/T07/T08/T09/T10/T11. No se inicia otra fase ni se modifica el motor LibVLC.
+- **Sistema visual y navegación:** canvas `#0B0D12`, superficies `#171A21`/`#20242D`, acento `#38BDF8`, texto `#F8FAFC`/`#9CA3AF`; barra lateral de 176 px que se compacta a 64 px en ventanas estrechas.
+- **Inicio:** hero estable derivado del contenido pendiente o catálogo guardado; usa póster vertical real sin estirarlo como panorámica. Filas visuales independientes para continuar, favoritos, películas y series. Continuar limita a 8 elementos; catálogo inicial limita cada fila a 12, sin duplicados. Se oculta cada fila vacía, se muestra skeleton durante sincronización y se evita presentar año, sinopsis o imagen que el catálogo no contenga. Episodios muestran temporada y número.
+- **TV en vivo:** lista de 320 px (300 px en ventanas reducidas), búsqueda/categoría/favoritos/conteo, filas de canal de 58 px, selección con franja de acento y lista contraíble. Importación M3U y controles administrativos permanecen en Ajustes. EPG compacto muestra programa actual/siguiente reales o «Programación no disponible»; se conserva el estado «Guía importada» en Ajustes. El favorito restablece la selección previa. Controles de seek/formato/audio/reintento/detención se ocultan cuando no aplican; el overlay y su autohide existente de 2,5 s se conservan.
+- **Archivos principales:** `src/StreamDesk.Probe.Desktop/MainWindow.xaml`, `MainWindow.xaml.cs`, `MainViewModel.Content.cs`, `MainViewModel.Library.cs`, `MainViewModel.Epg.cs`, `MainViewModel.Playback.cs`, `MainViewModel.Tracks.cs`, `MainViewModel.Catalog.cs`, `MainViewModel.Management.cs`, `MainViewModel.cs`, `src/StreamDesk.Probe.Core/ContentModels.cs`, `src/StreamDesk.Probe.Desktop/Resources/Theme.xaml`, `tests/StreamDesk.Probe.Tests/SystemEndToEndTests.cs`.
+- **Build:** `dotnet build StreamDesk.sln --no-restore --verbosity minimal --maxcpucount:1 -p:OutDir="C:\Users\PROGRAMADOR2\Documents\IPTV PLAYER\tests\StreamDesk.Probe.Tests\bin\home-live-validation-20261106\" -p:UseSharedCompilation=false`: **0 advertencias, 0 errores**.
+- **Pruebas:** una ejecución completa registró **251 pasadas, 1 fallida, 0 omitidas**; falló `CatalogUiTests.WpfCatalogVirtualizesFiveThousandRowsFiltersAndSurvivesFailedRefresh` al agotar 2:29 en la verificación WPF/LibVLC nativa. La evidencia del test confirma que llegó a la captura de Inicio y a navegación Home/TV; no se atribuye una causa interna sin stack. Tras hacer dinámica la fecha del fixture XMLTV para evitar caducidad, la suite filtrada se repitió después del ajuste final de ancho del hero: **251 pasadas, 0 fallidas, 0 omitidas**.
+- **Evidencia visual disponible:** `artifacts/player-home-layout.png` (Inicio vacío, sin cuenta) y `artifacts/f4-mvp.png` (TV con 50 canales ficticios), capturas WPF automatizadas a 1360×850 e inspeccionadas visualmente. Se generaron antes del último ajuste del ancho máximo del hero, así que documentan la composición general y TV, pero no verifican visualmente ese ajuste final. No son capturas de proveedor ni de reproducción real. La inspección de la ventana interactiva agotó el tiempo de aprobación del entorno. Tampoco se completaron capturas a 1366×768, 1600×900 y 1920×1080; una ejecución WPF dedicada se bloqueó antes del render al sembrar datos de prueba.
+- **Recorrido real pendiente:** proveedor autorizado, reproducción/cambio de canal, pantalla completa, audio/subtítulos reales, persistencia entre cuentas y evaluación humana. No se usaron credenciales de usuario ni se afirma éxito de vídeo real.
+
+| ID del ROADMAP | Estado del incremento | Evidencia / pendiente |
+|---|---|---|
+| F4-T01 | COMPLETADA | Paleta, jerarquía y navegación implementadas; captura WPF disponible. |
+| F4-T02 | COMPLETADA | Composición Home/TV y lista/protagonismo de reproducción renderizados con fixtures; prueba física de proveedor pendiente. |
+| F4-T03 | COMPLETADA | Se conservan favoritos persistidos y se añade acceso en Home; comportamiento de selección protegido. |
+| F4-T04 | COMPLETADA | Fila de reanudación usa progreso persistido y etiqueta temporada/episodio. |
+| F4-T05 | COMPLETADA | Búsqueda y categorías existentes permanecen en la nueva composición. |
+| F4-T06 | COMPLETADA | Atajos existentes conservados; sin cambios al motor ni a sus reglas de foco. |
+| F4-T07 | COMPLETADA | Overlay y autohide existente preservados; controles incompatibles se ocultan por estado. |
+| F4-T08 | COMPLETADA | Skeleton, vacíos, carga y error reutilizan estados reales existentes. |
+| F4-T09 | PARCIAL | Captura WPF a 1360×850 y escalado simulado existentes; faltan tres resoluciones físicas exactas, DPI/monitores y ventana pequeña en escritorio. |
+| F4-T10 | PARCIAL | 251 pruebas filtradas pasan con fixtures; falta recorrido manual y validación IPTV real. |
+| F4-T11 | COMPLETADA | Build de prueba generado; se registró el timeout del WPF nativo y no se oculta el fallo. |
+
+- **Gate del incremento F4:** `PENDIENTE_DE_VALIDACION`. Próximo paso: abrir el build en escritorio sin conectar credenciales para capturar las tres resoluciones exactas y ejecutar luego el recorrido con una cuenta autorizada. No se inicia F5 ni otra fase.
 
 ### 2026-11-06 — Revisión de catálogo visual y selector de episodios
 

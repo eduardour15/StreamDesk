@@ -12,7 +12,11 @@ public sealed record MediaItem(string Id, string Name, ContentKind Kind, string?
 public sealed record MediaCatalog(IReadOnlyList<XtreamCategory> Categories, IReadOnlyList<MediaItem> Items, DateTimeOffset SyncedAt);
 public sealed record MediaProgress(MediaItem Item, long PositionMilliseconds, long DurationMilliseconds, DateTimeOffset UpdatedAt, bool Completed = false)
 {
-    public string Label => $"{Item.Name} · {TimeSpan.FromMilliseconds(PositionMilliseconds):hh\\:mm\\:ss}";
+    public string ContentLabel => Item.Kind == ContentKind.Episode && Item.Season > 0 && Item.Episode > 0
+        ? $"{Item.Name} · T{Item.Season:00} E{Item.Episode:00}"
+        : Item.Name;
+    public string PositionLabel => TimeSpan.FromMilliseconds(PositionMilliseconds).ToString(@"hh\:mm\:ss");
+    public string Label => $"{ContentLabel} · {TimeSpan.FromMilliseconds(PositionMilliseconds):hh\\:mm\\:ss}";
 }
 public sealed record EpgProgram(string Title, DateTimeOffset StartUtc, DateTimeOffset EndUtc, string? Description = null)
 {

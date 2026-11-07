@@ -10,8 +10,12 @@ public sealed partial class MainViewModel
     private IReadOnlyList<EpgProgram> _epgPrograms = [];
     private Task _epgTask = Task.CompletedTask;
     private bool _hasCurrentEpgProgram;
+    private bool _hasNextEpgProgram;
+    private bool _hasEpgSchedule;
     private double _epgProgressPercent;
     public bool HasCurrentEpgProgram { get => _hasCurrentEpgProgram; private set => SetProperty(ref _hasCurrentEpgProgram, value); }
+    public bool HasNextEpgProgram { get => _hasNextEpgProgram; private set => SetProperty(ref _hasNextEpgProgram, value); }
+    public bool HasEpgSchedule { get => _hasEpgSchedule; private set => SetProperty(ref _hasEpgSchedule, value); }
     public double EpgProgressPercent { get => _epgProgressPercent; private set => SetProperty(ref _epgProgressPercent, value); }
     public Task RefreshEpgAsync(bool force = false) => _epgTask = RefreshEpgCoreAsync(force);
     private async Task RefreshEpgCoreAsync(bool force = false)
@@ -36,7 +40,7 @@ public sealed partial class MainViewModel
             request.Token.ThrowIfCancellationRequested();
             if (version != _sessionVersion || (_watch?.Channel ?? SelectedChannel)?.Id != channel.Id) return;
             _epgPrograms = programs; UpdateEpgLabels();
-            EpgStatus = programs.Count == 0 ? "Sin guía disponible para este canal." : "Guía actualizada (hora local).";
+            EpgStatus = HasEpgSchedule ? "Guía actualizada" : "Programación no disponible";
         }
         catch (OperationCanceledException) { }
         catch (Exception error) { _logger.LogError("epg_load", error); if (version == _sessionVersion) EpgStatus = "No se pudo cargar la guía."; }
@@ -53,7 +57,7 @@ public sealed partial class MainViewModel
             if (version != _sessionVersion || _disposed) return;
             if (_catalogOwnerId is { } profile && _contentStore is not null) await _contentStore.SaveEpgAsync(profile, channel.Id, programs, token);
             if (version != _sessionVersion) return;
-            _epgPrograms = programs; UpdateEpgLabels(); EpgStatus = programs.Count == 0 ? "El archivo no tiene datos para este canal." : "Guía importada.";
+            _epgPrograms = programs; UpdateEpgLabels(); EpgStatus = programs.Count > 0 ? "Guía importada." : "Programación no disponible";
         }
         catch (OperationCanceledException) { }
         catch (Exception error) { _logger.LogError("epg_import", error); if (version == _sessionVersion) EpgStatus = "El archivo de guía no es válido."; }
@@ -68,6 +72,8 @@ public sealed partial class MainViewModel
         if (EpgNow != current) { EpgNow = current; OnPropertyChanged(nameof(EpgNow)); }
         if (EpgNext != next) { EpgNext = next; OnPropertyChanged(nameof(EpgNext)); }
         HasCurrentEpgProgram = currentProgram is not null;
+        HasNextEpgProgram = nextProgram is not null;
+        HasEpgSchedule = currentProgram is not null || nextProgram is not null;
         EpgProgressPercent = currentProgram is { } program && program.EndUtc > program.StartUtc
             ? Math.Clamp((now - program.StartUtc).TotalMilliseconds / (program.EndUtc - program.StartUtc).TotalMilliseconds * 100d, 0d, 100d)
             : 0d;
@@ -77,6 +83,6 @@ public sealed partial class MainViewModel
     {
         _epgPrograms = [];
         UpdateEpgLabels();
-        EpgStatus = "La guía EPG no está disponible para esta lista.";
+        EpgStatus = "Programación no disponible para esta lista.";
     }
 }

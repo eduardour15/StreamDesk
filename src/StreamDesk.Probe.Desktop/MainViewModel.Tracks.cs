@@ -14,6 +14,7 @@ public partial class MainViewModel
             if (SetProperty(ref _formattedAudioTracks, value))
             {
                 OnPropertyChanged(nameof(HasAudioTracks));
+                OnPropertyChanged(nameof(HasTrackOptions));
                 OnPropertyChanged(nameof(AudioStatusMessage));
             }
         }
@@ -28,6 +29,7 @@ public partial class MainViewModel
             if (SetProperty(ref _formattedSubtitleTracks, value))
             {
                 OnPropertyChanged(nameof(HasSubtitleTracks));
+                OnPropertyChanged(nameof(HasTrackOptions));
                 OnPropertyChanged(nameof(SubtitleStatusMessage));
             }
         }
@@ -76,6 +78,7 @@ public partial class MainViewModel
     public bool HasAudioSubtitlesFeedback => !string.IsNullOrWhiteSpace(_audioSubtitlesFeedback);
 
     public bool HasAudioTracks => FormattedAudioTracks.Count > 0;
+    public bool HasTrackOptions => HasAudioTracks || HasSubtitleTracks;
     public bool HasNoAudioTracks => FormattedAudioTracks.Count == 0;
     public bool HasSubtitleTracks => FormattedSubtitleTracks.Any(t => !t.IsDisabled);
     public bool HasNoSubtitleTracks => !FormattedSubtitleTracks.Any(t => !t.IsDisabled);
@@ -129,6 +132,7 @@ public partial class MainViewModel
         OnPropertyChanged(nameof(HasAudioTracks));
         OnPropertyChanged(nameof(HasNoAudioTracks));
         OnPropertyChanged(nameof(HasSubtitleTracks));
+        OnPropertyChanged(nameof(HasTrackOptions));
         OnPropertyChanged(nameof(HasNoSubtitleTracks));
         OnPropertyChanged(nameof(AudioStatusMessage));
         OnPropertyChanged(nameof(SubtitleStatusMessage));

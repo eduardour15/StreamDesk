@@ -87,7 +87,7 @@ public sealed partial class MainViewModel
         _account = null;
         _connectedProfileId = null;
         ConnectionSummary = null;
-        AvailableFormats.Clear();
+        AvailableFormats.Clear(); OnPropertyChanged(nameof(HasMultipleFormats));
         SelectedFormat = null;
         StatusMessage = "Desconectado. 0 conexiones activas con el servidor.";
         OnPropertyChanged(nameof(IsConnected));

@@ -7,6 +7,7 @@ namespace StreamDesk.Probe.Desktop;
 public partial class App : System.Windows.Application
 {
     private AppServices? _services;
+    private bool _showingDispatcherException;
 
     protected override void OnExit(ExitEventArgs e)
     {
@@ -32,9 +33,23 @@ public partial class App : System.Windows.Application
         var directory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "StreamDesk");
         DispatcherUnhandledException += (_, eventArgs) =>
         {
-            _services?.Logger.LogError("ui_unhandled", eventArgs.Exception);
+            if (_showingDispatcherException)
+            {
+                eventArgs.Handled = true;
+                return;
+            }
+
+            _showingDispatcherException = true;
             eventArgs.Handled = true;
-            MessageBox.Show("Ocurrió un error recuperable. Se registró un código técnico sin datos de la cuenta.", "StreamDesk", MessageBoxButton.OK, MessageBoxImage.Warning);
+            _services?.Logger.LogError("ui_unhandled", eventArgs.Exception);
+            try
+            {
+                MessageBox.Show("Ocurrió un error recuperable. Se registró un código técnico sin datos de la cuenta.", "StreamDesk", MessageBoxButton.OK, MessageBoxImage.Warning);
+            }
+            finally
+            {
+                _showingDispatcherException = false;
+            }
         };
         TaskScheduler.UnobservedTaskException += (_, eventArgs) =>
         {

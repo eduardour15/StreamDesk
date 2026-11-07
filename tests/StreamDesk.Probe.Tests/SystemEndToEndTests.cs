@@ -774,13 +774,15 @@ public sealed class SystemEndToEndTests
             Assert.Equal("Magazine del Mediodía", savedEpg[1].Title);
 
             // 3. XMLTV File Import
-            var xmltv = """
+            var programStart = DateTimeOffset.UtcNow.AddHours(-1).ToString("yyyyMMddHHmmss +0000");
+            var programEnd = DateTimeOffset.UtcNow.AddHours(1).ToString("yyyyMMddHHmmss +0000");
+            var xmltv = $"""
                 <?xml version="1.0" encoding="utf-8"?>
                 <tv>
                   <channel id="central.tv">
                     <display-name>Canal Central</display-name>
                   </channel>
-                  <programme start="20261106000000 +0000" stop="20261106235959 +0000" channel="central.tv">
+                  <programme start="{programStart}" stop="{programEnd}" channel="central.tv">
                     <title lang="es">Transmisión Especial XMLTV</title>
                     <desc lang="es">Cobertura en vivo importada</desc>
                   </programme>

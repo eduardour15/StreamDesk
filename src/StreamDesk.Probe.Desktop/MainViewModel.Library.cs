@@ -32,6 +32,9 @@ public sealed partial class MainViewModel
         .Where(channel => FavoriteChannelIds.Contains(channel.Id))
         .OrderBy(channel => channel.Name, StringComparer.CurrentCultureIgnoreCase)
         .ToArray();
+    public IReadOnlyList<XtreamChannel> HomeFavoriteChannels => (_snapshot?.Channels ?? [])
+        .Where(channel => FavoriteChannelIds.Contains(channel.Id)).Take(8).ToArray();
+    public bool HasHomeFavoriteChannels => HomeFavoriteChannels.Count > 0;
     public IReadOnlyList<MediaItem> FavoriteMovies => (_movies?.Items ?? [])
         .Where(item => _library.MovieFavorites.Contains(item.Id))
         .ToArray();
@@ -158,6 +161,7 @@ public sealed partial class MainViewModel
             _snapshot = _snapshot! with { FavoriteChannelIds = new HashSet<string>(_playlistFavoriteIds, StringComparer.Ordinal) };
             OnPropertyChanged(nameof(FavoriteChannelIds));
             NotifySelection();
+            NotifyHomeContent();
             await ApplyFilterAsync(false);
             StatusMessage = _playlistFavoriteIds.Contains(channel.Id) ? "Canal guardado en favoritos durante esta sesión." : "Canal eliminado de favoritos.";
             return;
@@ -279,6 +283,9 @@ public sealed partial class MainViewModel
         NotifyFavoriteMediaPaging();
         OnPropertyChanged(nameof(CanFavorite)); OnPropertyChanged(nameof(CanFavoriteMedia)); NotifySelection();
         OnPropertyChanged(nameof(AutoPlayLast)); OnPropertyChanged(nameof(LastChannel)); OnPropertyChanged(nameof(HasLastChannel)); OnPropertyChanged(nameof(LastChannelLabel));
+        OnPropertyChanged(nameof(HomeFavoriteChannels));
+        OnPropertyChanged(nameof(HasHomeFavoriteChannels));
+        NotifyHomeContent();
         RefreshFrequentCategories();
     }
     private void RefreshFrequentCategories()
